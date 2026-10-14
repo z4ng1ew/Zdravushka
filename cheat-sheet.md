@@ -1,7 +1,7 @@
 
 ## ЗАПУСК
 
- uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 
 
 
@@ -22,6 +22,8 @@ pip install -r requirements.txt
 
  python -m scripts.check_stand
 Нет токена: впишите STAND_TOKEN в файл .env
+
+
 
 проверка schedule.py:
 
