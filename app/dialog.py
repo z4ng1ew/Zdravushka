@@ -54,8 +54,9 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     step = s["step"]
 
     if step == "start":
-        if "запис" in low or "талон" in low or "к врачу" in low:
-            s["collected"]["специальность"] = "Офтальмолог" if "окул" in low or "глаз" in low else "Терапевт"
+        if any(w in low for w in ["запис", "запиш", "талон", "к врачу"]):
+            s["collected"]["специальность"] = next(
+                (sp for w, sp in SPECIALTY_WORDS.items() if w in low), "Терапевт")
             s["step"] = "ask_name"
             return ChatResponse(session_id=session_id, intent="booking", collected=s["collected"],
                                 reply="Хорошо. Назовите, пожалуйста, фамилию, имя и отчество пациента.")
@@ -70,7 +71,7 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
 
     if step == "ask_birth":
         s["collected"]["дата рождения"] = text.strip()
-        doctors = [d for d in DEMO_DOCTORS if d["specialty"] == s["collected"]["специальность"]]
+        doctors = [d for d in schedule.demo_doctors() if d["specialty"] == s["collected"]["специальность"]]
         found = schedule.find_free_slots(doctors, set())
         s["options"] = [Booking(doctor_id=d["id"], doctor_name=d["full_name"], specialty=d["specialty"],
                                 scheduled_at=schedule.to_api(t), spoken=schedule.say_slot(t))
@@ -98,9 +99,11 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
         if re.search(r"\b(да|верно|хорошо|подтверждаю)\b", low):
             o = s["chosen"].model_copy(update={"visit_id": 0, "status": "Запланирована"})
             s["step"] = "done"
+            doc = schedule.excel_doctor(o.doctor_name) or {}
+            room = f", кабинет {doc['cabinet']}" if doc.get("cabinet") else ""
             return ChatResponse(session_id=session_id, intent="booking", collected=s["collected"],
                                 booking=o, done=True,
-                                reply=f"Готово, вы записаны {o.spoken}. Возьмите паспорт и полис. Всего доброго!")
+                                reply=f"Готово, вы записаны {o.spoken}{room}. Возьмите паспорт и полис. Всего доброго!")
         s["step"] = "choose"
         return ChatResponse(session_id=session_id, intent="booking", collected=s["collected"],
                             options=s["options"], reply="Хорошо, выберите другой вариант.")

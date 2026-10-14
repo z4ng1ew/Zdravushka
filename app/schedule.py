@@ -1,4 +1,7 @@
+import json
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
+from pathlib import Path
 
 from app import config
 
@@ -6,6 +9,8 @@ TZ = timezone(timedelta(hours=config.STAND_TZ_OFFSET_HOURS))
 
 DATE_FMT = "%d.%m.%Y"
 DT_FMT = "%d.%m.%Y %H:%M"
+
+SCHEDULE_FILE = Path(__file__).resolve().parent.parent / "data" / "schedule.json"
 
 PRIMARY = {"терапевт", "педиатр", "врач общей практики"}
 
@@ -24,38 +29,40 @@ def from_api(s: str) -> datetime:
     return datetime.strptime(s, DT_FMT)
 
 
+def norm_name(name: str) -> str:
+    return " ".join(name.lower().replace("ё", "е").split())
+
+
+@lru_cache(maxsize=1)
+def _data() -> dict:
+    raw = json.loads(SCHEDULE_FILE.read_text(encoding="utf-8"))
+    doctors = {norm_name(d["full_name"]): d for d in raw["doctors"]}
+    free = {norm_name(fio): days for fio, days in raw["free"].items()}
+    return {"doctors": doctors, "free": free}
+
+
+def excel_doctor(full_name: str) -> dict | None:
+    return _data()["doctors"].get(norm_name(full_name))
+
+
+def demo_doctors() -> list[dict]:
+    return [{"id": int(d["excel_id"][1:]), "full_name": d["full_name"],
+             "specialty": d["specialty"], "is_active": True}
+            for d in _data()["doctors"].values()]
+
+
+def specialties() -> list[str]:
+    return sorted({d["specialty"] for d in _data()["doctors"].values()})
+
+
 def is_primary(specialty: str) -> bool:
     return specialty.strip().lower() in PRIMARY
 
 
-def slot_minutes(specialty: str) -> int:
-    return 15 if is_primary(specialty) else 20
-
-
-def is_working_day(d: date) -> bool:
-    return d.weekday() < 6 and d not in HOLIDAYS
-
-
-def working_hours(doctor: dict, d: date) -> tuple[int, int] | None:
-    if not is_working_day(d):
-        return None
-    if d.weekday() == 5:
-        return (9, 15) if is_primary(doctor["specialty"]) else None
-    return (8, 14) if doctor["id"] % 2 == 0 else (14, 20)
-
-
 def day_slots(doctor: dict, d: date) -> list[datetime]:
-    hours = working_hours(doctor, d)
-    if not hours:
-        return []
-    step = timedelta(minutes=slot_minutes(doctor["specialty"]))
-    t = datetime(d.year, d.month, d.day, hours[0])
-    end = datetime(d.year, d.month, d.day, hours[1])
-    slots = []
-    while t + step <= end:
-        slots.append(t)
-        t += step
-    return slots
+    days = _data()["free"].get(norm_name(doctor["full_name"]), {})
+    times = days.get(d.strftime(DATE_FMT), [])
+    return [datetime.strptime(f"{d.strftime(DATE_FMT)} {t}", DT_FMT) for t in times]
 
 
 def is_valid_slot(doctor: dict, dt: datetime) -> bool:
@@ -79,7 +86,7 @@ PARTS_OF_DAY = {"утро": (7, 12), "день": (12, 16), "вечер": (16, 21
 def find_free_slots(doctors: list[dict], busy: set[tuple[int, str]],
                     date_from: date | None = None, date_to: date | None = None,
                     part_of_day: str | None = None, limit: int = 3,
-                    search_days: int = 21) -> list[tuple[dict, datetime]]:
+                    search_days: int = 30) -> list[tuple[dict, datetime]]:
     start = now() + timedelta(minutes=30)
     day = max(date_from or start.date(), start.date())
     last = date_to or (day + timedelta(days=search_days))
@@ -103,6 +110,13 @@ def find_free_slots(doctors: list[dict], busy: set[tuple[int, str]],
                 found.append((doc, slot))
         day += timedelta(days=1)
     return found
+
+
+def weekly_text(full_name: str) -> str | None:
+    doc = excel_doctor(full_name)
+    if not doc or not doc["weekly"]:
+        return None
+    return ", ".join(f"{d} {h}" for d, h in doc["weekly"].items())
 
 
 WEEKDAYS_ACC = ["в понедельник", "во вторник", "в среду", "в четверг",
