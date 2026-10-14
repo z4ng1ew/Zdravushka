@@ -1,13 +1,7 @@
 #!/bin/bash
 
 # ============================================================
-# Скрипт для сохранения:
-#   1. Дерева проекта без __pycache__, .git, .venv, .env
-#   2. Содержимого только указанных файлов
-#
-# Важно:
-#   - .env не копируется вообще
-#   - .env.* и *.env тоже исключаются
+# Скрипт для сохранения структуры и кода проекта Zdravushka
 # ============================================================
 
 OUTPUT_FILE="project_contents.txt"
@@ -22,32 +16,23 @@ INCLUDE_FILES=(
     "app/schedule.py"
     "app/stand_client.py"
     "scripts/check_stand.py"
+    "scripts/build_schedule.py"
+    "data/schedule.json"
     "requirements.txt"
 )
 # --------------------------------------------------
 
 is_secret_file() {
-    local path="$1"
     local name
-    name="$(basename "$path")"
+    name="$(basename "$1")"
+    [[ "$name" == ".env" || "$name" == .env.* || "$name" == *.env || "$name" == *.env.* ]]
+}
 
-    if [[ "$name" == ".env" ]]; then
-        return 0
-    fi
-
-    if [[ "$name" == .env.* ]]; then
-        return 0
-    fi
-
-    if [[ "$name" == *.env ]]; then
-        return 0
-    fi
-
-    if [[ "$name" == *.env.* ]]; then
-        return 0
-    fi
-
-    return 1
+is_binary_file() {
+    local name
+    name="$(basename "$1")"
+    # Защищаемся от случайного добавления таблиц, картинок и кэша
+    [[ "$name" == *.xlsx || "$name" == *.xls || "$name" == *.png || "$name" == *.jpg || "$name" == *.pdf || "$name" == *.pyc ]]
 }
 
 # Очищаем выходной файл
@@ -57,8 +42,6 @@ is_secret_file() {
 echo "===== ДЕРЕВО ПРОЕКТА =====" >> "$OUTPUT_FILE"
 
 if command -v tree &> /dev/null; then
-    # Исключаем служебные папки и файлы.
-    # .env дополнительно фильтруем через grep ниже.
     tree -a -f \
         -I "__pycache__|.git|.venv|.env|.env.*|*.env|$OUTPUT_FILE" \
         --noreport \
@@ -66,13 +49,10 @@ if command -v tree &> /dev/null; then
         >> "$OUTPUT_FILE"
 else
     echo "(tree не установлен, используется упрощённый вывод)" >> "$OUTPUT_FILE"
-
     find . \
         -not -path "./__pycache__/*" \
         -not -path "./.git/*" \
         -not -path "./.venv/*" \
-        -not -path "./.env" \
-        -not -path "./.env/*" \
         -not -name ".env" \
         -not -name ".env.*" \
         -not -name "*.env" \
@@ -98,16 +78,17 @@ echo "===== СОДЕРЖИМОЕ ФАЙЛОВ =====" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 for file in "${INCLUDE_FILES[@]}"; do
-    # Дополнительная защита: даже если .env случайно добавят
-    # в INCLUDE_FILES, он всё равно не будет скопирован.
     if is_secret_file "$file"; then
         echo "Пропускаем секретный файл: $file" >&2
         continue
     fi
 
-    # На всякий случай не копируем сам итоговый файл.
+    if is_binary_file "$file"; then
+        echo "Пропускаем бинарный файл: $file" >&2
+        continue
+    fi
+
     if [[ "$file" == "$OUTPUT_FILE" ]]; then
-        echo "Пропускаем итоговый файл: $file" >&2
         continue
     fi
 

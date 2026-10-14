@@ -10,3 +10,23 @@ STAND_TIMEOUT = float(os.getenv("STAND_TIMEOUT", "5"))
 STAND_TZ_OFFSET_HOURS = 4
 
 ASSISTANT_NAME = "Здравушка"
+
+
+
+
+
+LLM_URL = os.getenv("LLM_URL", "")
+LLM_TOKEN = os.getenv("LLM_TOKEN", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "")
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "30"))
+
+STT_URL = os.getenv("STT_URL", "")
+STT_TOKEN = os.getenv("STT_TOKEN", "")
+STT_MODEL = os.getenv("STT_MODEL", "whisper-1")
+STT_TIMEOUT = float(os.getenv("STT_TIMEOUT", "30"))
+
+TTS_URL = os.getenv("TTS_URL", "")
+TTS_TOKEN = os.getenv("TTS_TOKEN", "")
+TTS_MODEL = os.getenv("TTS_MODEL", "tts-1")
+TTS_VOICE = os.getenv("TTS_VOICE", "")
+TTS_TIMEOUT = float(os.getenv("TTS_TIMEOUT", "30"))
