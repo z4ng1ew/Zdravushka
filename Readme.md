@@ -26,6 +26,11 @@ pip install -r requirements.txt
 
 ## Проверки
 
+проверка scripts.check_stand
+
+ python -m scripts.check_stand
+Нет токена: впишите STAND_TOKEN в файл .env
+
 проверка schedule.py:
 
 
