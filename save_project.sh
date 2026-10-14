@@ -2,35 +2,53 @@
 
 # ============================================================
 # Скрипт для сохранения:
-#   1. Дерева проекта (полные пути, но без содержимого
-#      папок vosk-model-ru-0.42, vosk-model-small-ru-0.22,
-#      папки "я", а также без __pycache__, .git, .venv, vosk-model целиком)
+#   1. Дерева проекта без __pycache__, .git, .venv, .env
 #   2. Содержимого только указанных файлов
-# в один текстовый файл.
+#
+# Важно:
+#   - .env не копируется вообще
+#   - .env.* и *.env тоже исключаются
 # ============================================================
 
 OUTPUT_FILE="project_contents.txt"
 
 # ---------- СПИСОК ФАЙЛОВ ДЛЯ СОХРАНЕНИЯ ----------
 INCLUDE_FILES=(
-    "core/__init__.py"
-    "core/brain.py"
-    "core/config.py"
-    "core/rag.py"
-    "core/vision.py"
-    "audio/__init__.py"
-    "audio/ears.py"
-    "ui/__init__.py"
-    "ui/dialogs.py"
-    "ui/overlay.py"
-    "ui/widgets.py"
-    "main.py"
+    "app/__init__.py"
+    "app/config.py"
+    "app/dialog.py"
+    "app/main.py"
+    "app/models.py"
+    "app/schedule.py"
+    "app/stand_client.py"
+    "scripts/check_stand.py"
     "requirements.txt"
-    "theme.py"
-    "Makefile"
-    "run.sh"
 )
 # --------------------------------------------------
+
+is_secret_file() {
+    local path="$1"
+    local name
+    name="$(basename "$path")"
+
+    if [[ "$name" == ".env" ]]; then
+        return 0
+    fi
+
+    if [[ "$name" == .env.* ]]; then
+        return 0
+    fi
+
+    if [[ "$name" == *.env ]]; then
+        return 0
+    fi
+
+    if [[ "$name" == *.env.* ]]; then
+        return 0
+    fi
+
+    return 1
+}
 
 # Очищаем выходной файл
 > "$OUTPUT_FILE"
@@ -39,40 +57,65 @@ INCLUDE_FILES=(
 echo "===== ДЕРЕВО ПРОЕКТА =====" >> "$OUTPUT_FILE"
 
 if command -v tree &> /dev/null; then
-    # -f — полные пути, -a — показывать скрытые файлы,
-    # -I — исключить полностью ненужные папки (добавил |я),
-    # --noreport — не выводить статистику в конце.
-    tree -a -f -I "__pycache__|.git|.venv|vosk-model|я" --noreport \
-        | grep -v -E "vosk-model-ru-0.42/|vosk-model-small-ru-0.22/|я/" \
+    # Исключаем служебные папки и файлы.
+    # .env дополнительно фильтруем через grep ниже.
+    tree -a -f \
+        -I "__pycache__|.git|.venv|.env|.env.*|*.env|$OUTPUT_FILE" \
+        --noreport \
+        | grep -vE '(^|/)\.env($|/|\.)' \
         >> "$OUTPUT_FILE"
 else
     echo "(tree не установлен, используется упрощённый вывод)" >> "$OUTPUT_FILE"
-    # fallback: find с исключением и фильтрацией
+
     find . \
-        -not -path "./vosk-model/*" \
         -not -path "./__pycache__/*" \
-        -not -path "./.venv/*" \
         -not -path "./.git/*" \
-        -not -path "./я/*" \
-        -not -path "./я" \
+        -not -path "./.venv/*" \
+        -not -path "./.env" \
+        -not -path "./.env/*" \
+        -not -name ".env" \
+        -not -name ".env.*" \
+        -not -name "*.env" \
+        -not -name "$OUTPUT_FILE" \
         -print \
-        | grep -v -E "\./vosk-model-ru-0.42/|\./vosk-model-small-ru-0.22/|\./я/" \
-        | sed -e 's;[^/]*/;|__;g;s;__|;  ;g' \
+        | sed 's|^\./||' \
+        | grep -vE '(^|/)\.env($|/|\.)' \
+        | sort \
+        | awk -F/ '{
+            indent = "";
+            for (i = 1; i < NF; i++) {
+                indent = indent "    ";
+            }
+            print indent $NF;
+        }' \
         >> "$OUTPUT_FILE"
 fi
 
-echo -e "\n" >> "$OUTPUT_FILE"
+printf "\n\n" >> "$OUTPUT_FILE"
 
 # ========== 2. Содержимое выбранных файлов ==========
 echo "===== СОДЕРЖИМОЕ ФАЙЛОВ =====" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
 for file in "${INCLUDE_FILES[@]}"; do
+    # Дополнительная защита: даже если .env случайно добавят
+    # в INCLUDE_FILES, он всё равно не будет скопирован.
+    if is_secret_file "$file"; then
+        echo "Пропускаем секретный файл: $file" >&2
+        continue
+    fi
+
+    # На всякий случай не копируем сам итоговый файл.
+    if [[ "$file" == "$OUTPUT_FILE" ]]; then
+        echo "Пропускаем итоговый файл: $file" >&2
+        continue
+    fi
+
     if [[ -f "$file" ]]; then
         echo "Добавляем: $file" >&2
         echo "===== $file =====" >> "$OUTPUT_FILE"
         cat "$file" >> "$OUTPUT_FILE"
-        echo -e "\n" >> "$OUTPUT_FILE"
+        printf "\n\n" >> "$OUTPUT_FILE"
     else
         echo "Предупреждение: файл '$file' не найден, пропускаем" >&2
     fi
