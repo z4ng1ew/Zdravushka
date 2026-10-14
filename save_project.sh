@@ -17,7 +17,6 @@ INCLUDE_FILES=(
     "app/stand_client.py"
     "scripts/check_stand.py"
     "scripts/build_schedule.py"
-    "data/schedule.json"
     "requirements.txt"
 )
 # --------------------------------------------------

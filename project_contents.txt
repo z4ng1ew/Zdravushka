@@ -1,6 +1,7 @@
 ===== ДЕРЕВО ПРОЕКТА =====
 .
 ├── ./app
+│   ├── ./app/ai.py
 │   ├── ./app/config.py
 │   ├── ./app/dialog.py
 │   ├── ./app/__init__.py
@@ -9,12 +10,18 @@
 │   ├── ./app/schedule.py
 │   └── ./app/stand_client.py
 ├── ./cheat-sheet.md
+├── ./data
+│   ├── ./data/raw
+│   │   └── ./data/raw/schedule.xlsx
+│   └── ./data/schedule.json
 ├── ./.gitignore
 ├── ./Instructions for Muslim.md
 ├── ./Readme.md
 ├── ./requirements.txt
 ├── ./save_project.sh
 ├── ./scripts
+│   ├── ./scripts/build_schedule.py
+│   ├── ./scripts/check_models.py
 │   └── ./scripts/check_stand.py
 ├── ./TODO.MD
 └── ./архив
@@ -40,6 +47,26 @@ STAND_TIMEOUT = float(os.getenv("STAND_TIMEOUT", "5"))
 STAND_TZ_OFFSET_HOURS = 4
 
 ASSISTANT_NAME = "Здравушка"
+
+
+
+
+
+LLM_URL = os.getenv("LLM_URL", "")
+LLM_TOKEN = os.getenv("LLM_TOKEN", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "")
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "30"))
+
+STT_URL = os.getenv("STT_URL", "")
+STT_TOKEN = os.getenv("STT_TOKEN", "")
+STT_MODEL = os.getenv("STT_MODEL", "whisper-1")
+STT_TIMEOUT = float(os.getenv("STT_TIMEOUT", "30"))
+
+TTS_URL = os.getenv("TTS_URL", "")
+TTS_TOKEN = os.getenv("TTS_TOKEN", "")
+TTS_MODEL = os.getenv("TTS_MODEL", "tts-1")
+TTS_VOICE = os.getenv("TTS_VOICE", "")
+TTS_TIMEOUT = float(os.getenv("TTS_TIMEOUT", "30"))
 
 ===== app/dialog.py =====
 import re
@@ -98,8 +125,9 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     step = s["step"]
 
     if step == "start":
-        if "запис" in low or "талон" in low or "к врачу" in low:
-            s["collected"]["специальность"] = "Офтальмолог" if "окул" in low or "глаз" in low else "Терапевт"
+        if any(w in low for w in ["запис", "запиш", "талон", "к врачу"]):
+            s["collected"]["специальность"] = next(
+                (sp for w, sp in SPECIALTY_WORDS.items() if w in low), "Терапевт")
             s["step"] = "ask_name"
             return ChatResponse(session_id=session_id, intent="booking", collected=s["collected"],
                                 reply="Хорошо. Назовите, пожалуйста, фамилию, имя и отчество пациента.")
@@ -114,7 +142,7 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
 
     if step == "ask_birth":
         s["collected"]["дата рождения"] = text.strip()
-        doctors = [d for d in DEMO_DOCTORS if d["specialty"] == s["collected"]["специальность"]]
+        doctors = [d for d in schedule.demo_doctors() if d["specialty"] == s["collected"]["специальность"]]
         found = schedule.find_free_slots(doctors, set())
         s["options"] = [Booking(doctor_id=d["id"], doctor_name=d["full_name"], specialty=d["specialty"],
                                 scheduled_at=schedule.to_api(t), spoken=schedule.say_slot(t))
@@ -142,9 +170,11 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
         if re.search(r"\b(да|верно|хорошо|подтверждаю)\b", low):
             o = s["chosen"].model_copy(update={"visit_id": 0, "status": "Запланирована"})
             s["step"] = "done"
+            doc = schedule.excel_doctor(o.doctor_name) or {}
+            room = f", кабинет {doc['cabinet']}" if doc.get("cabinet") else ""
             return ChatResponse(session_id=session_id, intent="booking", collected=s["collected"],
                                 booking=o, done=True,
-                                reply=f"Готово, вы записаны {o.spoken}. Возьмите паспорт и полис. Всего доброго!")
+                                reply=f"Готово, вы записаны {o.spoken}{room}. Возьмите паспорт и полис. Всего доброго!")
         s["step"] = "choose"
         return ChatResponse(session_id=session_id, intent="booking", collected=s["collected"],
                             options=s["options"], reply="Хорошо, выберите другой вариант.")
@@ -224,7 +254,10 @@ class ChatResponse(BaseModel):
     done: bool = False
 
 ===== app/schedule.py =====
+import json
 from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
+from pathlib import Path
 
 from app import config
 
@@ -232,6 +265,8 @@ TZ = timezone(timedelta(hours=config.STAND_TZ_OFFSET_HOURS))
 
 DATE_FMT = "%d.%m.%Y"
 DT_FMT = "%d.%m.%Y %H:%M"
+
+SCHEDULE_FILE = Path(__file__).resolve().parent.parent / "data" / "schedule.json"
 
 PRIMARY = {"терапевт", "педиатр", "врач общей практики"}
 
@@ -250,38 +285,40 @@ def from_api(s: str) -> datetime:
     return datetime.strptime(s, DT_FMT)
 
 
+def norm_name(name: str) -> str:
+    return " ".join(name.lower().replace("ё", "е").split())
+
+
+@lru_cache(maxsize=1)
+def _data() -> dict:
+    raw = json.loads(SCHEDULE_FILE.read_text(encoding="utf-8"))
+    doctors = {norm_name(d["full_name"]): d for d in raw["doctors"]}
+    free = {norm_name(fio): days for fio, days in raw["free"].items()}
+    return {"doctors": doctors, "free": free}
+
+
+def excel_doctor(full_name: str) -> dict | None:
+    return _data()["doctors"].get(norm_name(full_name))
+
+
+def demo_doctors() -> list[dict]:
+    return [{"id": int(d["excel_id"][1:]), "full_name": d["full_name"],
+             "specialty": d["specialty"], "is_active": True}
+            for d in _data()["doctors"].values()]
+
+
+def specialties() -> list[str]:
+    return sorted({d["specialty"] for d in _data()["doctors"].values()})
+
+
 def is_primary(specialty: str) -> bool:
     return specialty.strip().lower() in PRIMARY
 
 
-def slot_minutes(specialty: str) -> int:
-    return 15 if is_primary(specialty) else 20
-
-
-def is_working_day(d: date) -> bool:
-    return d.weekday() < 6 and d not in HOLIDAYS
-
-
-def working_hours(doctor: dict, d: date) -> tuple[int, int] | None:
-    if not is_working_day(d):
-        return None
-    if d.weekday() == 5:
-        return (9, 15) if is_primary(doctor["specialty"]) else None
-    return (8, 14) if doctor["id"] % 2 == 0 else (14, 20)
-
-
 def day_slots(doctor: dict, d: date) -> list[datetime]:
-    hours = working_hours(doctor, d)
-    if not hours:
-        return []
-    step = timedelta(minutes=slot_minutes(doctor["specialty"]))
-    t = datetime(d.year, d.month, d.day, hours[0])
-    end = datetime(d.year, d.month, d.day, hours[1])
-    slots = []
-    while t + step <= end:
-        slots.append(t)
-        t += step
-    return slots
+    days = _data()["free"].get(norm_name(doctor["full_name"]), {})
+    times = days.get(d.strftime(DATE_FMT), [])
+    return [datetime.strptime(f"{d.strftime(DATE_FMT)} {t}", DT_FMT) for t in times]
 
 
 def is_valid_slot(doctor: dict, dt: datetime) -> bool:
@@ -305,7 +342,7 @@ PARTS_OF_DAY = {"утро": (7, 12), "день": (12, 16), "вечер": (16, 21
 def find_free_slots(doctors: list[dict], busy: set[tuple[int, str]],
                     date_from: date | None = None, date_to: date | None = None,
                     part_of_day: str | None = None, limit: int = 3,
-                    search_days: int = 21) -> list[tuple[dict, datetime]]:
+                    search_days: int = 30) -> list[tuple[dict, datetime]]:
     start = now() + timedelta(minutes=30)
     day = max(date_from or start.date(), start.date())
     last = date_to or (day + timedelta(days=search_days))
@@ -329,6 +366,13 @@ def find_free_slots(doctors: list[dict], busy: set[tuple[int, str]],
                 found.append((doc, slot))
         day += timedelta(days=1)
     return found
+
+
+def weekly_text(full_name: str) -> str | None:
+    doc = excel_doctor(full_name)
+    if not doc or not doc["weekly"]:
+        return None
+    return ", ".join(f"{d} {h}" for d, h in doc["weekly"].items())
 
 
 WEEKDAYS_ACC = ["в понедельник", "во вторник", "в среду", "в четверг",
@@ -560,9 +604,73 @@ if __name__ == "__main__":
     asyncio.run(main())
     
 
+===== scripts/build_schedule.py =====
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import openpyxl
+
+OUT = Path("data/schedule.json")
+
+
+def hhmm(t) -> str:
+    return t.strftime("%H:%M") if hasattr(t, "strftime") else str(t)[:5]
+
+
+def main(xlsx_path: str):
+    print(f"Читаю {xlsx_path} ... (около минуты)")
+    wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+
+    today = None
+    for row in wb["Описание"].iter_rows(values_only=True):
+        if row[0] == "Сегодня":
+            today = row[1]
+    today = today or datetime.now()
+
+    doctors = {}
+    for r in wb["Врачи"].iter_rows(min_row=2, values_only=True):
+        if not r[0]:
+            continue
+        doctors[r[1]] = {
+            "excel_id": r[0], "full_name": r[1], "department": r[2], "specialty": r[3],
+            "patients": r[4], "cabinet": str(r[5]), "slot_min": int(r[6]), "schedule": r[7],
+            "weekly": {},
+        }
+
+    days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    for r in wb["График"].iter_rows(min_row=2, values_only=True):
+        if r[1] in doctors:
+            doctors[r[1]]["weekly"] = {d: v for d, v in zip(days, r[4:11]) if v and v != "—"}
+
+    free: dict[str, dict[str, list[str]]] = {}
+    count = 0
+    for r in wb["Слоты"].iter_rows(min_row=2, values_only=True):
+        day, fio, status = r[1], r[4], r[11]
+        if not day or day < today or status != "Свободен":
+            continue
+        free.setdefault(fio, {}).setdefault(day.strftime("%d.%m.%Y"), []).append(hhmm(r[8]))
+        count += 1
+
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    data = {"source": Path(xlsx_path).name, "today": today.strftime("%d.%m.%Y"),
+            "doctors": list(doctors.values()), "free": free}
+    OUT.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    print(f"Готово: {len(doctors)} врачей, {count} свободных слотов → {OUT} "
+          f"({OUT.stat().st_size // 1024} КБ)")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Использование: python -m scripts.build_schedule путь/к/расписанию.xlsx")
+        sys.exit(1)
+    main(sys.argv[1])
+
 ===== requirements.txt =====
 fastapi
 uvicorn[standard]
 httpx
-python-dotenv
+python-dotenvopenpyxl
+
 
