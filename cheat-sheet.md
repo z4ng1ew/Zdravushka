@@ -41,3 +41,13 @@ uvicorn app.main:app --reload --port 8000
 
 
 
+# scripts/build_schedule.py — Excel → JSON 
+
+Превращает Excel с расписанием от организаторов в data/schedule.json,  который быстро читает сервер. Запускать после каждого обновления Excel:
+
+
+ python -m scripts.build_schedule data/raw/schedule.xlsx
+
+
+
+ # Excel тяжёлый (137 тысяч строк), поэтому читаем его один раз здесь, а не при каждом звонке.
