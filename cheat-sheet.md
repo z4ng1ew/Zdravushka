@@ -54,4 +54,34 @@ uvicorn app.main:app --reload --port 8000
 
 
 
- # Проверка трёх нейросетей. Запуск из корня проекта: python -m scripts.check_models
+ # Проверка трёх нейросетей. Запуск из корня проекта: 
+ 
+ python -m scripts.check_models
+
+
+
+
+
+
+
+
+
+
+
+pip install -r requirements.txt
+
+
+
+
+# голос Здравушки для Piper (≈63 МБ, в git не кладём)
+mkdir -p data/voices
+
+wget -O data/voices/ru_RU-irina-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx
+
+
+wget -O data/voices/ru_RU-irina-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json
+
+
+
+
+
