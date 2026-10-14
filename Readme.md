@@ -14,6 +14,18 @@
 
 
 
+## Установка requirements.txt
+
+
+pip install -r requirements.txt
+
+
+
+
+
+
+## Проверки
+
 проверка schedule.py:
 
 
