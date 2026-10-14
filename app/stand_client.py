@@ -8,6 +8,8 @@ from app import config
 
 
 class StandError(Exception):
+    pass
+
     def __init__(self, status: int, code: str, message: str):
         super().__init__(f"{status} {code}: {message}")
         self.status = status
@@ -16,6 +18,7 @@ class StandError(Exception):
 
 
 class RateLimiter:
+
     def __init__(self, max_calls: int, period: float = 60.0):
         self.max_calls = max_calls
         self.period = period
@@ -82,6 +85,7 @@ class StandClient:
                 return result
             offset += 50
 
+
     async def doctors(self, refresh: bool = False) -> list[dict]:
         if self._doctors is None or refresh:
             self._doctors = await self._get_all("/doctors")
@@ -93,6 +97,7 @@ class StandClient:
             s = specialty.strip().lower()
             result = [d for d in result if d["specialty"].lower() == s]
         return result
+
 
     async def find_client(self, last_name: str, first_name: str, birth_date: str) -> dict | None:
         found = await self._get_all("/clients", {
@@ -115,6 +120,7 @@ class StandClient:
 
     async def update_client_comment(self, client_id: int, comment: str) -> dict:
         return await self._request("PATCH", f"/clients/{client_id}", json={"comment": comment})
+
 
     async def create_visit(self, client_id: int, doctor_id: int, scheduled_at: str) -> dict:
         return await self._request("POST", "/visits", json={

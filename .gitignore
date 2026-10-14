@@ -3,3 +3,7 @@
 __pycache__/
 *.pyc
 data/data/raw/
+data/raw/
+data/tmp/
+data/runtime/
+data/voices/
