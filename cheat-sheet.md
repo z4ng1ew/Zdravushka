@@ -100,3 +100,5 @@ wget -O data/voices/ru_RU-irina-medium.onnx.json https://huggingface.co/rhasspy/
 source .venv-silero/bin/activate
 
 
+# Обычное окружение
+source .venv/bin/activate
