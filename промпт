@@ -1,0 +1,97 @@
+s@f:~/Zdravushka$ 
+s@f:~/Zdravushka$ 
+s@f:~/Zdravushka$ pip install -r requirements.txt
+printf 'data/raw/\ndata/tmp/\ndata/runtime/\ndata/voices/\n' >> .gitignore
+
+# голос Здравушки для Piper (≈63 МБ, в git не кладём)
+mkdir -p data/voices
+wget -O data/voices/ru_RU-irina-medium.onnx https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx
+wget -O data/voices/ru_RU-irina-medium.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json
+Defaulting to user installation because normal site-packages is not writeable
+Collecting fastapi (from -r requirements.txt (line 1))
+  Downloading fastapi-0.143.1-py3-none-any.whl.metadata (26 kB)
+Requirement already satisfied: httpx in /usr/lib/python3.14/site-packages (from -r requirements.txt (line 3)) (0.28.1)
+Collecting python-dotenv (from -r requirements.txt (line 4))
+  Using cached python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+Requirement already satisfied: python-multipart in /home/s/.local/lib/python3.14/site-packages (from -r requirements.txt (line 5)) (0.0.32)
+Requirement already satisfied: openpyxl in /usr/lib/python3.14/site-packages (from -r requirements.txt (line 6)) (3.1.5)
+Collecting piper-tts (from -r requirements.txt (line 7))
+  Downloading piper_tts-1.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+Requirement already satisfied: uvicorn[standard] in /home/s/.local/lib/python3.14/site-packages (from -r requirements.txt (line 2)) (0.49.0)
+Requirement already satisfied: starlette>=0.46.0 in /home/s/.local/lib/python3.14/site-packages (from fastapi->-r requirements.txt (line 1)) (1.3.1)
+Collecting pydantic>=2.9.0 (from fastapi->-r requirements.txt (line 1))
+  Using cached pydantic-2.14.1-py3-none-any.whl.metadata (133 kB)
+Requirement already satisfied: typing-extensions>=4.8.0 in /usr/lib/python3.14/site-packages (from fastapi->-r requirements.txt (line 1)) (4.15.0)
+Collecting typing-inspection>=0.4.2 (from fastapi->-r requirements.txt (line 1))
+  Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+Requirement already satisfied: annotated-doc>=0.0.2 in /home/s/.local/lib/python3.14/site-packages (from fastapi->-r requirements.txt (line 1)) (0.0.4)
+Collecting opentelemetry-api>=1.44.0 (from fastapi->-r requirements.txt (line 1))
+  Using cached opentelemetry_api-1.45.1-py3-none-any.whl.metadata (1.4 kB)
+Requirement already satisfied: click>=7.0 in /home/s/.local/lib/python3.14/site-packages (from uvicorn[standard]->-r requirements.txt (line 2)) (8.4.1)
+Requirement already satisfied: h11>=0.8 in /usr/lib/python3.14/site-packages (from uvicorn[standard]->-r requirements.txt (line 2)) (0.16.0)
+Requirement already satisfied: httptools>=0.8.0 in /home/s/.local/lib/python3.14/site-packages (from uvicorn[standard]->-r requirements.txt (line 2)) (0.8.0)
+Requirement already satisfied: pyyaml>=5.1 in /usr/lib64/python3.14/site-packages (from uvicorn[standard]->-r requirements.txt (line 2)) (6.0.2)
+Collecting uvloop>=0.15.1 (from uvicorn[standard]->-r requirements.txt (line 2))
+  Using cached uvloop-0.23.0-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.1 kB)
+Collecting watchfiles>=0.20 (from uvicorn[standard]->-r requirements.txt (line 2))
+  Using cached watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+Requirement already satisfied: websockets>=10.4 in /home/s/.local/lib/python3.14/site-packages (from uvicorn[standard]->-r requirements.txt (line 2)) (16.0)
+Requirement already satisfied: anyio in /usr/lib/python3.14/site-packages (from httpx->-r requirements.txt (line 3)) (4.13.0)
+Requirement already satisfied: certifi in /usr/lib/python3.14/site-packages (from httpx->-r requirements.txt (line 3)) (2025.7.9)
+Requirement already satisfied: httpcore==1.* in /usr/lib/python3.14/site-packages (from httpx->-r requirements.txt (line 3)) (1.0.9)
+Requirement already satisfied: idna in /usr/lib/python3.14/site-packages (from httpx->-r requirements.txt (line 3)) (3.10)
+Requirement already satisfied: et_xmlfile in /usr/lib/python3.14/site-packages (from openpyxl->-r requirements.txt (line 6)) (2.0.0)
+Requirement already satisfied: onnxruntime<2,>=1 in /home/s/.local/lib/python3.14/site-packages (from piper-tts->-r requirements.txt (line 7)) (1.26.0)
+Collecting pathvalidate<4,>=3 (from piper-tts->-r requirements.txt (line 7))
+  Downloading pathvalidate-3.3.1-py3-none-any.whl.metadata (12 kB)
+Requirement already satisfied: flatbuffers in /home/s/.local/lib/python3.14/site-packages (from onnxruntime<2,>=1->piper-tts->-r requirements.txt (line 7)) (25.12.19)
+Requirement already satisfied: numpy>=1.21.6 in /home/s/.local/lib/python3.14/site-packages (from onnxruntime<2,>=1->piper-tts->-r requirements.txt (line 7)) (2.4.6)
+Requirement already satisfied: packaging in /usr/lib/python3.14/site-packages (from onnxruntime<2,>=1->piper-tts->-r requirements.txt (line 7)) (25.0)
+Requirement already satisfied: protobuf in /home/s/.local/lib/python3.14/site-packages (from onnxruntime<2,>=1->piper-tts->-r requirements.txt (line 7)) (6.33.6)
+Collecting annotated-types>=0.6.0 (from pydantic>=2.9.0->fastapi->-r requirements.txt (line 1))
+  Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.50.1 (from pydantic>=2.9.0->fastapi->-r requirements.txt (line 1))
+  Using cached pydantic_core-2.50.1-cp314-cp314-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.5 kB)
+Collecting typing-extensions>=4.8.0 (from fastapi->-r requirements.txt (line 1))
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Downloading piper_tts-1.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl (34.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 34.1/34.1 MB 148.2 kB/s eta 0:00:00
+Downloading pathvalidate-3.3.1-py3-none-any.whl (24 kB)
+Using cached opentelemetry_api-1.45.1-py3-none-any.whl (60 kB)
+Using cached pydantic-2.14.1-py3-none-any.whl (488 kB)
+Installing collected packages: uvloop, typing-extensions, python-dotenv, pathvalidate, annotated-types, watchfiles, typing-inspection, pydantic-core, piper-tts, opentelemetry-api, pydantic, fastapi
+Successfully installed annotated-types-0.8.0 fastapi-0.143.1 opentelemetry-api-1.45.1 pathvalidate-3.3.1 piper-tts-1.8.0 pydantic-2.14.1 pydantic-core-2.50.1 python-dotenv-1.2.4 typing-extensions-4.16.0 typing-inspection-0.4.4 uvloop-0.23.0 watchfiles-1.3.0
+HTTP response 302  [https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx]
+Enqueue https://us.aws.cdn.hf.co/xet-bridge-us/64949e47c841c90374a1fb82/72ce7bc6abc97d9fb9def817474f172baa45d9985320f4ba4f8cfb58cb7718c9?resp
+Saving 'data/voices/ru_RU-irina-medium.onnx'
+HTTP response 200  [https://us.aws.cdn.hf.co/xet-bridge-us/64949e47c841c90374a1fb82/72ce7bc6abc97d9fb9def817474f172baa45d9985320f4ba4f8cfb58cdata/voices/ru_RU-ir 100% [==========================================================================================>]   60.27M   11.59MB/s&user_id=public&xip=M1RN_ff[Files: 1  Bytes: 60.27M [8.85MB/s] Redirects: 1  Todo: 0  Errors: 0                        ]HM6Ly91cy5hd3MuY2RuLmh
+HTTP response 307  [https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx.json]
+Enqueue https://huggingface.co/api/resolve-cache/models/rhasspy/piper-voices/c10ece1aade47bb51c153c893d14e5bf8e5b7117/ru%2Fru_RU%2Firina%2Fme
+Saving 'data/voices/ru_RU-irina-medium.onnx.json'
+HTTP response 200  [https://huggingface.co/api/resolve-cache/models/rhasspy/piper-voices/c10ece1aade47bb51c153c893d14e5bf8e5b7117/ru%2Fru_RU%data/voices/ru_RU-ir 100% [==========================================================================================>]     803     --.-KB/sm.onnx.json=&etag=%227b6176[Files: 1  Bytes: 1.11K [1.98KB/s] Redirects: 1  Todo: 0  Errors: 0                         ]
+s@f:~/Zdravushka$
+
+
+теперь приделаем телефонию 
+
+
+
+поменять голос на более приятный , и что бы озвучка было не по предложениям а по словно. на более милый и ми ми мишный
+
+
+ Silero (v5_ru) вместо Piper — это замена движка, ЛУЧШЕ ИЛИ ХУЖЕ ?
+
+
+
+
+ Сценарий тестирования:
+
+    На главном экране нажми микрофон и скажи:
+    «Хочу к окулисту на пятницу»
+    Бот спросит ФИО и дату рождения — ответь:
+    «Иванов Иван Иванович, первое февраля восемьдесят пятого»
+    Бот предложит варианты времени — скажи «второй», потом «да» для подтверждения.
+    Проверь, что на /staff/live весь диалог появился синхронно.
+    Скажи «перенести запись» или «отменить запись» — бот должен найти существующую и предложить действия.
+    Начни новый разговор и скажи «у меня болит грудь» — должна сработать категория А (экстренный блок с советом звонить 103/112).
+    Скажи «вызвать врача на дом» — бот должен записать к участковому терапевту.
