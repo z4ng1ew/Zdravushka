@@ -460,6 +460,14 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
 
     nl = await nlu.understand(text, s["step"])
     intent = nl["intent"]
+
+    if s["step"] == "reason":
+        nl["reason"] = nl["reason"] or text
+        if intent in ("medical", "other", None):
+            intent = "other"
+    if s["step"] == "address" and not nl["address"]:
+        nl["address"] = text
+        
     if intent == "emergency":
         return _escalate(s, Escalation(rule="R-01", reason="неотложное состояние", priority="P1",
                                        emergency=True, summary=f"Возможная угроза жизни: «{text}»"))
