@@ -94,3 +94,9 @@ wget -O data/voices/ru_RU-irina-medium.onnx.json https://huggingface.co/rhasspy/
 
 
 
+
+# 1. Отдельное окружение (PyTorch тяжёлый, лучше не смешивать с проектом):
+
+source .venv-silero/bin/activate
+
+
