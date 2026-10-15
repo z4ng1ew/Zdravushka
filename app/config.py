@@ -34,3 +34,13 @@ TTS_TIMEOUT = float(os.getenv("TTS_TIMEOUT", "30"))
 
 TTS_BACKEND = os.getenv("TTS_BACKEND", "piper")
 PIPER_MODEL = os.getenv("PIPER_MODEL", "data/voices/ru_RU-irina-medium.onnx")
+
+TELEPHONY_ENABLED = os.getenv("TELEPHONY_ENABLED", "1") == "1"
+AUDIOSOCKET_HOST = os.getenv("AUDIOSOCKET_HOST", "127.0.0.1")
+AUDIOSOCKET_PORT = int(os.getenv("AUDIOSOCKET_PORT", "9092"))
+VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "500"))
+END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "800"))
+MIN_SPEECH_MS = int(os.getenv("MIN_SPEECH_MS", "250"))
+BARGE_IN_MS = int(os.getenv("BARGE_IN_MS", "400"))
+SILENCE_PROMPT_SEC = float(os.getenv("SILENCE_PROMPT_SEC", "5"))
+SILENCE_HANGUP_SEC = float(os.getenv("SILENCE_HANGUP_SEC", "5"))

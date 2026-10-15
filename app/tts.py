@@ -1,7 +1,11 @@
+import asyncio
 import io
 import re
 import wave
 from functools import lru_cache
+from pathlib import Path
+
+import numpy as np
 
 from app import ai, config
 
@@ -40,6 +44,11 @@ def normalize(text: str) -> str:
     return text.replace("«", "").replace("»", "").replace("—", ",")
 
 
+def split_sentences(text: str) -> list[str]:
+    parts = re.split(r"(?<=[.!?;])\s+", text.strip())
+    return [p for p in parts if p]
+
+
 @lru_cache(maxsize=1)
 def _piper_voice():
     from piper import PiperVoice
@@ -57,9 +66,41 @@ def _piper(text: str) -> bytes:
     return buf.getvalue()
 
 
+def piper_available() -> bool:
+    return Path(config.PIPER_MODEL).exists()
+
+
 async def speak(text: str) -> bytes:
     text = normalize(text)
-    if config.TTS_BACKEND == "piper":
-        import asyncio
-        return await asyncio.to_thread(_piper, text)
-    return await ai.text_to_speech(text)
+    if config.TTS_BACKEND == "openai" and config.TTS_URL:
+        try:
+            return await ai.text_to_speech(text)
+        except Exception:
+            if not piper_available():
+                raise
+    return await asyncio.to_thread(_piper, text)
+
+
+def to_pcm(wav_bytes: bytes, rate: int = 8000) -> bytes:
+    with wave.open(io.BytesIO(wav_bytes)) as w:
+        src_rate, channels, width = w.getframerate(), w.getnchannels(), w.getsampwidth()
+        frames = w.readframes(w.getnframes())
+    if width != 2:
+        raise ValueError("Ожидается 16-битный WAV")
+    data = np.frombuffer(frames, dtype=np.int16).astype(np.float32)
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1)
+    if src_rate != rate and len(data):
+        n_out = int(len(data) * rate / src_rate)
+        data = np.interp(np.linspace(0, len(data) - 1, n_out), np.arange(len(data)), data)
+    return data.clip(-32768, 32767).astype(np.int16).tobytes()
+
+
+def pcm_to_wav(pcm: bytes, rate: int = 8000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()

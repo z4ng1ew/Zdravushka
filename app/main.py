@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile
@@ -6,10 +7,19 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import ai, config, dialog, journal, schedule, tts
+from app import ai, config, dialog, journal, schedule, telephony, tts
 from app.models import ChatRequest, ChatResponse
 
-app = FastAPI(title=f"{config.ASSISTANT_NAME} — голосовой ассистент регистратуры")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    server = await telephony.start_server() if config.TELEPHONY_ENABLED else None
+    yield
+    if server:
+        server.close()
+
+
+app = FastAPI(title=f"{config.ASSISTANT_NAME} — голосовой ассистент регистратуры", lifespan=lifespan)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -18,7 +28,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 async def health():
     return {"status": "ok", "assistant": config.ASSISTANT_NAME,
             "mode": "stand" if dialog.stand else "demo",
-            "llm": bool(config.LLM_URL), "stt": bool(config.STT_URL), "tts": config.TTS_BACKEND}
+            "llm": bool(config.LLM_URL), "stt": bool(config.STT_URL), "tts": config.TTS_BACKEND,
+            "telephony": f"{config.AUDIOSOCKET_HOST}:{config.AUDIOSOCKET_PORT}" if config.TELEPHONY_ENABLED else None}
 
 
 @app.post("/api/chat", response_model=ChatResponse)
