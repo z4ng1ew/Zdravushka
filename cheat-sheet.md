@@ -4,6 +4,8 @@
 uvicorn app.main:app --reload --port 8000
 
 
+uvicorn app.main:app --reload --reload-dir app --port 8000
+
 
 
 ## Установка requirements.txt
@@ -102,3 +104,29 @@ source .venv-silero/bin/activate
 
 # Обычное окружение
 source .venv/bin/activate
+
+
+
+
+## Проверка определения видеокарты:
+
+После запуска должно появиться Silero загружена: v5_ru и Устройство: cuda. Если вместо cuda написано cpu, видеокарта не нашлась. Проверить можно так: python -c "import torch; print(torch.cuda.is_available())".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Три терминала:
+
+Silero: source .venv-silero/bin/activate && python scripts/silero_server.py
+Здравушка: source .venv/bin/activate && uvicorn app.main:app --reload --reload-dir app --port 8000
+Телефон (в наушниках):

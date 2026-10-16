@@ -17,6 +17,8 @@ PORT = int(os.getenv("SILERO_PORT", "8020"))
 
 torch.set_num_threads(int(os.getenv("SILERO_THREADS", "4")))
 
+# Видеокарта, если есть (SILERO_DEVICE=cpu — принудительно процессор)
+DEVICE = torch.device(os.getenv("SILERO_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 
 def load_model():
     for model_id in (MODEL_ID, "v4_ru"):
@@ -24,6 +26,8 @@ def load_model():
             model, _ = torch.hub.load("snakers4/silero-models", "silero_tts",
                                       language="ru", speaker=model_id, trust_repo=True)
             print(f"Silero загружена: {model_id}")
+            model.to(DEVICE)
+            print(f"Устройство: {DEVICE}")
             return model
         except Exception as e:
             print(f"Не удалось загрузить {model_id}: {e}")
@@ -42,7 +46,7 @@ class SpeechRequest(BaseModel):
 
 
 def to_wav(audio: torch.Tensor) -> bytes:
-    pcm = (audio.numpy() * 32767).clip(-32768, 32767).astype(np.int16)
+    pcm = (audio.cpu().numpy() * 32767).clip(-32768, 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)
