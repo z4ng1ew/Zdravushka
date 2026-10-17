@@ -7,7 +7,7 @@ from app import config
 
 
 class AIError(Exception):
-    pass
+    """Ошибка нейросети: сервер недоступен, неверный токен, плохой ответ."""
 
 
 def _headers(token: str) -> dict:
@@ -45,6 +45,15 @@ async def llm_json(messages: list[dict]) -> dict:
         return parse_json(await llm_chat(retry))
 
 
+WHISPER_HALLUCINATIONS = ("продолжение следует", "субтитр", "спасибо за просмотр", "подписывайтесь",
+                          "редактор", "корректор", "dimatorzok", "благодарю за внимание")
+
+
+def is_hallucination(text: str) -> bool:
+    low = text.lower().strip(" .!…")
+    return not low or any(h in low for h in WHISPER_HALLUCINATIONS)
+
+
 async def speech_to_text(audio: bytes, filename: str = "audio.wav") -> str:
     url = config.STT_URL.rstrip("/") + "/audio/transcriptions"
     files = {"file": (filename, audio)}
@@ -53,7 +62,8 @@ async def speech_to_text(audio: bytes, filename: str = "audio.wav") -> str:
         resp = await http.post(url, files=files, data=data, headers=_headers(config.STT_TOKEN))
     if resp.status_code != 200:
         raise AIError(f"STT ответил {resp.status_code}: {resp.text[:300]}")
-    return resp.json().get("text", "").strip()
+    text = resp.json().get("text", "").strip()
+    return "" if is_hallucination(text) else text
 
 
 async def text_to_speech(text: str) -> bytes:

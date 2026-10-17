@@ -8,7 +8,6 @@ from app.stand_client import StandClient
 
 
 class FakeStand:
-    pass
 
     def __init__(self, broken: bool = False):
         self.broken = broken
@@ -179,3 +178,37 @@ async def test_home_visit_child_goes_to_pediatrician(mis):
         pytest.skip("воскресенье")
     await talk("врача на дом ребёнку", "Сидорова Аня 05.05.2020", "Лесная 12", "температура")
     assert "педиатр" in mis.escalations[-1]["description"]
+
+
+async def test_heart_pain_is_emergency(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "у меня болит сердце")
+    assert r.escalation and r.escalation.emergency and not mis.visits
+
+
+async def test_named_date_beats_option_number(mis):
+    r = await dialog.handle(None, "")
+    for p in ("запишите к терапевту", "Козлов Андрей 10.10.1990"):
+        r = await dialog.handle(r.session_id, p)
+    day = (schedule.now().date() + __import__("datetime").timedelta(days=12)).strftime("%d.%m.%Y")
+    r = await dialog.handle(r.session_id, day)
+    assert "Есть свободное время" in r.reply or "нет" in r.reply.lower()
+    assert not r.booking or r.options
+
+
+async def test_booking_with_named_doctor(mis):
+    await talk("запишите к Дорохову", "Козлов Андрей 10.10.1990", "1", "да")
+    assert mis.visits and mis.visits[0]["doctor"]["full_name"].startswith("Дорохов")
+
+
+async def test_reschedule_to_other_doctor_books_new_and_cancels_old(mis):
+    await talk("запишите к Богдановой", "Козлов Андрей 10.10.1990", "1", "да")
+    r = await talk("перенести запись к Дорохову", "Козлов Андрей 10.10.1990", "1", "да")
+    assert "Прежняя запись отменена" in r.reply
+    assert mis.visits[0]["status"] == "Отменена"
+    assert mis.visits[1]["doctor"]["full_name"].startswith("Дорохов")
+
+
+def test_whisper_hallucination_filtered():
+    from app import ai
+    assert ai.is_hallucination("Продолжение следует...")
+    assert not ai.is_hallucination("Запишите к терапевту")

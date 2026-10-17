@@ -26,7 +26,7 @@ LABELS = {"specialty": "специальность", "last_name": "фамили�
 
 
 class StandDown(Exception):
-    pass
+    """МИС недоступна или отказала — по регламенту переводим на регистратора (R-06)."""
 
 
 def _collected(s: dict) -> dict:
@@ -188,6 +188,18 @@ def _short(name: str) -> str:
     return " ".join([parts[0]] + [f"{p[0]}." for p in parts[1:]])
 
 
+def _same_doctor(full_name: str, wanted: str) -> bool:
+    a = full_name.split()[0].lower().replace("ё", "е")
+    b = wanted.split()[0].lower().replace("ё", "е")
+    n = max(4, min(len(a), len(b)) - 2)
+    return a[:n] == b[:n]
+
+
+def _wanted_specialty(wanted: str) -> str | None:
+    doc = next((d for d in schedule.demo_doctors() if _same_doctor(d["full_name"], wanted)), None)
+    return doc["specialty"] if doc else None
+
+
 def _room(name: str) -> str:
     doc = schedule.excel_doctor(name) or {}
     return f", кабинет {doc['cabinet']}" if doc.get("cabinet") else ""
@@ -256,7 +268,7 @@ def _pick(s: dict, nl: dict, key: str) -> object | None:
 
 
 async def _choose_slot(s: dict, nl: dict, doctors_for_retry) -> ChatResponse | None:
-    chosen = _pick(s, nl, "options")
+    chosen = None if (nl["date"] or nl["part_of_day"]) else _pick(s, nl, "options")
     if chosen:
         s["chosen"] = chosen
         s["step"] = "confirm"
@@ -291,6 +303,10 @@ async def _choose_visit(s: dict, nl: dict, verb: str) -> ChatResponse | None:
 async def task_booking(s: dict, nl: dict) -> ChatResponse:
     c = s["c"]
     s["call"]["intent"] = "Запись к врачу"
+    if c.get("doctor_name") and not c.get("specialty"):
+        c["specialty"] = _wanted_specialty(c["doctor_name"])
+        if not c["specialty"]:
+            c.pop("specialty")
     if not c.get("specialty"):
         s["step"] = "specialty"
         return _reply(s, "К какому врачу вас записать?")
@@ -299,6 +315,10 @@ async def task_booking(s: dict, nl: dict) -> ChatResponse:
         c.pop("specialty")
         s["step"] = "specialty"
         return _reply(s, "К такому специалисту записать не могу. Назовите другого врача, например терапевта.")
+    if c.get("doctor_name"):
+        chosen_docs = [d for d in doctors if _same_doctor(d["full_name"], c["doctor_name"])]
+        if chosen_docs:
+            doctors = chosen_docs
     if (r := await _need_identity(s)):
         return r
 
@@ -314,7 +334,11 @@ async def task_booking(s: dict, nl: dict) -> ChatResponse:
                 return await _offer_slots(s, doctors)
             visit = await _create_visit(s, o)
             done = o.model_copy(update={"visit_id": visit["id"], "status": "Запланирована"})
-            return _task_done(s, f"Готово, вы записаны {o.spoken}{_room(o.doctor_name)}. "
+            extra = ""
+            if (old := s.pop("replace_visit", None)):
+                await _cancel_visit(s, old)
+                extra = " Прежняя запись отменена."
+            return _task_done(s, f"Готово, вы записаны {o.spoken}{_room(o.doctor_name)}.{extra} "
                                  "Возьмите паспорт и полис ОМС.", "записан", booking=done)
         if nl["answer"] == "no" or nl["date"] or nl["part_of_day"]:
             return await _offer_slots(s, doctors)
@@ -335,6 +359,16 @@ async def task_reschedule(s: dict, nl: dict) -> ChatResponse:
         return r
     visit = s["visit"]
     doctor = visit["doctor"]
+    wanted = s["c"].get("doctor_name")
+    if wanted and not _same_doctor(doctor["full_name"], wanted):
+        s["replace_visit"] = visit
+        for key in ("visit", "visits", "options", "chosen"):
+            s.pop(key, None)
+        s["c"]["specialty"] = _wanted_specialty(wanted) or doctor["specialty"]
+        s["task"], s["step"] = "booking", "start"
+        r = await task_booking(s, nl)
+        r.reply = "К другому врачу оформлю новую запись, а прежнюю отменю. " + r.reply
+        return r
 
     async def same_doctor():
         return [doctor]
@@ -358,7 +392,7 @@ async def task_reschedule(s: dict, nl: dict) -> ChatResponse:
 
     o = s["chosen"]
     old = schedule.say_slot(schedule.from_api(visit["scheduled_at"]))
-    return _reply(s, f"Переношу запись, врач {_short(o.doctor_name)}. Было: {old}. Станет: {o.spoken}. Верно?",
+    return _reply(s, f"Переношу запись, врач {o.doctor_name}. Было: {old}. Станет: {o.spoken}. Верно?",
                   booking=o)
 
 

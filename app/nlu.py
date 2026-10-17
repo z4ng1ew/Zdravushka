@@ -154,6 +154,11 @@ def fallback(text: str, expecting: str) -> dict:
         raw["answer"] = "yes"
     elif re.search(r"\b(нет|не надо|неверно|не так)\b", low):
         raw["answer"] = "no"
+    for d in schedule.demo_doctors():
+        last = d["full_name"].split()[0].lower().replace("ё", "е")
+        if re.search(r"\b" + last[:max(4, len(last) - 2)], low):
+            raw["doctor_name"] = d["full_name"].split()[0]
+            break
     if expecting == "identity":
         words_ = re.findall(r"[А-Яа-яЁё\-]+", text)
         if len(words_) >= 2:
