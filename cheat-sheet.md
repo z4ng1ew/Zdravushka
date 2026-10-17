@@ -102,6 +102,8 @@ wget -O data/voices/ru_RU-irina-medium.onnx.json https://huggingface.co/rhasspy/
 source .venv-silero/bin/activate
 
 
+
+
 # Обычное окружение
 source .venv/bin/activate
 
@@ -130,3 +132,21 @@ source .venv/bin/activate
 Silero: source .venv-silero/bin/activate && python scripts/silero_server.py
 Здравушка: source .venv/bin/activate && uvicorn app.main:app --reload --reload-dir app --port 8000
 Телефон (в наушниках):
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Проверить связь со стендом (должно показать ~85 врачей):
+
+source .venv/bin/activate
+
+python -m scripts.check_stand

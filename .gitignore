@@ -7,3 +7,19 @@ data/raw/
 data/tmp/
 data/runtime/
 data/voices/
+Instructions.md__pycache__/
+*.pyc
+.venv/
+.env
+data/raw/
+data/runtime/
+data/voices/
+*.wav
+архив/
+промпт
+project_contents.txt
+save_project.sh
+FRONT-FILES/
+cheat-sheet.md
+TODO.MD
+Instructions for Muslim.md
