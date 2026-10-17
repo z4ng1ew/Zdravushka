@@ -1,7 +1,3 @@
-# Автотесты сценариев Здравушки, включая пограничные случаи (edge cases).
-# Стенд «Регистратура» подменяется заглушкой в памяти — тесты не трогают настоящий МИС и не тратят лимит.
-# Нейросеть не нужна: работает запасной разбор фраз (как при сбое LLM).
-# Запуск:  pip install pytest  &&  python -m pytest -q tests/
 import json
 
 import httpx
@@ -12,7 +8,6 @@ from app.stand_client import StandClient
 
 
 class FakeStand:
-    """Заглушка стенда: те же адреса и ответы, что у настоящего, данные — в памяти."""
 
     def __init__(self, broken: bool = False):
         self.broken = broken
@@ -71,7 +66,7 @@ class FakeStand:
 def mis(monkeypatch):
     fake = FakeStand()
     monkeypatch.setattr(config, "STAND_RATE_LIMIT", 1000)
-    monkeypatch.setattr(config, "LLM_URL", "")      # без нейросети — запасной разбор
+    monkeypatch.setattr(config, "LLM_URL", "")
     client = StandClient(base_url="https://stand/api/v1", token="t", transport=httpx.MockTransport(fake))
     monkeypatch.setattr(dialog, "stand", client)
     dialog.SESSIONS.clear()
@@ -79,14 +74,11 @@ def mis(monkeypatch):
 
 
 async def talk(*phrases: str):
-    """Разговор от приветствия до конца. Возвращает последний ответ."""
     r = await dialog.handle(None, "")
     for p in phrases:
         r = await dialog.handle(r.session_id, p)
     return r
 
-
-# ---------- Основные сценарии ----------
 
 async def test_booking_creates_visit(mis):
     r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
@@ -126,8 +118,6 @@ async def test_patient_says_no_on_confirm(mis):
     assert "Есть свободное время" in r.reply and not mis.visits
 
 
-# ---------- Безопасность и переводы на человека ----------
-
 async def test_emergency_without_identity_uses_tech_client(mis):
     r = await talk("у меня болит грудь")
     assert r.escalation.rule == "R-01" and r.escalation.emergency and r.done
@@ -138,7 +128,7 @@ async def test_emergency_without_identity_uses_tech_client(mis):
 async def test_emergency_mid_booking_stops_booking(mis):
     r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "мужу плохо, потерял сознание")
     assert r.escalation.rule == "R-01" and not mis.visits
-    assert mis.escalations[0]["client_id"] == mis.clients[0]["id"]  # заявка на названного пациента
+    assert mis.escalations[0]["client_id"] == mis.clients[0]["id"]
 
 
 async def test_operator_request(mis):
@@ -170,11 +160,9 @@ async def test_three_misunderstandings_go_to_operator(mis):
 
 async def test_stand_down_goes_to_operator(mis):
     mis.broken = True
-    r = await talk("запишите к терапевту")      # МИС не отвечает уже на поиске врачей
+    r = await talk("запишите к терапевту")
     assert r.escalation and r.escalation.rule == "R-06" and r.done
 
-
-# ---------- Вызов врача на дом ----------
 
 async def test_home_visit_creates_request_with_address(mis):
     r = await talk("вызвать врача на дом", "Сидоров Семён 05.05.1950", "улица Лесная 12 кв 40",
@@ -191,8 +179,6 @@ async def test_home_visit_child_goes_to_pediatrician(mis):
     await talk("врача на дом ребёнку", "Сидорова Аня 05.05.2020", "Лесная 12", "температура")
     assert "педиатр" in mis.escalations[-1]["description"]
 
-
-# ---------- Случаи из живого прогона 17.10 ----------
 
 async def test_heart_pain_is_emergency(mis):
     r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "у меня болит сердце")
@@ -228,8 +214,6 @@ def test_whisper_hallucination_filtered():
     assert not ai.is_hallucination("Запишите к терапевту")
 
 
-# ---------- Случаи из первого звонка по телефону 17.10 ----------
-
 async def test_which_doctors_lists_specialties(mis):
     r = await talk("запишите меня", "а какие есть врачи?")
     assert "терапевт" in r.reply and "Центральной" not in r.reply
@@ -240,3 +224,14 @@ async def test_only_year_asks_full_birth_date(mis):
     assert "число, месяц и год" in r.reply
     r = await dialog.handle(r.session_id, "10.10.1985")
     assert "Есть свободное время" in r.reply
+
+
+async def test_sudden_severe_headache_is_emergency(mis):
+    r = await talk("У меня резко, очень сильно заболела голова. Я не знаю, что делать.")
+    assert r.escalation and r.escalation.emergency
+
+
+def test_severe_pain_words():
+    from app import safety
+    assert safety.check("очень сильно болит живот").rule == "R-11"
+    assert safety.check("болит горло") is None

@@ -1,3 +1,5 @@
+import re
+
 from app.models import Escalation
 
 RED_FLAGS_A = [
@@ -21,6 +23,11 @@ RED_FLAGS_B = [
     "не могу встать", "распухла", "порезался глубоко",
 ]
 
+_STRONG = r"(резк|внезапн|очень сильн|сильно|невыносим|адск|нестерпим)"
+SEVERE_PAIN = re.compile(_STRONG + r"\w*\W+(\w+\W+){0,3}(забол|бол)|(забол|бол)\w*\W+(\w+\W+){0,3}" + _STRONG)
+SUDDEN_HEADACHE = re.compile(r"(резк|внезапн|очень сильн|сильно|невыносим)\w*\W+(\w+\W+){0,3}(забол|бол)\w*\W+(\w+\W+){0,2}голов"
+                             r"|голов\w*\W+(\w+\W+){0,2}(резк|внезапн|очень сильн|невыносим)")
+
 WANT_HUMAN = ["оператор", "живой человек", "живого человека", "с человеком", "сотрудник", "регистратор"]
 
 COMPLAINT = ["жалоб", "пожаловаться", "безобразие", "нагрубил", "хамств", "хамит", "буду жаловаться"]
@@ -30,11 +37,14 @@ DENTAL = ["болит зуб", "зубная боль", "флюс", "выбил 
 
 def check(text: str) -> Escalation | None:
     low = " " + text.lower().replace("ё", "е") + " "
+    if SUDDEN_HEADACHE.search(low):
+        return Escalation(rule="R-01", reason="неотложное состояние", priority="P1", emergency=True,
+                          summary=f"Внезапная сильная головная боль: «{text}»")
     norm = [w.replace("ё", "е") for w in RED_FLAGS_A]
     if any(w in low for w in norm):
         return Escalation(rule="R-01", reason="неотложное состояние", priority="P1", emergency=True,
                           summary=f"Красный флаг: «{text}»")
-    if any(w.replace("ё", "е") in low for w in RED_FLAGS_B):
+    if any(w.replace("ё", "е") in low for w in RED_FLAGS_B) or SEVERE_PAIN.search(low):
         return Escalation(rule="R-11", reason="острая боль", priority="P1",
                           summary=f"Острое состояние: «{text}»")
     if any(w in low for w in WANT_HUMAN):
