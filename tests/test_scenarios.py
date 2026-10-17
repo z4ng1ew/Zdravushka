@@ -235,3 +235,47 @@ def test_severe_pain_words():
     from app import safety
     assert safety.check("очень сильно болит живот").rule == "R-11"
     assert safety.check("болит горло") is None
+
+
+async def _booked(mis):
+    await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    return mis.visits[0]
+
+
+async def test_reminder_confirmed(mis):
+    v = await _booked(mis)
+    r = dialog.start_reminder("rem1", v)
+    assert "Вы придёте" in r.reply
+    r = await dialog.handle("rem1", "да, приду")
+    assert r.done and "ждём вас" in r.reply
+    assert dialog.journal.REMINDERS[v["id"]]["status"] == "подтвердил"
+    assert "Подтвердил" in mis.clients[0]["comment"]
+
+
+async def test_reminder_cancel(mis):
+    v = await _booked(mis)
+    dialog.start_reminder("rem2", v)
+    r = await dialog.handle("rem2", "нет, не смогу")
+    assert "Отменить" in r.reply
+    r = await dialog.handle("rem2", "отмените")
+    assert r.done and mis.visits[0]["status"] == "Отменена"
+    assert dialog.journal.REMINDERS[v["id"]]["status"] == "отменил"
+
+
+async def test_reminder_reschedule(mis):
+    v = await _booked(mis)
+    old = v["scheduled_at"]
+    dialog.start_reminder("rem3", v)
+    r = await dialog.handle("rem3", "перенесите, пожалуйста")
+    assert "Есть свободное время" in r.reply
+    await dialog.handle("rem3", "1")
+    r = await dialog.handle("rem3", "да")
+    assert "перенесена" in r.reply and mis.visits[0]["scheduled_at"] != old
+    assert dialog.journal.REMINDERS[v["id"]]["status"] == "перенёс"
+
+
+async def test_reminder_emergency_still_works(mis):
+    v = await _booked(mis)
+    dialog.start_reminder("rem4", v)
+    r = await dialog.handle("rem4", "мне плохо, болит сердце")
+    assert r.escalation and r.escalation.emergency

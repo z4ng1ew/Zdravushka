@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -109,16 +110,49 @@ async def reminders():
     return result
 
 
+async def _ring_all(visits: list[dict]):
+    for v in visits:
+        outcome = await telephony.call_reminder(v)
+        r = journal.REMINDERS.setdefault(v["id"], {})
+        if outcome in ("не дозвонились", "ошибка звонка") or r.get("status") in (None, "ожидает", "звоним"):
+            r["status"] = outcome if outcome != "звонок завершён" else "без ответа"
+        journal.save()
+
+
 @app.post("/api/reminders/run")
 async def run_reminders():
-    queued = 0
-    for v in await _tomorrow_visits():
-        r = journal.REMINDERS.setdefault(v["id"], {"status": "ожидает"})
-        if r["status"] == "ожидает":
-            r["status"] = "звоним"
-            queued += 1
+    if RINGING["task"] and not RINGING["task"].done():
+        return {"queued": 0, "note": "обзвон уже идёт"}
+    visits = [v for v in await _tomorrow_visits()
+              if journal.REMINDERS.setdefault(v["id"], {"status": "ожидает"})["status"] in ("ожидает", "не дозвонились")]
+    for v in visits:
+        journal.REMINDERS[v["id"]]["status"] = "в очереди"
     journal.save()
-    return {"queued": queued}
+    RINGING["task"] = asyncio.create_task(_ring_all(visits))
+    return {"queued": len(visits)}
+
+
+@app.post("/api/reminders/{visit_id}/call")
+async def call_one(visit_id: int):
+    visits = [v for v in await _visits_from_tomorrow() if v["id"] == visit_id]
+    if not visits:
+        raise HTTPException(404, "Запись не найдена или уже прошла")
+    if RINGING["task"] and not RINGING["task"].done():
+        raise HTTPException(409, "Сейчас идёт другой звонок")
+    RINGING["task"] = asyncio.create_task(_ring_all(visits))
+    return {"queued": 1}
+
+
+async def _visits_from_tomorrow() -> list[dict]:
+    if dialog.stand:
+        visits = await dialog.stand.list_visits(status="Запланирована")
+    else:
+        visits = [v for v in dialog.DEMO_VISITS.values() if v["status"] == "Запланирована"]
+    now = schedule.now()
+    return [v for v in visits if schedule.from_api(v["scheduled_at"]) > now]
+
+
+RINGING: dict = {"task": None}
 
 
 static_dir = Path(__file__).resolve().parent.parent / "static"

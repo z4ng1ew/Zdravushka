@@ -39,6 +39,7 @@ PIPER_MODEL = os.getenv("PIPER_MODEL", "data/voices/ru_RU-irina-medium.onnx")
 TELEPHONY_ENABLED = os.getenv("TELEPHONY_ENABLED", "1") == "1"
 AUDIOSOCKET_HOST = os.getenv("AUDIOSOCKET_HOST", "127.0.0.1")
 AUDIOSOCKET_PORT = int(os.getenv("AUDIOSOCKET_PORT", "9092"))
+REMINDER_ENDPOINT = os.getenv("REMINDER_ENDPOINT", "PJSIP/phone-049@gateway")
 VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "500"))
 END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "800"))
 MIN_SPEECH_MS = int(os.getenv("MIN_SPEECH_MS", "250"))

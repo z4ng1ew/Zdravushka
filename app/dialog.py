@@ -1,10 +1,3 @@
-# Мозг Здравушки: ведёт разговор по сценариям регламента и выполняет действия в МИС.
-# Нейросеть только ПОНИМАЕТ фразу (app/nlu.py). Все решения — врач, время, запись,
-# перевод на человека — принимает этот код. Поэтому записи не бывают «выдуманными».
-#
-# Режимы:
-#   - есть STAND_TOKEN в .env  → работаем с настоящим стендом «Регистратура»;
-#   - нет токена               → демо-режим: те же сценарии, записи хранятся в памяти.
 import re
 import uuid
 from datetime import date, datetime, timedelta
@@ -25,8 +18,8 @@ ANYTHING_ELSE = "Могу ещё чем-то помочь?"
 stand = StandClient() if config.STAND_TOKEN else None
 
 SESSIONS: dict[str, dict] = {}
-DEMO_CLIENTS: dict[tuple, dict] = {}   # демо-режим: пациенты
-DEMO_VISITS: dict[int, dict] = {}      # демо-режим: записи
+DEMO_CLIENTS: dict[tuple, dict] = {}
+DEMO_VISITS: dict[int, dict] = {}
 
 TASKS = {"booking", "reschedule", "cancel", "status", "schedule_info", "info", "home_visit"}
 
@@ -38,8 +31,6 @@ LABELS = {"specialty": "специальность", "last_name": "фамили�
 class StandDown(Exception):
     """МИС недоступна или отказала — по регламенту переводим на регистратора (R-06)."""
 
-
-# ---------- Ответ пациенту ----------
 
 def _collected(s: dict) -> dict:
     return {LABELS[k]: v for k, v in s["c"].items() if k in LABELS and v}
@@ -60,7 +51,6 @@ def _finish(s: dict) -> ChatResponse:
 
 
 async def _escalation_client(s: dict) -> dict | None:
-    """Клиент для заявки: названный пациент, иначе — технический «Срочный Вызов Иванович»."""
     if s.get("client"):
         return s["client"]
     c = s["c"]
@@ -76,7 +66,6 @@ async def _escalation_client(s: dict) -> dict | None:
 
 
 async def _send_escalation(s: dict, description: str):
-    """Заявка на соединение со специалистом в МИС (POST /escalations). В демо-режиме — только журнал."""
     if not stand:
         return
     client = await _escalation_client(s)
@@ -85,11 +74,10 @@ async def _send_escalation(s: dict, description: str):
     try:
         await _mis(s, "POST", "/escalations", stand.create_escalation(client["id"], description))
     except StandDown:
-        pass  # МИС недоступна — перевод всё равно состоится, карточка есть в журнале регистратора
+        pass
 
 
 async def _escalate(s: dict, esc: Escalation) -> ChatResponse:
-    """Перевод на человека: заявка в МИС + карточка в очередь регистратора + фраза из регламента."""
     c = s["c"]
     who = journal.mask_name(c.get("last_name"), c.get("first_name"), c.get("middle_name"))
     esc.summary = f"{esc.summary}. Пациент: {who or 'не назван'}. Задача: {s.get('task') or '—'}."
@@ -104,7 +92,6 @@ async def _escalate(s: dict, esc: Escalation) -> ChatResponse:
 
 
 def _task_done(s: dict, text: str, result: str, **kw) -> ChatResponse:
-    """Задача выполнена: фиксируем результат и спрашиваем, нужно ли что-то ещё."""
     s["call"]["result"] = result
     s["last_task"], s["task"], s["step"] = s["task"], None, "more"
     for key in ("options", "visits", "visit", "chosen"):
@@ -112,10 +99,7 @@ def _task_done(s: dict, text: str, result: str, **kw) -> ChatResponse:
     return _reply(s, f"{text} {ANYTHING_ELSE}", **kw)
 
 
-# ---------- Работа с МИС (стенд или демо) ----------
-
 async def _mis(s: dict, method: str, path: str, coro):
-    """Вызов стенда с записью в журнал звонка. Любой сбой → StandDown → перевод (R-06)."""
     try:
         result = await coro
     except StandError as e:
@@ -129,7 +113,6 @@ async def _mis(s: dict, method: str, path: str, coro):
 
 
 async def _doctors(specialty: str) -> list[dict]:
-    """Активные врачи специальности, у которых есть расписание."""
     if stand:
         docs = await stand.active_doctors(specialty)
     else:
@@ -138,7 +121,6 @@ async def _doctors(specialty: str) -> list[dict]:
 
 
 async def _busy(s: dict) -> set[tuple[int, str]]:
-    """Наши запланированные записи на ближайший месяц — одним запросом (экономим лимит)."""
     today = schedule.now().date()
     if stand:
         visits = await _mis(s, "GET", "/visits", stand.list_visits(
@@ -150,7 +132,6 @@ async def _busy(s: dict) -> set[tuple[int, str]]:
 
 
 async def _identify(s: dict) -> dict:
-    """Поиск пациента по фамилии, имени и дате рождения. Нет в МИС — заводим карточку."""
     c = s["c"]
     if stand:
         client = await _mis(s, "GET", "/clients", stand.find_client(
@@ -170,7 +151,6 @@ async def _identify(s: dict) -> dict:
 
 
 async def _client_visits(s: dict) -> list[dict]:
-    """Будущие запланированные записи пациента, по времени."""
     cid = s["client"]["id"]
     if stand:
         visits = await _mis(s, "GET", "/visits", stand.list_visits(client_id=cid, status="Запланирована"))
@@ -206,16 +186,12 @@ async def _cancel_visit(s: dict, visit: dict) -> dict:
     return DEMO_VISITS[visit["id"]]
 
 
-# ---------- Общие шаги сценариев ----------
-
 def _short(name: str) -> str:
-    """«Ковалёва Людмила Петровна» → «Ковалёва Л. П.» — короче для голоса."""
     parts = name.split()
     return " ".join([parts[0]] + [f"{p[0]}." for p in parts[1:]])
 
 
 def _same_doctor(full_name: str, wanted: str) -> bool:
-    """«Дорохов Сергей Анатольевич» и «Дорохову» — один врач (сравниваем основу фамилии)."""
     a = full_name.split()[0].lower().replace("ё", "е")
     b = wanted.split()[0].lower().replace("ё", "е")
     n = max(4, min(len(a), len(b)) - 2)
@@ -223,7 +199,6 @@ def _same_doctor(full_name: str, wanted: str) -> bool:
 
 
 def _wanted_specialty(wanted: str) -> str | None:
-    """Специальность врача, которого пациент назвал по фамилии."""
     doc = next((d for d in schedule.demo_doctors() if _same_doctor(d["full_name"], wanted)), None)
     return doc["specialty"] if doc else None
 
@@ -246,7 +221,6 @@ def _visit_booking(v: dict) -> Booking:
 
 
 async def _need_identity(s: dict) -> ChatResponse | None:
-    """Спрашиваем ФИО и дату рождения, пока не узнаем пациента. None — пациент известен."""
     if s.get("client"):
         return None
     c = s["c"]
@@ -256,7 +230,7 @@ async def _need_identity(s: dict) -> ChatResponse | None:
     if not c.get("birth_date"):
         again = s["step"] == "birth_date"
         s["step"] = "birth_date"
-        if again:  # не поняли с первого раза (например, назвали только год) — подсказываем формат
+        if again:
             return _reply(s, "Назовите дату рождения полностью: число, месяц и год. "
                              "Например: первое января тысяча девятьсот восемьдесят пятого.")
         return _reply(s, "Назовите дату рождения пациента.")
@@ -265,7 +239,6 @@ async def _need_identity(s: dict) -> ChatResponse | None:
 
 
 async def _offer_slots(s: dict, doctors: list[dict], exclude: str | None = None) -> ChatResponse:
-    """Ищем до трёх вариантов времени с учётом пожеланий и предлагаем пациенту."""
     c = s["c"]
     busy = await _busy(s)
     if exclude:
@@ -293,7 +266,6 @@ async def _offer_slots(s: dict, doctors: list[dict], exclude: str | None = None)
 
 
 def _pick(s: dict, nl: dict, key: str) -> object | None:
-    """Выбор варианта по номеру («второй») из списка s[key]."""
     items = s.get(key) or []
     if nl["choice"] and nl["choice"] <= len(items):
         return items[nl["choice"] - 1]
@@ -303,8 +275,6 @@ def _pick(s: dict, nl: dict, key: str) -> object | None:
 
 
 async def _choose_slot(s: dict, nl: dict, doctors_for_retry) -> ChatResponse | None:
-    """Шаг выбора времени: номер варианта → подтверждение; новый день/время → новый поиск."""
-    # Назван новый день («29 октября») — это новый поиск, даже если модель увидела в фразе «номер»
     chosen = None if (nl["date"] or nl["part_of_day"]) else _pick(s, nl, "options")
     if chosen:
         s["chosen"] = chosen
@@ -317,7 +287,6 @@ async def _choose_slot(s: dict, nl: dict, doctors_for_retry) -> ChatResponse | N
 
 
 async def _choose_visit(s: dict, nl: dict, verb: str) -> ChatResponse | None:
-    """Находим записи пациента; если их несколько — просим выбрать."""
     if "visits" not in s:
         s["visits"] = await _client_visits(s)
     visits = s["visits"]
@@ -338,10 +307,7 @@ async def _choose_visit(s: dict, nl: dict, verb: str) -> ChatResponse | None:
     return _reply(s, f"У вас несколько записей: {listing}. Какую {verb}?", options=items)
 
 
-# ---------- Сценарии (регламент, раздел 5) ----------
-
 async def task_booking(s: dict, nl: dict) -> ChatResponse:
-    """С-01. Запись на приём."""
     c = s["c"]
     s["call"]["intent"] = "Запись к врачу"
     if c.get("doctor_name") and not c.get("specialty"):
@@ -356,7 +322,7 @@ async def task_booking(s: dict, nl: dict) -> ChatResponse:
         c.pop("specialty")
         s["step"] = "specialty"
         return _reply(s, "К такому специалисту записать не могу. Назовите другого врача, например терапевта.")
-    if c.get("doctor_name"):  # пациент хочет конкретного врача
+    if c.get("doctor_name"):
         chosen_docs = [d for d in doctors if _same_doctor(d["full_name"], c["doctor_name"])]
         if chosen_docs:
             doctors = chosen_docs
@@ -372,11 +338,11 @@ async def task_booking(s: dict, nl: dict) -> ChatResponse:
             busy = await _busy(s)
             doc = next(d for d in doctors if d["id"] == o.doctor_id)
             if (o.doctor_id, o.scheduled_at) in busy or not schedule.is_valid_slot(doc, schedule.from_api(o.scheduled_at)):
-                return await _offer_slots(s, doctors)  # время успели занять — предлагаем заново
+                return await _offer_slots(s, doctors)
             visit = await _create_visit(s, o)
             done = o.model_copy(update={"visit_id": visit["id"], "status": "Запланирована"})
             extra = ""
-            if (old := s.pop("replace_visit", None)):  # «перенос» к другому врачу: старую запись отменяем
+            if (old := s.pop("replace_visit", None)):
                 await _cancel_visit(s, old)
                 extra = " Прежняя запись отменена."
             return _task_done(s, f"Готово, вы записаны {o.spoken}{_room(o.doctor_name)}.{extra} "
@@ -393,7 +359,6 @@ async def task_booking(s: dict, nl: dict) -> ChatResponse:
 
 
 async def task_reschedule(s: dict, nl: dict) -> ChatResponse:
-    """С-03. Перенос записи: та же запись, новое время у того же врача."""
     s["call"]["intent"] = "Перенос записи"
     if (r := await _need_identity(s)):
         return r
@@ -403,7 +368,6 @@ async def task_reschedule(s: dict, nl: dict) -> ChatResponse:
     doctor = visit["doctor"]
     wanted = s["c"].get("doctor_name")
     if wanted and not _same_doctor(doctor["full_name"], wanted):
-        # Перенос в МИС меняет только время. К другому врачу — новая запись, старая отменяется после «да»
         s["replace_visit"] = visit
         for key in ("visit", "visits", "options", "chosen"):
             s.pop(key, None)
@@ -425,6 +389,7 @@ async def task_reschedule(s: dict, nl: dict) -> ChatResponse:
             if (o.doctor_id, o.scheduled_at) in await _busy(s):
                 return await _offer_slots(s, [doctor], exclude=(doctor["id"], visit["scheduled_at"]))
             updated = await _reschedule_visit(s, visit, o)
+            _reminder_status(s, "перенёс", o.scheduled_at)
             return _task_done(s, f"Готово, запись перенесена. Новое время: {o.spoken}{_room(o.doctor_name)}.", "перенесён",
                               booking=_visit_booking(updated))
         if nl["answer"] == "no" or nl["date"] or nl["part_of_day"]:
@@ -440,7 +405,6 @@ async def task_reschedule(s: dict, nl: dict) -> ChatResponse:
 
 
 async def task_cancel(s: dict, nl: dict) -> ChatResponse:
-    """С-04. Отмена записи (запись не удаляется, а получает статус «Отменена»)."""
     s["call"]["intent"] = "Отмена записи"
     if (r := await _need_identity(s)):
         return r
@@ -450,6 +414,7 @@ async def task_cancel(s: dict, nl: dict) -> ChatResponse:
     if s["step"] == "confirm":
         if nl["answer"] == "yes":
             updated = await _cancel_visit(s, s["visit"])
+            _reminder_status(s, "отменил")
             return _task_done(s, "Запись отменена. Спасибо, что предупредили.", "отменён",
                               booking=_visit_booking(updated))
         if nl["answer"] == "no":
@@ -459,7 +424,6 @@ async def task_cancel(s: dict, nl: dict) -> ChatResponse:
 
 
 async def task_status(s: dict, nl: dict) -> ChatResponse:
-    """С-05. Проверка своей записи. Данные называем только после идентификации."""
     s["call"]["intent"] = "Статус записи"
     if (r := await _need_identity(s)):
         return r
@@ -472,7 +436,6 @@ async def task_status(s: dict, nl: dict) -> ChatResponse:
 
 
 async def task_schedule_info(s: dict, nl: dict) -> ChatResponse:
-    """С-07. Когда принимает врач. Идентификация не нужна."""
     c = s["c"]
     s["call"]["intent"] = "График врача"
     docs = []
@@ -489,7 +452,6 @@ async def task_schedule_info(s: dict, nl: dict) -> ChatResponse:
 
 
 async def task_info(s: dict, nl: dict) -> ChatResponse:
-    """Справочные вопросы — ответ дословно из регламента."""
     s["call"]["intent"] = "Справка"
     text = knowledge.answer(nl["topic"])
     if not text:
@@ -499,7 +461,6 @@ async def task_info(s: dict, nl: dict) -> ChatResponse:
 
 
 async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
-    """С-06. Вызов врача на дом: заявка участковому врачу, адрес и повод — в комментарии."""
     c = s["c"]
     s["call"]["intent"] = "Вызов врача на дом"
     now = schedule.now()
@@ -521,7 +482,6 @@ async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
         s["step"] = "reason"
         return _reply(s, "Коротко скажите своими словами, что случилось. Я передам врачу.")
 
-    # Заявки до 14:00 в будни (до 12:00 в субботу) — на сегодня, позже — на следующий рабочий день
     limit = 12 if now.weekday() == 5 else 14
     day = now.date() if now.hour < limit else now.date() + timedelta(days=1)
     while day.weekday() == 6 or day in schedule.HOLIDAYS:
@@ -531,7 +491,6 @@ async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
     specialist = "педиатр" if child else "участковый терапевт"
     note = (f"ВЫЗОВ ВРАЧА НА ДОМ на {day.strftime('%d.%m.%Y')} ({specialist}). Адрес: {c['address']}. "
             f"Повод (слова пациента): {c['reason']}. Требует подтверждения регистратором.")
-    # Заявка на специалиста в МИС: адрес и повод — в описании (так попросили организаторы)
     await _send_escalation(s, note)
     if stand:
         await _mis(s, "PATCH", f"/clients/{s['client']['id']}",
@@ -542,12 +501,65 @@ async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
                          "назвать не могу. Регистратор проверит заявку.", "записан")
 
 
-HANDLERS = {"booking": task_booking, "reschedule": task_reschedule, "cancel": task_cancel,
+def _reminder_status(s: dict, status: str, new_time: str | None = None):
+    vid = s.get("reminder_visit_id")
+    if vid is None:
+        return
+    r = journal.REMINDERS.setdefault(vid, {})
+    r["status"] = status
+    if new_time:
+        r["new_time"] = new_time
+    journal.save()
+
+
+def start_reminder(session_id: str, visit: dict) -> ChatResponse:
+    s = {"id": session_id, "step": "remind", "task": "reminder", "c": {}, "miss": 0,
+         "call": journal.start_call(session_id, "исходящий"),
+         "client": {"id": visit["client_id"]}, "visit": visit, "reminder_visit_id": visit["id"]}
+    s["call"]["intent"] = "Напоминание о приёме"
+    SESSIONS[session_id] = s
+    _reminder_status(s, "звоним")
+    b = _visit_booking(visit)
+    return _reply(s, f"Здравствуйте! Это {config.ASSISTANT_NAME}, виртуальный помощник регистратуры "
+                     f"поликлиники номер семь. Напоминаю о записи: {b.specialty.lower()}, врач {b.doctor_name}, "
+                     f"{b.spoken}{_room(b.doctor_name)}. Вы придёте?", booking=b)
+
+
+async def task_reminder(s: dict, nl: dict) -> ChatResponse:
+    intent = nl["intent"]
+    if intent == "reschedule" or (s["step"] == "remind_no" and (nl["date"] or nl["part_of_day"]
+                                                                or nl["choice"] == 2)):
+        s["task"], s["step"] = "reschedule", "start"
+        return await task_reschedule(s, nl)
+    if intent == "cancel" or (s["step"] == "remind_no" and (nl["answer"] == "yes" or nl["choice"] == 1)):
+        await _cancel_visit(s, s["visit"])
+        _reminder_status(s, "отменил")
+        s["call"]["result"] = "отменён"
+        return _reply(s, "Запись отменена, время освободится для других пациентов. "
+                         "Если понадобится, позвоните нам, и мы запишем вас снова. Всего доброго!", done=True)
+    if s["step"] == "remind" and nl["answer"] == "yes":
+        _reminder_status(s, "подтвердил")
+        s["call"]["result"] = "подтверждён"
+        if stand:
+            await _mis(s, "PATCH", f"/clients/{s['client']['id']}", stand.update_client_comment(
+                s["client"]["id"], f"Подтвердил визит {s['visit']['scheduled_at']} (звонок-напоминание)"))
+        return _reply(s, "Спасибо, ждём вас. Возьмите паспорт и полис ОМС. Всего доброго!", done=True)
+    if s["step"] == "remind" and nl["answer"] == "no":
+        s["step"] = "remind_no"
+        return _reply(s, "Понятно. Отменить запись или подобрать другое время?")
+    s["miss"] += 1
+    if s["miss"] >= 2:
+        return await _escalate(s, Escalation(rule="R-05", reason="не распознано", priority="P3",
+                                             summary="Напоминание: пациент не дал понятного ответа"))
+    if s["step"] == "remind_no":
+        return _reply(s, "Скажите, пожалуйста: отменить запись или перенести на другое время?")
+    return _reply(s, "Простите, не поняла. Вы придёте на приём? Скажите «да» или «нет».")
+
+
+HANDLERS = {"reminder": task_reminder, "booking": task_booking, "reschedule": task_reschedule, "cancel": task_cancel,
             "status": task_status, "schedule_info": task_schedule_info, "info": task_info,
             "home_visit": task_home_visit}
 
-
-# ---------- Главная функция ----------
 
 async def handle(session_id: str | None, text: str) -> ChatResponse:
     if not session_id or session_id not in SESSIONS:
@@ -565,11 +577,9 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
         return _reply(s, "Вы меня слышите?")
     journal.say(s["call"], "patient", text)
 
-    # 1. Безопасность — до нейросети, на каждой реплике
     if (esc := safety.check(text)):
         return await _escalate(s, esc)
 
-    # Пожилой пациент не расслышал: повторяем медленнее и громче, на второй раз — сотрудник (R-15)
     if safety.asks_repeat(text) and s.get("last_reply"):
         s["repeats"] = s.get("repeats", 0) + 1
         if s["repeats"] >= 2:
@@ -580,22 +590,17 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
         s["last_reply"] = last
         return resp
 
-    # «Какие есть врачи?» — перечисляем основных специалистов и ждём выбора
     if WHICH_DOCTORS.search(text.lower()):
         s["step"] = "specialty"
         s["task"] = s.get("task") or "booking"
         return _reply(s, "У нас принимают терапевты, педиатры, офтальмологи, лор, неврологи, кардиологи, хирурги, "
                          "гинекологи, стоматологи и другие специалисты. К какому врачу записать?")
 
-    # 2. Понимание фразы
     nl = await nlu.understand(text, s["step"])
-    # ФИО берём, только когда мы его спрашивали (или назвали вместе с датой рождения),
-    # иначе модель может принять за фамилию случайное слово из фразы
     if s["step"] not in ("identity", "birth_date") and not nl["birth_date"]:
         for key in ("last_name", "first_name", "middle_name"):
             nl[key] = None
     intent = nl["intent"]
-    # Ждём конкретный ответ (адрес, повод вызова) — симптомы здесь это ответ, а не медицинский вопрос
     if s["step"] == "reason":
         nl["reason"] = nl["reason"] or text
         if intent in ("medical", "other", None):
@@ -622,10 +627,8 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     if intent == "goodbye" and not s.get("task"):
         return _finish(s)
 
-    # 3. Какая задача: новая или продолжаем текущую
     if intent in TASKS and (not s.get("task") or s["step"] in ("start", "more", "specialty")):
         if intent != s.get("task") or s["step"] == "more":
-            # новая задача: забываем детали прошлой (врач, дата, адрес), но помним пациента
             for key in ("options", "visits", "visit", "chosen"):
                 s.pop(key, None)
             for key in ("specialty", "doctor_name", "date", "part_of_day", "address", "reason"):
@@ -634,7 +637,6 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
         if s["step"] in ("start", "more"):
             s["step"] = "start"
 
-    # 4. Запоминаем всё, что пациент назвал
     for key in ("specialty", "doctor_name", "last_name", "first_name", "middle_name", "birth_date",
                 "date", "part_of_day", "address", "reason"):
         if nl[key]:
@@ -654,7 +656,6 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
                              "или подсказать график. Что нужно?")
     s["miss"] = 0
 
-    # 5. Выполняем сценарий
     try:
         return await HANDLERS[s["task"]](s, nl)
     except (StandDown, StandError, httpx.HTTPError) as e:
