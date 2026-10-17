@@ -279,3 +279,21 @@ async def test_reminder_emergency_still_works(mis):
     dialog.start_reminder("rem4", v)
     r = await dialog.handle("rem4", "мне плохо, болит сердце")
     assert r.escalation and r.escalation.emergency
+
+
+async def test_cancel_both_visits(mis):
+    await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    await talk("запишите к окулисту", "Козлов Андрей 10.10.1990", "1", "да")
+    r = await talk("отмените запись", "Козлов Андрей 10.10.1990", "обе отмените")
+    assert "Отменила все записи: 2" in r.reply
+    assert all(v["status"] == "Отменена" for v in mis.visits)
+
+
+async def test_reminder_cancel_other_visit_keeps_status_correct(mis):
+    await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    await talk("запишите к окулисту", "Козлов Андрей 10.10.1990", "1", "да")
+    v1, v2 = mis.visits
+    dialog.journal.REMINDERS.clear()
+    dialog.start_reminder("rem5", v1)
+    await dialog.handle("rem5", "да")
+    assert dialog.journal.REMINDERS[v1["id"]]["status"] == "подтвердил"

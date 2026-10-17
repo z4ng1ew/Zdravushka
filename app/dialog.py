@@ -8,6 +8,7 @@ from app import config, journal, knowledge, nlu, safety, schedule
 from app.models import Booking, ChatResponse, Escalation
 from app.stand_client import StandClient, StandError
 
+ALL_OF_THEM = re.compile(r"\b(обе|оба|все|всё|обеих|каждую)\b")
 WHICH_DOCTORS = re.compile(r"какие (у вас )?(есть )?(врач|специалист|доктор)|каких врачей|какие врачи")
 
 GREETING = (f"Здравствуйте! Я {config.ASSISTANT_NAME}, виртуальный помощник регистратуры "
@@ -389,7 +390,7 @@ async def task_reschedule(s: dict, nl: dict) -> ChatResponse:
             if (o.doctor_id, o.scheduled_at) in await _busy(s):
                 return await _offer_slots(s, [doctor], exclude=(doctor["id"], visit["scheduled_at"]))
             updated = await _reschedule_visit(s, visit, o)
-            _reminder_status(s, "перенёс", o.scheduled_at)
+            _reminder_status(s, "перенёс", o.scheduled_at, visit_id=visit["id"])
             return _task_done(s, f"Готово, запись перенесена. Новое время: {o.spoken}{_room(o.doctor_name)}.", "перенесён",
                               booking=_visit_booking(updated))
         if nl["answer"] == "no" or nl["date"] or nl["part_of_day"]:
@@ -408,13 +409,19 @@ async def task_cancel(s: dict, nl: dict) -> ChatResponse:
     s["call"]["intent"] = "Отмена записи"
     if (r := await _need_identity(s)):
         return r
+    if s["step"] == "choose_visit" and ALL_OF_THEM.search(s.get("text", "")) and s.get("visits"):
+        for v in s["visits"][:3]:
+            await _cancel_visit(s, v)
+            _reminder_status(s, "отменил", visit_id=v["id"])
+        n = len(s["visits"][:3])
+        return _task_done(s, f"Отменила все записи: {n}. Спасибо, что предупредили.", "отменён")
     if not s.get("visit") and (r := await _choose_visit(s, nl, "отменить")):
         return r
     b = _visit_booking(s["visit"])
     if s["step"] == "confirm":
         if nl["answer"] == "yes":
             updated = await _cancel_visit(s, s["visit"])
-            _reminder_status(s, "отменил")
+            _reminder_status(s, "отменил", visit_id=s["visit"]["id"])
             return _task_done(s, "Запись отменена. Спасибо, что предупредили.", "отменён",
                               booking=_visit_booking(updated))
         if nl["answer"] == "no":
@@ -501,9 +508,9 @@ async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
                          "назвать не могу. Регистратор проверит заявку.", "записан")
 
 
-def _reminder_status(s: dict, status: str, new_time: str | None = None):
-    vid = s.get("reminder_visit_id")
-    if vid is None:
+def _reminder_status(s: dict, status: str, new_time: str | None = None, visit_id: int | None = None):
+    vid = visit_id if visit_id is not None else s.get("reminder_visit_id")
+    if vid is None or (visit_id is not None and vid not in journal.REMINDERS and vid != s.get("reminder_visit_id")):
         return
     r = journal.REMINDERS.setdefault(vid, {})
     r["status"] = status
@@ -576,6 +583,7 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     if not text:
         return _reply(s, "Вы меня слышите?")
     journal.say(s["call"], "patient", text)
+    s["text"] = text.lower()
 
     if (esc := safety.check(text)):
         return await _escalate(s, esc)
