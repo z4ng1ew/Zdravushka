@@ -35,6 +35,7 @@ def _collected(s: dict) -> dict:
 
 def _reply(s: dict, text: str, **kw) -> ChatResponse:
     journal.say(s["call"], "bot", text)
+    s["last_reply"] = text
     if kw.get("done"):
         s["step"] = "done"
     journal.save()
@@ -46,10 +47,40 @@ def _finish(s: dict) -> ChatResponse:
     return _reply(s, GOODBYE, done=True)
 
 
-def _escalate(s: dict, esc: Escalation) -> ChatResponse:
+async def _escalation_client(s: dict) -> dict | None:
+    if s.get("client"):
+        return s["client"]
+    c = s["c"]
+    try:
+        if c.get("last_name") and c.get("first_name") and c.get("birth_date"):
+            return await _identify(s)
+        t = config.TECH_CLIENT
+        return await _mis(s, "POST", "/clients", stand.create_client(
+            t["last_name"], t["first_name"], t["birth_date"], t["middle_name"],
+            comment="Технический клиент для срочных заявок без идентификации"))
+    except StandDown:
+        return None
+
+
+async def _send_escalation(s: dict, description: str):
+    if not stand:
+        return
+    client = await _escalation_client(s)
+    if not client:
+        return
+    try:
+        await _mis(s, "POST", "/escalations", stand.create_escalation(client["id"], description))
+    except StandDown:
+        pass
+
+
+async def _escalate(s: dict, esc: Escalation) -> ChatResponse:
     c = s["c"]
     who = journal.mask_name(c.get("last_name"), c.get("first_name"), c.get("middle_name"))
     esc.summary = f"{esc.summary}. Пациент: {who or 'не назван'}. Задача: {s.get('task') or '—'}."
+    details = "; ".join(f"{k}: {v}" for k, v in _collected(s).items())
+    await _send_escalation(s, f"[{esc.rule}, {esc.priority}] {esc.reason}. {esc.summary}"
+                              + (f" Собрано: {details}." if details else ""))
     journal.handoff(s["call"], esc.reason, esc.priority == "P1", esc.summary, _collected(s))
     s["call"]["result"] = "переведён"
     s["call"]["intent"] = s["call"]["intent"] or "перевод на регистратора"
@@ -204,7 +235,7 @@ async def _offer_slots(s: dict, doctors: list[dict], exclude: str | None = None)
     if not found and c.get("part_of_day"):
         found = schedule.find_free_slots(doctors, busy, date_from=want)
     if not found:
-        return _escalate(s, Escalation(rule="R-08", reason="лист ожидания", priority="P3",
+        return await _escalate(s, Escalation(rule="R-08", reason="лист ожидания", priority="P3",
                                        summary="Нет свободного времени в ближайший месяц — лист ожидания"))
     s["options"] = [_booking(d, t) for d, t in found]
     s["step"] = "choose_slot"
@@ -381,7 +412,7 @@ async def task_info(s: dict, nl: dict) -> ChatResponse:
     s["call"]["intent"] = "Справка"
     text = knowledge.answer(nl["topic"])
     if not text:
-        return _escalate(s, Escalation(rule="R-08", reason="не распознано", priority="P3",
+        return await _escalate(s, Escalation(rule="R-08", reason="не распознано", priority="P3",
                                        summary="Справочный вопрос вне базы знаний"))
     return _task_done(s, text, "справка")
 
@@ -414,24 +445,17 @@ async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
         day += timedelta(days=1)
     birth = datetime.strptime(c["birth_date"], "%d.%m.%Y").date()
     child = (now.date() - birth).days < 18 * 365
-    specialty = "Педиатр" if child else "Терапевт"
-    doctors = await _doctors(specialty)
-    slot = schedule.find_free_slots(doctors, await _busy(s), date_from=day, date_to=day + timedelta(days=2), limit=1)
-    if not slot:
-        return _escalate(s, Escalation(rule="R-08", reason="вызов на дом", priority="P2",
-                                       summary=f"Вызов на дом, нет врача в графике. Адрес: {c['address']}"))
-    doc, when = slot[0]
-    o = _booking(doc, when)
-    visit = await _create_visit(s, o)
-    note = f"ВЫЗОВ НА ДОМ {day.strftime('%d.%m.%Y')}. Адрес: {c['address']}. Повод: {c['reason']}"
+    specialist = "педиатр" if child else "участковый терапевт"
+    note = (f"ВЫЗОВ ВРАЧА НА ДОМ на {day.strftime('%d.%m.%Y')} ({specialist}). Адрес: {c['address']}. "
+            f"Повод (слова пациента): {c['reason']}. Требует подтверждения регистратором.")
+    await _send_escalation(s, note)
     if stand:
         await _mis(s, "PATCH", f"/clients/{s['client']['id']}",
                    stand.update_client_comment(s["client"]["id"], note))
-    journal.handoff(s["call"], "вызов на дом", False, f"Заявка требует подтверждения. {note}", _collected(s))
+    journal.handoff(s["call"], "вызов на дом", False, note, _collected(s))
     when_text = "сегодня" if day == now.date() else schedule.say_date(day)
     return _task_done(s, f"Заявка принята на {when_text}. Врач придёт до восемнадцати часов, точное время "
-                         "назвать не могу. Регистратор проверит заявку.", "записан",
-                      booking=o.model_copy(update={"visit_id": visit["id"], "status": "Запланирована"}))
+                         "назвать не могу. Регистратор проверит заявку.", "записан")
 
 
 HANDLERS = {"booking": task_booking, "reschedule": task_reschedule, "cancel": task_cancel,
@@ -456,7 +480,17 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     journal.say(s["call"], "patient", text)
 
     if (esc := safety.check(text)):
-        return _escalate(s, esc)
+        return await _escalate(s, esc)
+
+    if safety.asks_repeat(text) and s.get("last_reply"):
+        s["repeats"] = s.get("repeats", 0) + 1
+        if s["repeats"] >= 2:
+            return await _escalate(s, Escalation(rule="R-15", reason="не распознано", priority="P2",
+                                                 summary="Пациент плохо слышит ассистента"))
+        last = s["last_reply"]
+        resp = _reply(s, f"Повторяю. {last}", options=[])
+        s["last_reply"] = last
+        return resp
 
     nl = await nlu.understand(text, s["step"])
     intent = nl["intent"]
@@ -467,16 +501,16 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     if s["step"] == "address" and not nl["address"]:
         nl["address"] = text
     if intent == "emergency":
-        return _escalate(s, Escalation(rule="R-01", reason="неотложное состояние", priority="P1",
+        return await _escalate(s, Escalation(rule="R-01", reason="неотложное состояние", priority="P1",
                                        emergency=True, summary=f"Возможная угроза жизни: «{text}»"))
     if intent == "operator":
-        return _escalate(s, Escalation(rule="R-02", reason="просьба оператора", priority="P2",
+        return await _escalate(s, Escalation(rule="R-02", reason="просьба оператора", priority="P2",
                                        summary="Пациент попросил сотрудника"))
     if intent == "complaint":
-        return _escalate(s, Escalation(rule="R-03", reason="жалоба", priority="P2", summary=f"Жалоба: «{text}»"))
+        return await _escalate(s, Escalation(rule="R-03", reason="жалоба", priority="P2", summary=f"Жалоба: «{text}»"))
     if intent == "medical":
         if s.get("medical_warned"):
-            return _escalate(s, Escalation(rule="R-04", reason="медицинский вопрос", priority="P3",
+            return await _escalate(s, Escalation(rule="R-04", reason="медицинский вопрос", priority="P3",
                                            summary=f"Медицинский вопрос: «{text}»"))
         s["medical_warned"] = True
         return _reply(s, "Я не могу давать медицинские советы — это может сделать только врач. "
@@ -506,7 +540,7 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
         else:
             s["miss"] += 1
             if s["miss"] >= 3:
-                return _escalate(s, Escalation(rule="R-05", reason="не распознано", priority="P3",
+                return await _escalate(s, Escalation(rule="R-05", reason="не распознано", priority="P3",
                                                summary="Ассистент трижды не понял пациента"))
             if s["miss"] == 2:
                 return _reply(s, "Простите, не поняла. Могу соединить с сотрудником, или скажите иначе: "
@@ -517,6 +551,6 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
 
     try:
         return await HANDLERS[s["task"]](s, nl)
-    except StandDown as e:
-        return _escalate(s, Escalation(rule="R-06", reason="не распознано", priority="P3",
+    except (StandDown, StandError, httpx.HTTPError) as e:
+        return await _escalate(s, Escalation(rule="R-06", reason="не распознано", priority="P3",
                                        summary=f"Сбой МИС: {e}"))

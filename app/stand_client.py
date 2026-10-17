@@ -18,6 +18,7 @@ class StandError(Exception):
 
 
 class RateLimiter:
+    pass
 
     def __init__(self, max_calls: int, period: float = 60.0):
         self.max_calls = max_calls
@@ -149,3 +150,8 @@ class StandClient:
         visits = await self.list_visits(doctor_id=doctor_id, status="Запланирована",
                                         date_from=day, date_to=day)
         return any(v["scheduled_at"] == scheduled_at for v in visits)
+
+
+    async def create_escalation(self, client_id: int, description: str) -> dict:
+        return await self._request("POST", "/escalations", json={
+            "client_id": client_id, "description": description[:1000]})

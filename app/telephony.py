@@ -27,6 +27,11 @@ def rms(pcm: bytes) -> float:
     return float(np.sqrt(np.mean(data * data)))
 
 
+def louder(pcm: bytes, gain: float = 1.8) -> bytes:
+    data = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) * gain
+    return data.clip(-32768, 32767).astype(np.int16).tobytes()
+
+
 class Call:
     pass
 
@@ -78,7 +83,10 @@ class Call:
             if i + 1 < len(sentences):
                 next_audio = asyncio.create_task(tts.speak(sentences[i + 1]))
             if wav and not self.interrupted:
-                await self.play(tts.to_pcm(wav, RATE))
+                pcm = tts.to_pcm(wav, RATE)
+                if text.startswith("Повторяю"):
+                    pcm = louder(pcm)
+                await self.play(pcm)
             if self.interrupted or self.closed:
                 if i + 1 < len(sentences):
                     next_audio.cancel()

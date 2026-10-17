@@ -130,7 +130,9 @@ def validate(raw: dict) -> dict:
 def fallback(text: str, expecting: str) -> dict:
     low = text.lower().replace("ё", "е")
     raw: dict = {}
-    rules = [("перенес", "reschedule"), ("перезапиш", "reschedule"), ("отмен", "cancel"),
+    rules = [("выпить", "medical"), ("лекарств", "medical"), ("таблетк", "medical"), ("как лечить", "medical"),
+             ("диагноз", "medical"), ("это опасно", "medical"), ("нормальн", "medical"),
+             ("перенес", "reschedule"), ("перезапиш", "reschedule"), ("отмен", "cancel"),
              ("на дом", "home_visit"), ("когда я записан", "status"), ("моя запись", "status"),
              ("когда принимает", "schedule_info"), ("запиш", "booking"), ("запис", "booking"),
              ("талон", "booking"), ("до свидания", "goodbye"), ("спасибо, все", "goodbye")]

@@ -2,10 +2,11 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+load_dotenv("/opt/hackathon/ai.env", override=False)
 
 STAND_URL = os.getenv("STAND_URL", "https://crm-med-mock.dbi-testing.ru/api/v1")
 
-STAND_TOKEN = os.getenv("STAND_TOKEN", "")
+STAND_TOKEN = os.getenv("STAND_TOKEN") or os.getenv("DBI_API_TOKEN", "")
 
 STAND_RATE_LIMIT = int(os.getenv("STAND_RATE_LIMIT", "9"))
 
@@ -16,14 +17,14 @@ STAND_TZ_OFFSET_HOURS = 4
 ASSISTANT_NAME = "Здравушка"
 
 
-LLM_URL = os.getenv("LLM_URL", "")
-LLM_TOKEN = os.getenv("LLM_TOKEN", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "")
+LLM_URL = os.getenv("LLM_URL") or os.getenv("OPENAI_BASE_URL", "")
+LLM_TOKEN = os.getenv("LLM_TOKEN") or os.getenv("OPENAI_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "ai-sage/GigaChat3-10B-A1.8B")
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "30"))
 
-STT_URL = os.getenv("STT_URL", "")
-STT_TOKEN = os.getenv("STT_TOKEN", "")
-STT_MODEL = os.getenv("STT_MODEL", "whisper-1")
+STT_URL = os.getenv("STT_URL") or os.getenv("OPENAI_BASE_URL", "")
+STT_TOKEN = os.getenv("STT_TOKEN") or os.getenv("OPENAI_API_KEY", "")
+STT_MODEL = os.getenv("STT_MODEL", "openai/whisper-large-v3")
 STT_TIMEOUT = float(os.getenv("STT_TIMEOUT", "30"))
 
 TTS_URL = os.getenv("TTS_URL", "")
@@ -44,3 +45,5 @@ MIN_SPEECH_MS = int(os.getenv("MIN_SPEECH_MS", "250"))
 BARGE_IN_MS = int(os.getenv("BARGE_IN_MS", "400"))
 SILENCE_PROMPT_SEC = float(os.getenv("SILENCE_PROMPT_SEC", "5"))
 SILENCE_HANGUP_SEC = float(os.getenv("SILENCE_HANGUP_SEC", "5"))
+
+TECH_CLIENT = {"last_name": "Срочный", "first_name": "Вызов", "middle_name": "Иванович", "birth_date": "01.01.1900"}
