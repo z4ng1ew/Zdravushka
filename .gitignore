@@ -16,7 +16,7 @@ data/runtime/
 data/voices/
 *.wav
 архив/
-промпт
+промпт.txt
 project_contents.txt
 save_project.sh
 FRONT-FILES/
