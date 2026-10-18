@@ -220,7 +220,13 @@ class Call:
             return
         if not text.strip():
             return
-        answer = await dialog.handle(self.session_id, text)
+        try:
+            answer = await dialog.handle(self.session_id, text)
+        except Exception:
+            log.exception("Ошибка диалога в звонке %s", self.session_id)
+            await self.say("Извините, произошёл сбой. Соединяю с регистратором.")
+            self.done = True
+            return
         await self.say(answer.reply)
         if answer.done:
             self.done = True

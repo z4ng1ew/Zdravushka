@@ -33,3 +33,5 @@ class ChatResponse(BaseModel):
     booking: Booking | None = None
     escalation: Escalation | None = None
     done: bool = False
+    status: str = "in_progress"
+    source: str | None = None

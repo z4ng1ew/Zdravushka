@@ -8,6 +8,8 @@ STAND_URL = os.getenv("STAND_URL", "https://crm-med-mock.dbi-testing.ru/api/v1")
 
 STAND_TOKEN = os.getenv("STAND_TOKEN") or os.getenv("DBI_API_TOKEN", "")
 
+STAND_MODE = os.getenv("STAND_MODE", "stand")
+
 STAND_RATE_LIMIT = int(os.getenv("STAND_RATE_LIMIT", "9"))
 
 STAND_TIMEOUT = float(os.getenv("STAND_TIMEOUT", "5"))
@@ -46,5 +48,32 @@ MIN_SPEECH_MS = int(os.getenv("MIN_SPEECH_MS", "250"))
 BARGE_IN_MS = int(os.getenv("BARGE_IN_MS", "400"))
 SILENCE_PROMPT_SEC = float(os.getenv("SILENCE_PROMPT_SEC", "5"))
 SILENCE_HANGUP_SEC = float(os.getenv("SILENCE_HANGUP_SEC", "5"))
+
+TRUSTED_AI_HOSTS = {h.strip() for h in os.getenv(
+    "TRUSTED_AI_HOSTS", "hub.gigaschool.ru,localhost,127.0.0.1").split(",") if h.strip()}
+
+
+def _trusted(url: str) -> str:
+    if not url:
+        return ""
+    from urllib.parse import urlparse
+    import ipaddress
+    host = urlparse(url).hostname or ""
+    try:
+        private = ipaddress.ip_address(host).is_private
+    except ValueError:
+        private = False
+    if host in TRUSTED_AI_HOSTS or private:
+        return url
+    import logging
+    logging.getLogger("config").error("152-ФЗ: адрес %s не в доверенном контуре — отключён", host)
+    REJECTED_AI_URLS.append(host)
+    return ""
+
+
+REJECTED_AI_URLS: list[str] = []
+LLM_URL = _trusted(LLM_URL)
+STT_URL = _trusted(STT_URL)
+TTS_URL = _trusted(TTS_URL)
 
 TECH_CLIENT = {"last_name": "Срочный", "first_name": "Вызов", "middle_name": "Иванович", "birth_date": "01.01.1900"}

@@ -1,65 +1,9 @@
-import json
-
 import httpx
 import pytest
 
 from app import config, dialog, schedule
+from app.mock_stand import MockStand as FakeStand
 from app.stand_client import StandClient
-
-
-class FakeStand:
-
-    def __init__(self, broken: bool = False):
-        self.broken = broken
-        self.doctors = [{"id": 100 + i, "full_name": d["full_name"], "specialty": d["specialty"], "is_active": True}
-                        for i, d in enumerate(schedule.demo_doctors())]
-        self.clients, self.visits, self.escalations = [], [], []
-
-    def __call__(self, req: httpx.Request) -> httpx.Response:
-        if self.broken:
-            return httpx.Response(500, json={"code": "ВНУТРЕННЯЯ_ОШИБКА", "message": "сбой"})
-        path, q = req.url.path.replace("/api/v1", ""), dict(req.url.params)
-        body = json.loads(req.content) if req.content else {}
-        if path == "/doctors":
-            o = int(q["offset"])
-            return httpx.Response(200, json=self.doctors[o:o + 50])
-        if path == "/clients" and req.method == "GET":
-            found = [c for c in self.clients if c["last_name"] == q.get("last_name")
-                     and c["first_name"] == q.get("first_name") and c["birth_date"] == q.get("birth_date")]
-            return httpx.Response(200, json=found)
-        if path == "/clients" and req.method == "POST":
-            for c in self.clients:
-                if (c["last_name"], c["first_name"], c["birth_date"]) == (body["last_name"], body["first_name"], body["birth_date"]):
-                    return httpx.Response(200, json=c)
-            c = {"id": len(self.clients) + 1, "comment": None, **body}
-            self.clients.append(c)
-            return httpx.Response(201, json=c)
-        if path.startswith("/clients/"):
-            c = self.clients[int(path.split("/")[-1]) - 1]
-            c.update(body)
-            return httpx.Response(200, json=c)
-        if path == "/visits" and req.method == "POST":
-            doc = next(d for d in self.doctors if d["id"] == body["doctor_id"])
-            v = {"id": len(self.visits) + 1, "client_id": body["client_id"], "doctor": doc,
-                 "scheduled_at": body["scheduled_at"], "status": "Запланирована"}
-            self.visits.append(v)
-            return httpx.Response(201, json=v)
-        if path == "/visits":
-            res = [v for v in self.visits
-                   if (not q.get("client_id") or str(v["client_id"]) == q["client_id"])
-                   and (not q.get("status") or v["status"] == q["status"])]
-            return httpx.Response(200, json=res if int(q.get("offset", 0)) == 0 else [])
-        if path.startswith("/visits/"):
-            v = self.visits[int(path.split("/")[-1]) - 1]
-            if v["status"] != "Запланирована":
-                return httpx.Response(409, json={"code": "КОНФЛИКТ_СТАТУСА", "message": "нельзя"})
-            v.update(body)
-            return httpx.Response(200, json=v)
-        if path == "/escalations":
-            e = {"id": len(self.escalations) + 1, **body}
-            self.escalations.append(e)
-            return httpx.Response(201, json=e)
-        return httpx.Response(404, json={"code": "НЕ_НАЙДЕНО", "message": path})
 
 
 @pytest.fixture
@@ -297,3 +241,80 @@ async def test_reminder_cancel_other_visit_keeps_status_correct(mis):
     dialog.start_reminder("rem5", v1)
     await dialog.handle("rem5", "да")
     assert dialog.journal.REMINDERS[v1["id"]]["status"] == "подтвердил"
+
+
+async def test_no_stand_means_operator_not_fake_booking(monkeypatch):
+    monkeypatch.setattr(config, "LLM_URL", "")
+    monkeypatch.setattr(dialog, "stand", None)
+    dialog.SESSIONS.clear()
+    r = await talk("запишите к терапевту")
+    assert r.escalation and r.escalation.rule == "R-06" and r.status == "handoff"
+
+
+async def test_mock_stand_adapter_end_to_end(monkeypatch):
+    from app import mock_stand
+    fake = mock_stand.MockStand()
+    monkeypatch.setattr(config, "LLM_URL", "")
+    monkeypatch.setattr(dialog, "stand", mock_stand.client(fake))
+    dialog.SESSIONS.clear()
+    r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    assert r.status == "completed" and r.source == "МИС" and len(fake.visits) == 1
+
+
+async def test_llm_garbage_falls_back_to_keywords(monkeypatch, mis):
+    from app import ai, nlu
+    monkeypatch.setattr(config, "LLM_URL", "http://127.0.0.1:1/v1")
+
+    async def broken(*a, **kw):
+        return httpx.Response(200, json={"choices": [{"message": {"content": None}}]})
+    monkeypatch.setattr(ai, "_post", broken)
+    nl = await nlu.understand("запишите к терапевту", "start")
+    assert nl["intent"] == "booking" and nl["specialty"] == "Терапевт"
+
+
+async def test_stt_timeout_is_ai_error(monkeypatch):
+    from app import ai
+    monkeypatch.setattr(config, "STT_URL", "http://127.0.0.1:1/v1")
+
+    async def timeout(*a, **kw):
+        raise httpx.ReadTimeout("slow")
+
+    class Client:
+        def __init__(self, *a, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): pass
+        post = timeout
+    monkeypatch.setattr(ai.httpx, "AsyncClient", Client)
+    with pytest.raises(ai.AIError):
+        await ai.speech_to_text(b"x")
+
+
+def test_untrusted_ai_host_rejected():
+    assert config._trusted("https://api.some-free-stt.com/v1") == ""
+    assert config._trusted("https://hub.gigaschool.ru/api/v1/llm/v1")
+    assert config._trusted("http://10.0.0.5:8000/v1")
+
+
+def test_knowledge_detects_topics():
+    from app import knowledge
+    assert knowledge.detect("Готовы ли мои анализы?") == "test_results"
+    assert knowledge.detect("До скольки вы работаете?") == "hours"
+    assert knowledge.detect("Как к вам проехать?") == "address"
+
+
+async def test_info_question_answered_from_regulation(mis):
+    r = await talk("скажите, до скольки вы работаете?")
+    assert "по будням" in r.reply and r.source == "регламент РГ-ТЕЛ-01"
+
+
+async def test_personal_data_hidden_in_transcript(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990")
+    texts = [x["text"] for x in dialog.journal.CALLS[r.session_id]["transcript"]]
+    assert not any("Козлов" in x or "10.10.1990" in x for x in texts)
+
+
+def test_journal_save_survives_disk_error(monkeypatch, tmp_path):
+    from app import journal
+    (tmp_path / "busy").write_text("файл, а не папка")
+    monkeypatch.setattr(journal, "FILE", tmp_path / "busy" / "j.json")
+    journal.save()

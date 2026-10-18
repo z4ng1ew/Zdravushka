@@ -1,3 +1,4 @@
+
 ANSWERS = {
     "address": "Мы находимся на улице Центральной, дом семь. Вход в детское отделение — с торца здания.",
     "hours": ("Поликлиника работает по будням с семи тридцати до двадцати, в субботу с девяти до пятнадцати, "
@@ -17,6 +18,29 @@ ANSWERS = {
 }
 
 TOPICS = list(ANSWERS)
+
+KEYWORDS = {
+    "test_results": ["готов", "результат"],
+    "test_prep": ["натощак", "подготов", "можно ли есть", "перед анализ"],
+    "tests": ["анализ", "кровь сдать", "сдать кровь", "процедурн"],
+    "address": ["адрес", "где находит", "добраться", "проехать", "где вы"],
+    "hours": ["часы работы", "до скольки", "во сколько открыва", "режим работы", "работаете", "график работы поликлиник"],
+    "documents": ["документ", "что взять", "что с собой"],
+    "sick_leave": ["больничн"],
+    "prices": ["цена", "стоимость", "сколько стоит", "платн"],
+    "attachment": ["прикреп"],
+    "online": ["госуслуг", "онлайн", "через сайт", "через интернет"],
+}
+
+
+def detect(text: str) -> str | None:
+    low = text.lower().replace("ё", "е")
+    if "анализ" in low and any(w in low for w in KEYWORDS["test_results"]):
+        return "test_results"
+    for topic, words in KEYWORDS.items():
+        if topic != "test_results" and any(w in low for w in words):
+            return topic
+    return None
 
 
 def answer(topic: str | None) -> str | None:

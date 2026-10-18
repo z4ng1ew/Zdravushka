@@ -106,10 +106,13 @@ def _clean_name(value) -> str | None:
 
 
 def validate(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        raw = {}
     out = {}
     intent = raw.get("intent")
     out["intent"] = intent if intent in INTENTS else None
-    out["specialty"] = norm_specialty(raw.get("specialty"))
+    spec = raw.get("specialty")
+    out["specialty"] = norm_specialty(spec) if isinstance(spec, str) else None
     out["doctor_name"] = _clean_name(raw.get("doctor_name"))
     for key in ("last_name", "first_name", "middle_name"):
         out[key] = _clean_name(raw.get(key))
@@ -118,12 +121,15 @@ def validate(raw: dict) -> dict:
     pod = raw.get("part_of_day")
     out["part_of_day"] = pod if pod in schedule.PARTS_OF_DAY else None
     choice = raw.get("choice")
-    out["choice"] = choice if isinstance(choice, int) and 1 <= choice <= 3 else None
+    if isinstance(choice, str) and choice.strip().isdigit():
+        choice = int(choice.strip())
+    out["choice"] = choice if isinstance(choice, int) and not isinstance(choice, bool) and 1 <= choice <= 3 else None
     out["answer"] = raw.get("answer") if raw.get("answer") in ("yes", "no") else None
     for key in ("address", "reason"):
         v = raw.get(key)
         out[key] = v.strip()[:300] if isinstance(v, str) and v.strip() else None
     out["topic"] = raw.get("topic") if raw.get("topic") in knowledge.TOPICS else None
+    out["intent"] = out["intent"] or None
     return out
 
 
@@ -137,6 +143,9 @@ def fallback(text: str, expecting: str) -> dict:
              ("когда принимает", "schedule_info"), ("запиш", "booking"), ("запис", "booking"),
              ("талон", "booking"), ("до свидания", "goodbye"), ("спасибо, все", "goodbye")]
     raw["intent"] = next((i for k, i in rules if k in low), "other")
+    raw["topic"] = knowledge.detect(text)
+    if raw["intent"] == "other" and raw["topic"]:
+        raw["intent"] = "info"
     raw["specialty"] = text
     m = re.search(r"\b(\d{1,2})[.\-/ ](\d{1,2})[.\-/ ](\d{4})\b", low)
     if m:
@@ -186,7 +195,7 @@ async def understand(text: str, expecting: str) -> dict:
         return fallback(text, expecting)
     result = validate(raw)
     backup = fallback(text, expecting)
-    for key in ("answer", "choice", "birth_date"):
+    for key in ("answer", "choice", "birth_date", "topic"):
         if result[key] is None and backup[key] is not None:
             result[key] = backup[key]
     return result

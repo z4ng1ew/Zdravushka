@@ -1,9 +1,12 @@
 import json
+import logging
+import os
 import uuid
 from pathlib import Path
 
 from app import schedule
 
+log = logging.getLogger("journal")
 FILE = Path(__file__).resolve().parent.parent / "data" / "runtime" / "journal.json"
 
 CALLS: dict[str, dict] = {}
@@ -13,16 +16,25 @@ REMINDERS: dict[int, dict] = {}
 
 def _load():
     if FILE.exists():
-        data = json.loads(FILE.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            log.warning("журнал не прочитан: %s", e)
+            return
         CALLS.update(data.get("calls", {}))
         HANDOFFS.update(data.get("handoffs", {}))
         REMINDERS.update({int(k): v for k, v in data.get("reminders", {}).items()})
 
 
 def save():
-    FILE.parent.mkdir(parents=True, exist_ok=True)
-    FILE.write_text(json.dumps({"calls": CALLS, "handoffs": HANDOFFS, "reminders": REMINDERS},
-                               ensure_ascii=False), encoding="utf-8")
+    try:
+        FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"calls": CALLS, "handoffs": HANDOFFS, "reminders": REMINDERS},
+                                  ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, FILE)
+    except OSError as e:
+        log.warning("журнал не сохранён: %s", e)
 
 
 def mask_name(last: str | None, first: str | None, middle: str | None = None) -> str | None:

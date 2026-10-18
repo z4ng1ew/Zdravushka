@@ -16,11 +16,16 @@ GREETING = (f"Здравствуйте! Я {config.ASSISTANT_NAME}, виртуа
 GOODBYE = "Всего доброго, будьте здоровы!"
 ANYTHING_ELSE = "Могу ещё чем-то помочь?"
 
-stand = StandClient() if config.STAND_TOKEN else None
+def _make_stand() -> StandClient | None:
+    if config.STAND_MODE == "mock":
+        from app import mock_stand
+        return mock_stand.client()
+    return StandClient() if config.STAND_TOKEN else None
+
+
+stand = _make_stand()
 
 SESSIONS: dict[str, dict] = {}
-DEMO_CLIENTS: dict[tuple, dict] = {}
-DEMO_VISITS: dict[int, dict] = {}
 
 TASKS = {"booking", "reschedule", "cancel", "status", "schedule_info", "info", "home_visit"}
 
@@ -37,14 +42,16 @@ def _collected(s: dict) -> dict:
     return {LABELS[k]: v for k, v in s["c"].items() if k in LABELS and v}
 
 
-def _reply(s: dict, text: str, **kw) -> ChatResponse:
+def _reply(s: dict, text: str, status: str | None = None, source: str | None = None, **kw) -> ChatResponse:
     journal.say(s["call"], "bot", text)
     s["last_reply"] = text
     if kw.get("done"):
         s["step"] = "done"
+    if status is None:
+        status = "handoff" if kw.get("escalation") else "completed" if kw.get("done") else "in_progress"
     journal.save()
     return ChatResponse(session_id=s["id"], reply=text, intent=s.get("task") or s.get("last_task"),
-                        collected=_collected(s), **kw)
+                        collected=_collected(s), status=status, source=source, **kw)
 
 
 def _finish(s: dict) -> ChatResponse:
@@ -89,7 +96,8 @@ async def _escalate(s: dict, esc: Escalation) -> ChatResponse:
     s["call"]["result"] = "переведён"
     s["call"]["intent"] = s["call"]["intent"] or "перевод на регистратора"
     s["task"] = "escalation"
-    return _reply(s, safety.PHRASES.get(esc.rule, safety.PHRASES["R-08"]), escalation=esc, done=True)
+    return _reply(s, safety.PHRASES.get(esc.rule, safety.PHRASES["R-08"]), escalation=esc, done=True,
+                  source="регламент РГ-ТЕЛ-01")
 
 
 def _task_done(s: dict, text: str, result: str, **kw) -> ChatResponse:
@@ -97,7 +105,14 @@ def _task_done(s: dict, text: str, result: str, **kw) -> ChatResponse:
     s["last_task"], s["task"], s["step"] = s["task"], None, "more"
     for key in ("options", "visits", "visit", "chosen"):
         s.pop(key, None)
-    return _reply(s, f"{text} {ANYTHING_ELSE}", **kw)
+    kw.setdefault("source", "МИС")
+    return _reply(s, f"{text} {ANYTHING_ELSE}", status="completed", **kw)
+
+
+def _api() -> StandClient:
+    if stand is None:
+        raise StandDown("стенд не настроен: нет DBI_API_TOKEN и не включён STAND_MODE=mock")
+    return stand
 
 
 async def _mis(s: dict, method: str, path: str, coro):
@@ -106,85 +121,59 @@ async def _mis(s: dict, method: str, path: str, coro):
     except StandError as e:
         journal.stand_request(s["call"], method, path, e.status, e.message)
         raise StandDown(e.message) from e
-    except httpx.HTTPError as e:
-        journal.stand_request(s["call"], method, path, 0, "нет ответа")
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+        journal.stand_request(s["call"], method, path, 0, "нет ответа или неверный ответ")
         raise StandDown(str(e)) from e
     journal.stand_request(s["call"], method, path, 201 if method == "POST" else 200)
     return result
 
 
 async def _doctors(specialty: str) -> list[dict]:
-    if stand:
-        docs = await stand.active_doctors(specialty)
-    else:
-        docs = [d for d in schedule.demo_doctors() if d["specialty"].lower() == specialty.lower()]
+    docs = await _api().active_doctors(specialty)
     return [d for d in docs if schedule.excel_doctor(d["full_name"])]
 
 
 async def _busy(s: dict) -> set[tuple[int, str]]:
     today = schedule.now().date()
-    if stand:
-        visits = await _mis(s, "GET", "/visits", stand.list_visits(
-            status="Запланирована", date_from=today.strftime("%d.%m.%Y"),
-            date_to=(today + timedelta(days=45)).strftime("%d.%m.%Y")))
-    else:
-        visits = [v for v in DEMO_VISITS.values() if v["status"] == "Запланирована"]
+    visits = await _mis(s, "GET", "/visits", _api().list_visits(
+        status="Запланирована", date_from=today.strftime("%d.%m.%Y"),
+        date_to=(today + timedelta(days=45)).strftime("%d.%m.%Y")))
     return {(v["doctor"]["id"], v["scheduled_at"]) for v in visits}
 
 
 async def _identify(s: dict) -> dict:
     c = s["c"]
-    if stand:
-        client = await _mis(s, "GET", "/clients", stand.find_client(
-            c["last_name"], c["first_name"], c["birth_date"]))
-        if not client:
-            client = await _mis(s, "POST", "/clients", stand.create_client(
-                c["last_name"], c["first_name"], c["birth_date"], c.get("middle_name"),
-                comment="Карточка заведена голосовым ассистентом"))
-    else:
-        key = (c["last_name"].lower(), c["first_name"].lower(), c["birth_date"])
-        client = DEMO_CLIENTS.setdefault(key, {"id": len(DEMO_CLIENTS) + 1, "last_name": c["last_name"],
-                                               "first_name": c["first_name"], "birth_date": c["birth_date"],
-                                               "comment": None})
+    client = await _mis(s, "GET", "/clients", _api().find_client(c["last_name"], c["first_name"], c["birth_date"]))
+    if not client:
+        client = await _mis(s, "POST", "/clients", _api().create_client(
+            c["last_name"], c["first_name"], c["birth_date"], c.get("middle_name"),
+            comment="Карточка заведена голосовым ассистентом"))
     s["client"] = client
     s["call"]["patient"] = journal.mask_name(c["last_name"], c["first_name"], c.get("middle_name"))
     return client
 
 
 async def _client_visits(s: dict) -> list[dict]:
-    cid = s["client"]["id"]
-    if stand:
-        visits = await _mis(s, "GET", "/visits", stand.list_visits(client_id=cid, status="Запланирована"))
-    else:
-        visits = [v for v in DEMO_VISITS.values() if v["client_id"] == cid and v["status"] == "Запланирована"]
+    visits = await _mis(s, "GET", "/visits", _api().list_visits(client_id=s["client"]["id"], status="Запланирована"))
     now = schedule.now()
     return sorted([v for v in visits if schedule.from_api(v["scheduled_at"]) > now],
                   key=lambda v: schedule.from_api(v["scheduled_at"]))
 
 
 async def _create_visit(s: dict, o: Booking) -> dict:
-    if stand:
-        return await _mis(s, "POST", "/visits", stand.create_visit(s["client"]["id"], o.doctor_id, o.scheduled_at))
-    vid = len(DEMO_VISITS) + 1
-    DEMO_VISITS[vid] = {"id": vid, "client_id": s["client"]["id"], "scheduled_at": o.scheduled_at,
-                        "status": "Запланирована",
-                        "doctor": {"id": o.doctor_id, "full_name": o.doctor_name, "specialty": o.specialty}}
-    return DEMO_VISITS[vid]
+    return await _mis(s, "POST", "/visits", _api().create_visit(s["client"]["id"], o.doctor_id, o.scheduled_at))
 
 
 async def _reschedule_visit(s: dict, visit: dict, o: Booking) -> dict:
-    if stand:
-        return await _mis(s, "PATCH", f"/visits/{visit['id']}",
-                          stand.reschedule_visit(visit["id"], o.scheduled_at))
-    DEMO_VISITS[visit["id"]]["scheduled_at"] = o.scheduled_at
-    return DEMO_VISITS[visit["id"]]
+    return await _mis(s, "PATCH", f"/visits/{visit['id']}", _api().reschedule_visit(visit["id"], o.scheduled_at))
 
 
 async def _cancel_visit(s: dict, visit: dict) -> dict:
-    if stand:
-        return await _mis(s, "PATCH", f"/visits/{visit['id']}", stand.cancel_visit(visit["id"]))
-    DEMO_VISITS[visit["id"]]["status"] = "Отменена"
-    return DEMO_VISITS[visit["id"]]
+    return await _mis(s, "PATCH", f"/visits/{visit['id']}", _api().cancel_visit(visit["id"]))
+
+
+async def _comment(s: dict, note: str):
+    await _mis(s, "PATCH", f"/clients/{s['client']['id']}", _api().update_client_comment(s["client"]["id"], note))
 
 
 def _short(name: str) -> str:
@@ -464,7 +453,7 @@ async def task_info(s: dict, nl: dict) -> ChatResponse:
     if not text:
         return await _escalate(s, Escalation(rule="R-08", reason="не распознано", priority="P3",
                                        summary="Справочный вопрос вне базы знаний"))
-    return _task_done(s, text, "справка")
+    return _task_done(s, text, "справка", source="регламент РГ-ТЕЛ-01")
 
 
 async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
@@ -499,9 +488,7 @@ async def task_home_visit(s: dict, nl: dict) -> ChatResponse:
     note = (f"ВЫЗОВ ВРАЧА НА ДОМ на {day.strftime('%d.%m.%Y')} ({specialist}). Адрес: {c['address']}. "
             f"Повод (слова пациента): {c['reason']}. Требует подтверждения регистратором.")
     await _send_escalation(s, note)
-    if stand:
-        await _mis(s, "PATCH", f"/clients/{s['client']['id']}",
-                   stand.update_client_comment(s["client"]["id"], note))
+    await _comment(s, note)
     journal.handoff(s["call"], "вызов на дом", False, note, _collected(s))
     when_text = "сегодня" if day == now.date() else schedule.say_date(day)
     return _task_done(s, f"Заявка принята на {when_text}. Врач придёт до восемнадцати часов, точное время "
@@ -528,7 +515,7 @@ def start_reminder(session_id: str, visit: dict) -> ChatResponse:
     _reminder_status(s, "звоним")
     b = _visit_booking(visit)
     return _reply(s, f"Здравствуйте! Это {config.ASSISTANT_NAME}, виртуальный помощник регистратуры "
-                     f"поликлиники номер семь. Напоминаю о записи: {b.specialty.lower()}, врач {b.doctor_name}, "
+                     f"поликлиники номер семь. Разговор записывается. Напоминаю о записи: {b.specialty.lower()}, врач {b.doctor_name}, "
                      f"{b.spoken}{_room(b.doctor_name)}. Вы придёте?", booking=b)
 
 
@@ -547,9 +534,7 @@ async def task_reminder(s: dict, nl: dict) -> ChatResponse:
     if s["step"] == "remind" and nl["answer"] == "yes":
         _reminder_status(s, "подтвердил")
         s["call"]["result"] = "подтверждён"
-        if stand:
-            await _mis(s, "PATCH", f"/clients/{s['client']['id']}", stand.update_client_comment(
-                s["client"]["id"], f"Подтвердил визит {s['visit']['scheduled_at']} (звонок-напоминание)"))
+        await _comment(s, f"Подтвердил визит {s['visit']['scheduled_at']} (звонок-напоминание)")
         return _reply(s, "Спасибо, ждём вас. Возьмите паспорт и полис ОМС. Всего доброго!", done=True)
     if s["step"] == "remind" and nl["answer"] == "no":
         s["step"] = "remind_no"
@@ -582,7 +567,7 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
                             done=True, collected=_collected(s))
     if not text:
         return _reply(s, "Вы меня слышите?")
-    journal.say(s["call"], "patient", text)
+    journal.say(s["call"], "patient", "[ФИО и дата рождения — скрыто]" if s["step"] in ("identity", "birth_date") else text)
     s["text"] = text.lower()
 
     if (esc := safety.check(text)):
@@ -667,5 +652,5 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     try:
         return await HANDLERS[s["task"]](s, nl)
     except (StandDown, StandError, httpx.HTTPError) as e:
-        return await _escalate(s, Escalation(rule="R-06", reason="не распознано", priority="P3",
+        return await _escalate(s, Escalation(rule="R-06", reason="сбой МИС", priority="P2",
                                        summary=f"Сбой МИС: {e}"))

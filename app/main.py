@@ -1,7 +1,9 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -10,6 +12,9 @@ from pydantic import BaseModel
 
 from app import ai, config, dialog, journal, schedule, telephony, tts
 from app.models import ChatRequest, ChatResponse
+from app.stand_client import StandError
+
+log = logging.getLogger("main")
 
 
 @asynccontextmanager
@@ -28,14 +33,20 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "assistant": config.ASSISTANT_NAME,
-            "mode": "stand" if dialog.stand else "demo",
+            "mode": config.STAND_MODE if dialog.stand else "no-stand",
+            "pd_trusted_ai_only": not config.REJECTED_AI_URLS,
             "llm": bool(config.LLM_URL), "stt": bool(config.STT_URL), "tts": config.TTS_BACKEND,
             "telephony": f"{config.AUDIOSOCKET_HOST}:{config.AUDIOSOCKET_PORT}" if config.TELEPHONY_ENABLED else None}
 
 
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    return await dialog.handle(req.session_id, req.text)
+    try:
+        return await dialog.handle(req.session_id, req.text)
+    except Exception:
+        log.exception("Ошибка диалога")
+        return ChatResponse(session_id=req.session_id or "error", reply="Извините, произошёл сбой. "
+                            "Соединяю с регистратором.", status="error", done=True)
 
 
 @app.post("/api/asr")
@@ -93,10 +104,12 @@ async def _tomorrow_visits() -> list[dict]:
         if day.weekday() != 6:
             break
     d = day.strftime("%d.%m.%Y")
-    if dialog.stand:
+    if not dialog.stand:
+        return []
+    try:
         return await dialog.stand.list_visits(status="Запланирована", date_from=d, date_to=d)
-    return [v for v in dialog.DEMO_VISITS.values()
-            if v["status"] == "Запланирована" and v["scheduled_at"].startswith(d)]
+    except (StandError, httpx.HTTPError) as e:
+        raise HTTPException(503, f"МИС недоступна: {e}")
 
 
 @app.get("/api/reminders")
@@ -144,10 +157,12 @@ async def call_one(visit_id: int):
 
 
 async def _visits_from_tomorrow() -> list[dict]:
-    if dialog.stand:
+    if not dialog.stand:
+        return []
+    try:
         visits = await dialog.stand.list_visits(status="Запланирована")
-    else:
-        visits = [v for v in dialog.DEMO_VISITS.values() if v["status"] == "Запланирована"]
+    except (StandError, httpx.HTTPError) as e:
+        raise HTTPException(503, f"МИС недоступна: {e}")
     now = schedule.now()
     return [v for v in visits if schedule.from_api(v["scheduled_at"]) > now]
 
