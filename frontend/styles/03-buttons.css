@@ -1,0 +1,130 @@
+/* Кнопки, чипы, поиск, «Аа» */
+
+.btn-big {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 15px 18px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.btn-big:disabled { opacity: .45; cursor: default; }
+.btn-red { background: linear-gradient(180deg, #ef4f5c, var(--bad)); color: #fff; border: 0; box-shadow: 0 6px 14px rgba(224,58,72,.3); }
+.btn-outline { background: #fff; color: var(--blue); border: 1.5px solid #b9d0f3; }
+.chip {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.chip:disabled { cursor: default; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid #c6d9f5;
+  background: #fff;
+  color: var(--blue);
+  padding: 9px 18px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn:hover { border-color: #9cc0f7; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn-primary {
+  background: linear-gradient(180deg, var(--blue-2), var(--blue));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(31,108,240,.28);
+}
+.btn-green { background: #fff; color: var(--op-text); border: 1.5px solid var(--op-line); }
+.btn-green:not(:disabled):hover { background: var(--op-bg); }
+.btn-takeover {
+  background: linear-gradient(180deg, #34c27f, #1e9b62);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 6px 14px rgba(30,155,98,.3);
+}
+.btn-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn-pair .btn-big { padding: 12px 10px; font-size: 14px; }
+.btn-big:disabled { opacity: 1; background: #eef2f8; color: #a3b2c9; border-color: #e1e8f2; box-shadow: none; }
+.ico-img { display: inline-block; object-fit: contain; flex-shrink: 0; }
+.btn-big:disabled .ico-img { filter: invert(.55); }
+.btn-work {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #4ab6dc, #2fa0cf);
+  color: #fff;
+  padding: 9px 18px;
+  border-radius: 8px;
+}
+.btn-work:hover { filter: brightness(1.06); }
+.btn-work-ghost { background: #fff; color: #2f8fc0; box-shadow: inset 0 0 0 1.5px #8ccbe5; }
+.btn-work-done { background: linear-gradient(180deg, #34c27f, #1e9b62); }
+.btn-mini {
+  border: 1.5px solid #c6d9f5;
+  background: #fff;
+  color: var(--blue);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn-mini:hover { border-color: #9cc0f7; }
+/* поиск, настройки, профиль */
+.search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1.5px solid #c6d9f5;
+  border-radius: 999px;
+  padding: 8px 18px;
+  color: #8ea4c6;
+  max-width: 520px;
+}
+.search input { flex: 1; border: 0; outline: 0; font: inherit; color: var(--text); background: transparent; min-width: 0; }
+.btn-danger-o { color: var(--bad); border-color: #f3a1aa; }
+.nav-img { display: block; object-fit: contain; }
+.rail-item.on .nav-img { filter: brightness(0) invert(1); }
+.quick-chips .chip {
+  border: 1.5px solid #c6d9f5;
+  background: #fff;
+  color: var(--blue);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.quick-chips .chip:hover { background: var(--blue-soft); }
+/* крупный шрифт */
+.font-toggle {
+  border: 1.5px solid #c6d9f5;
+  background: #fff;
+  color: var(--blue);
+  border-radius: 12px;
+  width: 42px;
+  height: 38px;
+  font: inherit;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.font-toggle.on { background: var(--blue); color: #fff; border-color: var(--blue); }

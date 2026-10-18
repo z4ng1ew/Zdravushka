@@ -1,0 +1,5 @@
+/* Доступность: видимая рамка фокуса с клавиатуры */
+
+/* контраст подписей не ниже 4.5:1 */
+:focus-visible { outline: 3px solid #1f6cf0; outline-offset: 2px; }
+button:focus:not(:focus-visible) { outline: none; }

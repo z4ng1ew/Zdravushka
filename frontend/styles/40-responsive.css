@@ -1,0 +1,81 @@
+/* Адаптив и режимы (телефон, планшет, крупный шрифт, без анимаций) */
+
+
+@media (max-width: 1050px) {
+  .call-panel, .bottom-panel { grid-template-columns: 1fr; }
+  .grid-4, .grid-5 { grid-template-columns: 1fr 1fr; }
+  .grid-2, .grid-queue { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .page { padding: 10px 10px 30px; }
+  .panel:not(.bottom-wrap) { padding: 18px 16px; } /* у раскрывающейся панели отступы внутри шапки */
+  .topbar { padding: 12px 16px; }
+  .topbar-right { gap: 12px; }
+  .bubble-wrap { max-width: 80%; }
+  .grid-4, .grid-5 { grid-template-columns: 1fr; }
+  .bar-row { grid-template-columns: 110px 1fr 40px; }
+  .record-grid { grid-template-columns: 1fr; }
+  .mic { width: 200px; height: 200px; }
+  .collapse-head { gap: 10px; padding: 14px 16px; }
+  .bottom-wrap .bottom-panel { padding: 4px 14px 16px; }
+}
+
+@media print {
+  body.print-one * { visibility: hidden !important; }
+  body.print-one .printing, body.print-one .printing * { visibility: visible !important; }
+  body.print-one .printing { position: fixed; left: 10mm; top: 10mm; width: 170mm; box-shadow: none; }
+  body.print-one .printing .ticket-print { display: none; }
+  body::before { display: none; }
+}
+
+@media (max-width: 1150px) {
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .q-row { grid-template-columns: 62px 1fr auto; }
+  .q-row .q-patient, .q-row .q-summary { grid-column: 2 / 4; }
+}
+
+@media (max-width: 760px) {
+  .app2 { grid-template-columns: 1fr; }
+  .rail { position: static; width: auto; height: auto; } /* меню строкой — высота по содержимому */
+  .rail-inner, .rail:hover .rail-inner { position: static; width: auto; flex-direction: row; overflow-x: auto; padding: 8px; }
+  .rail-label { display: none; }
+  .main2 { padding: 14px; }
+  .kpi-grid { grid-template-columns: 1fr; gap: 22px; }
+  .t2 { display: block; overflow-x: auto; }
+  .ticket { grid-template-columns: 100px 1fr; }
+  .ticket::before, .ticket::after { left: 89px; }
+  .slot { grid-template-columns: 50px 1fr; }
+  .chip-text { display: none; }
+  .sec-head { flex-wrap: wrap; padding: 8px 14px; gap: 8px; }
+  .sec-head h2 { font-size: 16px; }
+  .sec-right { margin-left: 0; width: 100%; justify-content: space-between; }
+  .q-row { grid-template-columns: 1fr; }
+  .q-row .q-patient, .q-row .q-summary { grid-column: auto; }
+  .page { overflow-x: hidden; }
+}
+/* синие полосы: слева скругление, справа полукруг (как «Намерение» в макете) */
+.sec-head { padding-right: 22px; }
+
+@media (max-width: 760px) {
+  .ticket2 .doctor-head img { width: 60px; height: 60px; }
+  .ticket2-no { min-width: 70px; }
+  .ticket2-no b { font-size: 18px; }
+}
+
+@media (max-width: 900px) {
+  .call-detail { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .chip-user-btn { width: auto; }
+  .topbar2 .topbar-right { gap: 8px; }
+}
+
+@media (max-width: 900px) {
+  .mis-none { font-size: 11px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-pulse, .spin, .mic-hint { animation: none !important; }
+}
