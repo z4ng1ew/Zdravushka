@@ -24,4 +24,7 @@ FRONT-FILES/
 cheat-sheet.md
 TODO.MD
 *.log
-save.sh
+save.shstatic/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
