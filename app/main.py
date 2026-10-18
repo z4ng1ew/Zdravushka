@@ -33,7 +33,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "assistant": config.ASSISTANT_NAME,
-            "mode": config.STAND_MODE if dialog.stand else "no-stand",
+            "mode": config.STAND_MODE if dialog.state.stand else "no-stand",
             "pd_trusted_ai_only": not config.REJECTED_AI_URLS,
             "llm": bool(config.LLM_URL), "stt": bool(config.STT_URL), "tts": config.TTS_BACKEND,
             "telephony": f"{config.AUDIOSOCKET_HOST}:{config.AUDIOSOCKET_PORT}" if config.TELEPHONY_ENABLED else None}
@@ -104,10 +104,10 @@ async def _tomorrow_visits() -> list[dict]:
         if day.weekday() != 6:
             break
     d = day.strftime("%d.%m.%Y")
-    if not dialog.stand:
+    if not dialog.state.stand:
         return []
     try:
-        return await dialog.stand.list_visits(status="Запланирована", date_from=d, date_to=d)
+        return await dialog.state.stand.list_visits(status="Запланирована", date_from=d, date_to=d)
     except (StandError, httpx.HTTPError) as e:
         raise HTTPException(503, f"МИС недоступна: {e}")
 
@@ -157,10 +157,10 @@ async def call_one(visit_id: int):
 
 
 async def _visits_from_tomorrow() -> list[dict]:
-    if not dialog.stand:
+    if not dialog.state.stand:
         return []
     try:
-        visits = await dialog.stand.list_visits(status="Запланирована")
+        visits = await dialog.state.stand.list_visits(status="Запланирована")
     except (StandError, httpx.HTTPError) as e:
         raise HTTPException(503, f"МИС недоступна: {e}")
     now = schedule.now()

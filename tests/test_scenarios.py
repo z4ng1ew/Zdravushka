@@ -12,7 +12,7 @@ def mis(monkeypatch):
     monkeypatch.setattr(config, "STAND_RATE_LIMIT", 1000)
     monkeypatch.setattr(config, "LLM_URL", "")
     client = StandClient(base_url="https://stand/api/v1", token="t", transport=httpx.MockTransport(fake))
-    monkeypatch.setattr(dialog, "stand", client)
+    monkeypatch.setattr(dialog.state, "stand", client)
     dialog.SESSIONS.clear()
     return fake
 
@@ -245,7 +245,7 @@ async def test_reminder_cancel_other_visit_keeps_status_correct(mis):
 
 async def test_no_stand_means_operator_not_fake_booking(monkeypatch):
     monkeypatch.setattr(config, "LLM_URL", "")
-    monkeypatch.setattr(dialog, "stand", None)
+    monkeypatch.setattr(dialog.state, "stand", None)
     dialog.SESSIONS.clear()
     r = await talk("запишите к терапевту")
     assert r.escalation and r.escalation.rule == "R-06" and r.status == "handoff"
@@ -255,7 +255,7 @@ async def test_mock_stand_adapter_end_to_end(monkeypatch):
     from app import mock_stand
     fake = mock_stand.MockStand()
     monkeypatch.setattr(config, "LLM_URL", "")
-    monkeypatch.setattr(dialog, "stand", mock_stand.client(fake))
+    monkeypatch.setattr(dialog.state, "stand", mock_stand.client(fake))
     dialog.SESSIONS.clear()
     r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
     assert r.status == "completed" and r.source == "МИС" and len(fake.visits) == 1
