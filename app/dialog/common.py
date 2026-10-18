@@ -52,6 +52,9 @@ async def escalation_client(s: dict) -> dict | None:
         if c.get("last_name") and c.get("first_name") and c.get("birth_date"):
             return await identify(s)
         t = config.TECH_CLIENT
+        found = await call_mis(s, "GET", "/clients", state.stand.find_client(t["last_name"], t["first_name"], t["birth_date"]))
+        if found:
+            return found
         return await call_mis(s, "POST", "/clients", state.stand.create_client(
             t["last_name"], t["first_name"], t["birth_date"], t["middle_name"],
             comment="Технический клиент для срочных заявок без идентификации"))

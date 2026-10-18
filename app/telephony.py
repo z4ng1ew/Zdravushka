@@ -35,6 +35,8 @@ def louder(pcm: bytes, gain: float = 1.8) -> bytes:
 
 OUTBOUND: dict[str, dict] = {}
 
+ACTIVE: set[str] = set()
+
 
 class Call:
 
@@ -175,6 +177,7 @@ class Call:
                 break
             await asyncio.sleep(0.02)
         self.session_id = self.session_id or uuid.uuid4().hex[:12]
+        ACTIVE.add(self.session_id)
         log.info("Звонок %s", self.session_id)
 
         self.outbound = OUTBOUND.get(self.call_uuid)
@@ -207,6 +210,7 @@ class Call:
         call = journal.CALLS.get(self.session_id)
         if call and call["result"] == "сброшен" and not self.done:
             journal.save()
+        ACTIVE.discard(self.session_id)
         if self.outbound:
             self.outbound["finished"].set()
         log.info("Звонок %s завершён", self.session_id)

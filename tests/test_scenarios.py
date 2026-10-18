@@ -318,3 +318,21 @@ def test_journal_save_survives_disk_error(monkeypatch, tmp_path):
     (tmp_path / "busy").write_text("файл, а не папка")
     monkeypatch.setattr(journal, "FILE", tmp_path / "busy" / "j.json")
     journal.save()
+
+
+async def test_tech_client_created_once_and_reused(mis):
+    await talk("у меня болит сердце")
+    await talk("позовите оператора")
+    tech = [c for c in mis.clients if c["last_name"] == "Срочный"]
+    assert len(tech) == 1 and len(mis.escalations) == 2
+
+
+async def test_doctors_and_live_endpoints(monkeypatch):
+    from app import main, telephony
+    monkeypatch.setattr(config, "TELEPHONY_ENABLED", False)
+    transport = httpx.ASGITransport(app=main.app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+        docs = (await c.get("/api/doctors")).json()
+        assert len(docs) == 85 and {"fullName", "specialty", "cabinet", "weekly"} <= set(docs[0])
+        telephony.ACTIVE.clear()
+        assert (await c.get("/api/live")).json() == []

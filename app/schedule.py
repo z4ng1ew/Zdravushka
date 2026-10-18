@@ -51,6 +51,13 @@ def demo_doctors() -> list[dict]:
             for d in _data()["doctors"].values()]
 
 
+def public_doctors() -> list[dict]:
+    return [{"id": int(d["excel_id"][1:]), "fullName": d["full_name"], "specialty": d["specialty"],
+             "department": d.get("department"), "patients": d.get("patients"),
+             "cabinet": str(d.get("cabinet") or ""), "slotMin": d.get("slot_min"), "weekly": d.get("weekly") or {}}
+            for d in _data()["doctors"].values()]
+
+
 def specialties() -> list[str]:
     return sorted({d["specialty"] for d in _data()["doctors"].values()})
 

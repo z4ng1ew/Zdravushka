@@ -72,6 +72,15 @@ async def speak(req: TtsRequest):
     return Response(audio, media_type="audio/wav")
 
 
+@app.get("/api/doctors")
+async def doctors():
+    return schedule.public_doctors()
+
+
+@app.get("/api/live")
+async def live_calls():
+    return [{**c, "active": True} for c in journal.public(journal.CALLS) if c["id"] in telephony.ACTIVE]
+
 @app.get("/api/calls")
 async def calls():
     return journal.public(journal.CALLS)

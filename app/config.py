@@ -76,4 +76,5 @@ LLM_URL = _trusted(LLM_URL)
 STT_URL = _trusted(STT_URL)
 TTS_URL = _trusted(TTS_URL)
 
-TECH_CLIENT = {"last_name": "Срочный", "first_name": "Вызов", "middle_name": "Иванович", "birth_date": "01.01.1900"}
+TECH_CLIENT = {"last_name": "Срочный", "first_name": "Вызов", "middle_name": "Иванович",
+               "birth_date": os.getenv("TECH_CLIENT_BIRTH_DATE", "01.01.1970")}
