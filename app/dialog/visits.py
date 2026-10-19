@@ -72,12 +72,21 @@ async def task_cancel(s: Session, nl: dict) -> ChatResponse:
     s.call["intent"] = "Отмена записи"
     if (r := await need_identity(s, create=False)):
         return r
+    if s.step == "confirm_all":
+        if nl["answer"] == "yes":
+            for v in s.visits[:3]:
+                await cancel_visit(s, v)
+                reminder_status(s, "отменил", visit_id=v["id"])
+            return task_done(s, f"Отменила все записи: {len(s.visits[:3])}. Спасибо, что предупредили.", "отменён")
+        if nl["answer"] == "no":
+            return task_done(s, "Хорошо, записи остаются.", "справка")
+        return reply(s, "Отменить все эти записи? Скажите «да» или «нет».")
     if s.step == "choose_visit" and ALL_OF_THEM.search(s.text) and s.visits:
-        for v in s.visits[:3]:
-            await cancel_visit(s, v)
-            reminder_status(s, "отменил", visit_id=v["id"])
-        n = len(s.visits[:3])
-        return task_done(s, f"Отменила все записи: {n}. Спасибо, что предупредили.", "отменён")
+        s.step = "confirm_all"
+        items = [visit_booking(v) for v in s.visits[:3]]
+        listing = "; ".join(f"{b.specialty.lower()}, {b.spoken}" for b in items)
+        return reply(s, f"Отменяю все записи: {listing}. Верно?", options=items,
+                     explanation="Перед отменой нескольких записей ассистент всегда переспрашивает.")
     if not s.visit and (r := await choose_visit(s, nl, "отменить")):
         return r
     b = visit_booking(s.visit)

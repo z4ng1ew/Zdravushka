@@ -53,7 +53,7 @@ async def prompt_injection(s: Session, text: str) -> ChatResponse | None:
                  explanation="Фраза похожа на попытку изменить правила ассистента — она не выполняется.")
 
 
-IMPORTANT_STEPS = ("identity", "birth_date", "confirm", "address")
+IMPORTANT_STEPS = ("identity", "birth_date", "confirm", "confirm_all", "address")
 
 
 async def unsure_hearing(s: Session, text: str) -> ChatResponse | None:

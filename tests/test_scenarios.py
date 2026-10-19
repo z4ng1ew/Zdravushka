@@ -231,6 +231,8 @@ async def test_cancel_both_visits(mis):
     await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
     await talk("запишите к окулисту", "Козлов Андрей 10.10.1990", "1", "да")
     r = await talk("отмените запись", "Козлов Андрей 10.10.1990", "обе отмените")
+    assert "Верно?" in r.reply and all(v["status"] == "Запланирована" for v in mis.visits)
+    r = await dialog.handle(r.session_id, "да")
     assert "Отменила все записи: 2" in r.reply
     assert all(v["status"] == "Отменена" for v in mis.visits)
 
@@ -606,3 +608,10 @@ async def test_concurrent_bookings_do_not_take_same_slot(mis):
     await asyncio.gather(dialog.handle(r1.session_id, "да"), dialog.handle(r2.session_id, "да"))
     slots = [(v["doctor"]["id"], v["scheduled_at"]) for v in mis.visits]
     assert len(slots) == len(set(slots))
+
+
+async def test_cancel_all_needs_confirmation_and_no_keeps_visits(mis):
+    await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    await talk("запишите к окулисту", "Козлов Андрей 10.10.1990", "1", "да")
+    r = await talk("отмените запись", "Козлов Андрей 10.10.1990", "какие все", "нет")
+    assert "остаются" in r.reply and all(v["status"] == "Запланирована" for v in mis.visits)
