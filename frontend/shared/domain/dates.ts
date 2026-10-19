@@ -63,5 +63,8 @@ export function agoMis(at: string): string {
   return splitDT(at).date;
 }
 
-/** Длительность звонка: «45 с», «2 мин 5 с» */
-export const durationText = (n: number) => (n >= 60 ? `${Math.floor(n / 60)} мин ${n % 60} с` : `${n} с`);
+/** Длительность звонка: «45 с», «2 мин 5 с» (дробные и отрицательные секунды сервера — округляем) */
+export function durationText(n: number): string {
+  const s = Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+  return s >= 60 ? `${Math.floor(s / 60)} мин ${s % 60} с` : `${s} с`;
+}

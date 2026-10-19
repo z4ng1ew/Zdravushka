@@ -5,7 +5,7 @@ import type { Ticket } from "@/shared/types/ticket";
 
 export type FeedItem =
   | { type: "line"; line: LiveLine }
-  | { type: "error"; status: number | null; detail: string; at: string }
+  | { type: "error"; status: number | null; detail: string; at: string; retry?: string } // retry — фраза, которую можно отправить ещё раз
   | { type: "ticket"; ticket: Ticket; at: string }
   | { type: "notice"; text: string; at: string }; // подсказка пациенту: что делать, если голос не сработал
 

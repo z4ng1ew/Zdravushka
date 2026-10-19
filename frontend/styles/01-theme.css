@@ -35,6 +35,7 @@
 html, body { margin: 0; padding: 0; }
 html { background: #dbe9ff; }
 body {
+  overflow-wrap: break-word; /* длинные слова и адреса переносятся, а не вылезают за край */
   color: var(--text);
   font-family: "Nunito", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
   font-size: 15px;

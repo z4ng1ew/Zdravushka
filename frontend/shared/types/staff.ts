@@ -1,4 +1,4 @@
-// Контракт кабинета сотрудника: /api/calls, /api/handoffs, /api/reminders (app/main.py бэкенда).
+// Контракт кабинета сотрудника: /api/calls, /api/live, /api/handoffs, /api/reminders (app/main.py бэкенда).
 
 export type CallResult = "записан" | "перенесён" | "отменён" | "справка" | "переведён" | "сброшен";
 
@@ -29,6 +29,7 @@ export interface Call {
   patient: string | null; // уже замаскировано бэкендом: «Иванов П. С.»
   transcript: Utterance[];
   stand_requests: StandRequest[];
+  active?: boolean; // /api/live: звонок идёт прямо сейчас
 }
 
 export type HandoffStatus = "новая" | "в работе" | "перезвонили" | "закрыта";

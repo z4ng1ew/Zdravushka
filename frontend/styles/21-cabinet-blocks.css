@@ -201,3 +201,26 @@
 .dir { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .dir-in { color: var(--blue); }
 .dir-out { color: #6d4bd8; }
+
+/* «Звонок сейчас»: телефонные звонки и подзаголовок демо-звонка */
+.phone-call { margin-bottom: 16px; }
+.phone-call .live-status { margin-bottom: 6px; }
+.phone-call-meta { margin: 0 0 10px; }
+.live-sub { font-size: 17px; font-weight: 800; color: #1d3b6e; margin: 18px 0 10px; }
+
+/* поиск и страницы в длинных списках кабинета (очередь переводов, журнал звонков) */
+.list-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.list-tools .search { flex: 1; min-width: 200px; max-width: 420px; padding: 6px 16px; }
+.list-found { font-size: 12.5px; color: var(--muted); }
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.pager-info { font-size: 12.5px; color: var(--muted); margin-right: auto; }
+.pager-now { font-size: 13px; font-weight: 700; color: #1d3b6e; min-width: 46px; text-align: center; }
+.pager-btn {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  background: #fff; color: var(--blue); border: 1.5px solid #c6d9f5;
+}
+.pager-btn:hover:not(:disabled) { background: var(--blue-soft); }
+.pager-btn:disabled { opacity: .4; cursor: default; }
+.pager-prev svg { transform: rotate(90deg); }
+.pager-next svg { transform: rotate(-90deg); }
+.q-status { margin-top: 6px; }

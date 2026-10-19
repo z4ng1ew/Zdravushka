@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import AppHeader from "./AppHeader";
+import ErrorBoundary from "./ErrorBoundary";
 import { MisBadgeAuto } from "./MisBadge";
 
 export interface NavItem {
@@ -36,13 +37,16 @@ function Rail({ nav }: { nav: NavItem[] }) {
 
 export default function Shell({ nav, chip, children }: { nav: NavItem[]; chip: ReactNode; children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
+  const path = usePathname() ?? "";
   useEffect(() => setMounted(true), []);
   return (
     <div className="page">
       <AppHeader wide status={mounted && <MisBadgeAuto />} chip={chip} />
       <div className="app2">
         <Rail nav={nav} />
-        <main className="main2">{mounted ? children : <div className="empty-row">Загрузка…</div>}</main>
+        <main className="main2">
+          {mounted ? <ErrorBoundary inline resetKey={path}>{children}</ErrorBoundary> : <div className="empty-row">Загрузка…</div>}
+        </main>
       </div>
     </div>
   );

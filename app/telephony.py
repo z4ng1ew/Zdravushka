@@ -217,7 +217,7 @@ class Call:
 
     async def process(self, pcm: bytes):
         try:
-            text = await ai.speech_to_text(tts.pcm_to_wav(pcm, RATE), "phone.wav")
+            text, confidence = await ai.transcribe(tts.pcm_to_wav(pcm, RATE), "phone.wav")
         except ai.AIError as e:
             log.warning("STT: %s", e)
             await self.say("Простите, не расслышала. Повторите, пожалуйста.")
@@ -225,7 +225,7 @@ class Call:
         if not text.strip():
             return
         try:
-            answer = await dialog.handle(self.session_id, text)
+            answer = await dialog.handle(self.session_id, text, confidence)
         except Exception:
             log.exception("Ошибка диалога в звонке %s", self.session_id)
             await self.say("Извините, произошёл сбой. Соединяю с регистратором.")

@@ -77,6 +77,20 @@ HARD_OF_HEARING = ["повтори", "не расслыш", "не слышу", "
                    "не понял", "не поняла", "повторите еще раз", "медленнее"]
 
 
+INJECTION = re.compile(
+    r"(игнорир|забудь|не обращай внимания).{0,30}(инструкц|правил|указан|предыдущ)"
+    r"|(ignore|disregard|forget).{0,30}(instruction|previous|rules|prompt)"
+    r"|системн\w* (промпт|подсказк|инструкц)|system prompt|\bprompt\b|промпт"
+    r"|ты (теперь|больше не)|you are now|act as|притворись|представь, что ты"
+    r"|режим разработчика|developer mode|jailbreak|dan mode"
+    r"|<\s*/?\s*(system|phrase|assistant)\s*>|```",
+    re.IGNORECASE)
+
+
+def is_injection(text: str) -> bool:
+    return bool(INJECTION.search(text))
+
+
 def asks_repeat(text: str) -> bool:
     low = text.lower()
     return any(w in low for w in HARD_OF_HEARING) and len(low.split()) <= 6

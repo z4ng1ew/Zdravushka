@@ -1,6 +1,7 @@
 import re
 
 from app import schedule
+from app.dialog.mis import BOOKING_LOCK
 from app.dialog.booking import task_booking
 from app.dialog.common import reminder_status, reply, task_done
 from app.dialog.mis import busy_slots, cancel_visit, client_visits, reschedule_visit
@@ -22,7 +23,7 @@ ALL_OF_THEM = re.compile(r"\b(обе|оба|все|всё|обеих|кажду�
 
 async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
     s.call["intent"] = "Перенос записи"
-    if (r := await need_identity(s)):
+    if (r := await need_identity(s, create=False)):
         return r
     if not s.visit and (r := await choose_visit(s, nl, "перенести")):
         return r
@@ -47,9 +48,11 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
     elif s.step == "confirm":
         if nl["answer"] == "yes":
             o = s.chosen
-            if (o.doctor_id, o.scheduled_at) in await busy_slots(s):
+            async with BOOKING_LOCK:
+                taken = (o.doctor_id, o.scheduled_at) in await busy_slots(s)
+                updated = None if taken else await reschedule_visit(s, visit, o)
+            if taken:
                 return await offer_slots(s, [doctor], exclude=(doctor["id"], visit["scheduled_at"]))
-            updated = await reschedule_visit(s, visit, o)
             reminder_status(s, "перенёс", o.scheduled_at, visit_id=visit["id"])
             return task_done(s, f"Готово, запись перенесена. Новое время: {o.spoken}{room(o.doctor_name)}.", "перенесён",
                               booking=visit_booking(updated))
@@ -67,7 +70,7 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
 
 async def task_cancel(s: Session, nl: dict) -> ChatResponse:
     s.call["intent"] = "Отмена записи"
-    if (r := await need_identity(s)):
+    if (r := await need_identity(s, create=False)):
         return r
     if s.step == "choose_visit" and ALL_OF_THEM.search(s.text) and s.visits:
         for v in s.visits[:3]:
@@ -92,7 +95,7 @@ async def task_cancel(s: Session, nl: dict) -> ChatResponse:
 
 async def task_status(s: Session, nl: dict) -> ChatResponse:
     s.call["intent"] = "Статус записи"
-    if (r := await need_identity(s)):
+    if (r := await need_identity(s, create=False)):
         return r
     visits = await client_visits(s)
     if not visits:

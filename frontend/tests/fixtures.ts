@@ -14,7 +14,7 @@ export const reply = (r: Partial<ChatResponse> = {}): ChatResponse => ({
 
 export const call = (c: Partial<Call> = {}): Call => ({
   id: "c1", direction: "входящий", started_at: "18.10.2026 09:00", duration_sec: 60,
-  intent: "booking", result: "записан", patient: null, transcript: [], ...c,
+  intent: "booking", result: "записан", patient: null, transcript: [], stand_requests: [], ...c,
 } as Call);
 
 export const handoff = (h: Partial<Handoff> = {}): Handoff => ({

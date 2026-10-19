@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+import asyncio
+
 import httpx
 
 from app import journal, schedule
@@ -9,6 +11,9 @@ from app.models import Booking
 from app.ports import MisPort
 from app.stand_client import StandError
 from app.dialog.session import Session
+
+
+BOOKING_LOCK = asyncio.Lock()
 
 
 def api() -> MisPort:
@@ -22,6 +27,8 @@ async def call_mis(s: Session, method: str, path: str, coro):
         result = await coro
     except StandError as e:
         journal.stand_request(s.call, method, path, e.status, e.message)
+        if e.status in (400, 409) and "врач" in e.message.lower():
+            getattr(state.stand, "invalidate_doctors", lambda: None)()
         raise StandDown(e.message) from e
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
         journal.stand_request(s.call, method, path, 0, "нет ответа или неверный ответ")
@@ -43,9 +50,11 @@ async def busy_slots(s: Session) -> set[tuple[int, str]]:
     return {(v["doctor"]["id"], v["scheduled_at"]) for v in visits}
 
 
-async def identify(s: Session) -> dict:
+async def identify(s: Session, create: bool = True) -> dict | None:
     c = s.fields
     client = await call_mis(s, "GET", "/clients", api().find_client(c["last_name"], c["first_name"], c["birth_date"]))
+    if not client and not create:
+        return None
     if not client:
         client = await call_mis(s, "POST", "/clients", api().create_client(
             c["last_name"], c["first_name"], c["birth_date"], c.get("middle_name"),

@@ -20,7 +20,8 @@ def collected(s: Session) -> dict:
     return {LABELS[k]: v for k, v in s.fields.items() if k in LABELS and v}
 
 
-def reply(s: Session, text: str, status: str | None = None, source: str | None = None, **kw) -> ChatResponse:
+def reply(s: Session, text: str, status: str | None = None, source: str | None = None,
+          explanation: str | None = None, **kw) -> ChatResponse:
     journal.say(s.call, "bot", text)
     s.last_reply = text
     if kw.get("done"):
@@ -29,7 +30,8 @@ def reply(s: Session, text: str, status: str | None = None, source: str | None =
         status = "handoff" if kw.get("escalation") else "completed" if kw.get("done") else "in_progress"
     journal.save()
     return ChatResponse(session_id=s.id, reply=text, intent=s.task or s.last_task,
-                        collected=collected(s), status=status, source=source, **kw)
+                        collected=collected(s), status=status, source=source, explanation=explanation,
+                        understood_by=s.understood_by, asr_confidence=s.asr_confidence, **kw)
 
 
 def finish(s: Session) -> ChatResponse:
@@ -41,6 +43,8 @@ def task_done(s: Session, text: str, result: str, **kw) -> ChatResponse:
     s.last_task, s.task, s.step = s.task, None, "more"
     s.forget_task_data()
     kw.setdefault("source", "МИС")
+    if kw.get("booking") is not None and kw["booking"].visit_id and "explanation" not in kw:
+        kw["explanation"] = f"Действие выполнено в МИС, номер записи {kw['booking'].visit_id}."
     return reply(s, f"{text} {ANYTHING_ELSE}", status="completed", **kw)
 
 
@@ -62,6 +66,14 @@ async def escalation_client(s: Session) -> dict | None:
         return None
 
 
+ESCALATION_MAX = 1000
+
+
+def clean_text(text: str, limit: int = ESCALATION_MAX) -> str:
+    text = "".join(ch if ch.isprintable() else " " for ch in text)
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
 async def send_escalation(s: Session, description: str):
     if not state.stand:
         return
@@ -69,7 +81,7 @@ async def send_escalation(s: Session, description: str):
     if not client:
         return
     try:
-        await call_mis(s, "POST", "/escalations", state.stand.create_escalation(client["id"], description))
+        await call_mis(s, "POST", "/escalations", state.stand.create_escalation(client["id"], clean_text(description)))
     except StandDown:
         pass
 
@@ -79,14 +91,15 @@ async def escalate(s: Session, esc: Escalation) -> ChatResponse:
     who = journal.mask_name(c.get("last_name"), c.get("first_name"), c.get("middle_name"))
     esc.summary = f"{esc.summary}. Пациент: {who or 'не назван'}. Задача: {s.task or '—'}."
     details = "; ".join(f"{k}: {v}" for k, v in collected(s).items())
-    await send_escalation(s, f"[{esc.rule}, {esc.priority}] {esc.reason}. {esc.summary}"
-                              + (f" Собрано: {details}." if details else ""))
+    await send_escalation(s, clean_text(f"[{esc.rule}, {esc.priority}] {esc.reason}. {esc.summary}"
+                                        + (f" Собрано: {details}." if details else "")))
     journal.handoff(s.call, esc.reason, esc.priority == "P1", esc.summary, collected(s))
     s.call["result"] = "переведён"
     s.call["intent"] = s.call["intent"] or "перевод на регистратора"
     s.task = "escalation"
     return reply(s, safety.PHRASES.get(esc.rule, safety.PHRASES["R-08"]), escalation=esc, done=True,
-                  source="регламент РГ-ТЕЛ-01")
+                 source="регламент РГ-ТЕЛ-01",
+                 explanation=f"Правило {esc.rule} регламента РГ-ТЕЛ-01: {esc.reason}. Обращение передано регистратору.")
 
 
 def reminder_status(s: Session, status: str, new_time: str | None = None, visit_id: int | None = None):

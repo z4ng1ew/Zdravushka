@@ -37,9 +37,20 @@ export function describe(status: number | null): string {
   return STATUS_TEXT[status] ?? (status >= 500 ? "Ошибка сервера" : "Ошибка запроса");
 }
 
+/** Запись журнала из хранилища: чужое или испорченное пропускаем, чтобы страница «Ошибки» не падала */
+function toEntry(v: unknown): ErrorEntry | null {
+  if (typeof v !== "object" || v === null) return null;
+  const e = v as Record<string, unknown>;
+  const s = (x: unknown) => (typeof x === "string" ? x : "");
+  if (!s(e.at) || Number.isNaN(new Date(s(e.at)).getTime())) return null;
+  const status = typeof e.status === "number" && Number.isFinite(e.status) ? e.status : null;
+  return { at: s(e.at), status, method: s(e.method), path: s(e.path), message: s(e.message), where: s(e.where) };
+}
+
 export function readErrors(): ErrorEntry[] {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    const raw: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    return Array.isArray(raw) ? raw.flatMap((x) => toEntry(x) ?? []) : [];
   } catch {
     return [];
   }

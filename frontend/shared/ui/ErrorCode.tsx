@@ -19,11 +19,9 @@ export function ErrorBlock({ status, detail }: { status: number | null; detail?:
   );
 }
 
-/** Ошибка действия: цифра + короткая понятная причина рядом (409 — «идёт другой звонок», 503 — «МИС недоступна»…) */
+/** Ошибка действия: цифра + короткая причина рядом — от сервера, если она короткая, иначе по коду */
 export function ErrorInline({ status, detail }: { status: number | null; detail?: string }) {
-  const text = status === 409 ? "Сейчас идёт другой звонок"
-    : detail && detail.length <= 90 ? detail
-    : describe(status);
+  const text = detail && detail.length <= 90 ? detail : describe(status);
   return (
     <span className="err-inline" role="alert">
       <ErrorCode status={status} detail={detail} />

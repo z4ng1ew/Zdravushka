@@ -35,9 +35,9 @@ export default function HandoffRow({ h, busy, error, onStatus }: {
     <>
       <div className={`q-row ${h.urgent ? "q-red" : ""} ${h.status !== "новая" ? "q-work" : ""}`}>
         <div className="q-time"><b>{splitDT(h.created_at).time}</b><small>{agoMis(h.created_at)}</small></div>
-        <div>
-          <span className={`rtag ${reason.cls}`}>{reason.icon}{h.reason}</span>
-          <div style={{ marginTop: 6 }}><span className={`sp ${STATUS_CLS[h.status] ?? "sp-grey"}`}>{h.status}</span></div>
+        <div className="q-tags">
+          <span className={`rtag ${reason.cls}`}>{reason.icon}{h.reason || "причина не указана"}</span>
+          <div className="q-status"><span className={`sp ${STATUS_CLS[h.status] ?? "sp-grey"}`}>{h.status}</span></div>
         </div>
         <div className="q-patient">
           <div><b>Пациент:</b> {handoffPatient(h) || "не назвался"}</div>

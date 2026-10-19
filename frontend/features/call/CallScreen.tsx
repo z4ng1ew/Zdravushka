@@ -45,17 +45,18 @@ export default function CallScreen() {
     onOperatorSay: (text) => call.line("operator", text),
   });
 
-  const choose = async (i: number) => { if (s.sending) return; voice.cancel(); voice.afterTurn(await call.choose(i)); };
-  const say = async (text: string) => {
+  const choose = (i: number) => { if (s.sending) return; voice.cancel(); voice.follow(call.choose(i)); };
+  const say = (text: string) => {
     if (s.sending) return;
     if (!active) return voice.begin(text);
-    voice.afterTurn(await call.ask(text));
+    voice.follow(call.ask(text));
   };
   const send = (text: string) => {
     if (s.mode !== "ai") return call.line("patient", text); // с регистратором — просто передаём фразу
     if (!active) return voice.begin(text);
-    call.ask(text);
+    voice.follow(call.ask(text));
   };
+  const retry = (text: string) => { if (!s.sending) voice.follow(call.send(text)); };
   const toRegistrar = () => { if (s.sending || s.mode !== "ai") return; voice.cancel(); call.toRegistrar(); };
   const end = () => { voice.stop(); call.end(); };
 
@@ -72,10 +73,10 @@ export default function CallScreen() {
             {statusText(s, voice.flags)}
           </div>
           <CallButtons active={active} aiLeads={s.mode === "ai"} sending={s.sending}
-            onEnd={end} onRegistrar={toRegistrar} onRestart={() => voice.begin()} />
+            onEnd={end} onRegistrar={toRegistrar} onRestart={voice.restart} />
           <PhoneCard />
         </div>
-        <DialogPanel call={s} canCall={canCall(s)} onReplay={voice.canReplay ? voice.speak : undefined}
+        <DialogPanel call={s} canCall={canCall(s)} onReplay={voice.canReplay ? voice.speak : undefined} onRetry={retry}
           onChoose={choose} onSay={say} onSend={send} onMic={voice.press} />
       </section>
       <DetailsPanel call={s} onChoose={choose} />

@@ -1,13 +1,12 @@
 "use client";
 
-// «Диалоги»: регистратор видит разговор ИИ с пациентом в реальном времени и может его перехватить.
+// «Звонок сейчас»: телефонные звонки с сервера (GET /api/live) и демо-звонок из этого браузера.
 
-import { useEffect, useRef } from "react";
-import Bubble, { SpeakerLegend } from "@/shared/ui/Bubble";
-import LiveFacts from "./LiveFacts";
-import LiveStatusBar from "./LiveStatusBar";
-import OperatorReply from "./OperatorReply";
+import { ErrorInline } from "@/shared/ui/ErrorCode";
+import PhoneCallCard from "./PhoneCallCard";
 import { useLiveCall } from "./useLiveCall";
+import { usePhoneCalls } from "./usePhoneCalls";
+import WebCall from "./WebCall";
 
 function NoCall() {
   return (
@@ -15,37 +14,27 @@ function NoCall() {
       <img src="/img/mic-flat.png" width={64} height={64} alt="" />
       <div>
         <b>Сейчас нет активных звонков</b>
-        <p className="muted small">Как только пациент позвонит Здравушке, разговор появится здесь — его можно будет перехватить.</p>
+        <p className="muted small">Как только пациент позвонит Здравушке, разговор появится здесь.</p>
       </div>
     </div>
   );
 }
 
 export default function LiveScreen() {
-  const { call, say, takeover, release } = useLiveCall();
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); }, [call?.lines.length]);
-
+  const phone = usePhoneCalls();
+  const web = useLiveCall();
+  const calls = phone.data ?? [];
+  const webCall = web.call && web.call.phase !== "idle" ? web.call : null;
   return (
     <>
       <h1 className="page-title">Звонок сейчас</h1>
       <p className="page-sub">
-        Вы видите разговор ИИ с пациентом в реальном времени и можете перехватить его в любой момент —
-        например, если пациент нервничает или ИИ не справляется.
+        Разговор ИИ с пациентом в реальном времени: расшифровка и запросы к МИС. Звонок с сайта можно перехватить.
       </p>
-      {!call || call.phase === "idle" ? <NoCall /> : (
-        <div className="grid grid-queue" style={{ gridTemplateColumns: "1.5fr 1fr" }}>
-          <div className="card">
-            <LiveStatusBar call={call} onTakeover={takeover} onRelease={release} />
-            <SpeakerLegend />
-            <div className="dialog dialog-live" ref={box}>
-              {call.lines.map((l, i) => <Bubble key={i} {...l} operator={call.operator} small />)}
-            </div>
-            {call.mode === "operator" && call.phase === "active" && <OperatorReply onSay={say} />}
-          </div>
-          <LiveFacts call={call} />
-        </div>
-      )}
+      {phone.error && <ErrorInline status={phone.error.status} detail={phone.error.message} />}
+      {calls.map((c) => <PhoneCallCard key={c.id} call={c} />)}
+      {webCall && <WebCall call={webCall} onSay={web.say} onTakeover={web.takeover} onRelease={web.release} />}
+      {!calls.length && !webCall && <NoCall />}
     </>
   );
 }

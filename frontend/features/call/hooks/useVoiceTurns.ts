@@ -1,92 +1,104 @@
 "use client";
 
-// Голосовой разговор: микрофон → /api/asr → фраза боту → озвучка ответа (useSpeaker) → снова слушать.
-// Ошибки голоса не обрывают звонок: пациенту — понятная подсказка, можно продолжить текстом.
+// Голосовой разговор: микрофон (useMicrophone) → /api/asr → фраза боту → озвучка ответа (useSpeaker) → снова слушать.
+// Ошибки голоса не обрывают звонок: пациенту — понятная подсказка (model/speechMisses.ts).
+// turn — номер «хода»: «Заново», «Завершить», перехват и выбор варианта его меняют, и опоздавшие шаги
+// (распознанная фраза, ответ сервера, озвучка) старого хода молча отбрасываются.
 
-import { useCallback, useRef, useState } from "react";
-import { ApiError, toApiError } from "@/shared/api/ApiError";
-import { logError } from "@/shared/api/errorLog";
+import { useRef, useState } from "react";
+import { toApiError } from "@/shared/api/ApiError";
 import { recognize } from "@/shared/api/speech";
-import { startRecording, type Recording } from "@/shared/browser/recorder";
 import type { ChatResponse } from "@/shared/types/chat";
+import { MIC_TEXT, missReaction, silenceReaction, type MissReaction } from "../model/speechMisses";
 import type { CallSession } from "./useCallSession";
+import { useMicrophone } from "./useMicrophone";
 import { useSpeaker } from "./useSpeaker";
 
-const MIC_DENIED = "Нет доступа к микрофону. Разрешите микрофон в браузере или пишите текстом в поле ниже.";
-const ASR_FAILED = "Не удалось распознать речь. Скажите ещё раз или напишите текстом.";
+const TEMPORARY = [408, 502, 503]; // временный сбой распознавания — как промах, звонок продолжается
+
+type Heard = { kind: "text"; text: string; confidence?: number } | { kind: "miss" } | { kind: "error"; error: unknown };
+
+/** Распознать фразу: текст, промах (пусто или временный сбой) или ошибка, которую надо показать */
+async function hear(audio: Blob): Promise<Heard> {
+  try {
+    const res = await recognize(audio);
+    return res.text ? { kind: "text", text: res.text, confidence: res.confidence ?? undefined } : { kind: "miss" };
+  } catch (e) {
+    return TEMPORARY.includes(toApiError(e).status ?? 0) ? { kind: "miss" } : { kind: "error", error: e };
+  }
+}
 
 export function useVoiceTurns(call: CallSession) {
-  const [listening, setListening] = useState(false);
+  const mic = useMicrophone();
+  const speaker = useSpeaker();
   const [transcribing, setTranscribing] = useState(false);
-  const { speak, speaking, canReplay } = useSpeaker();
   const voiceOn = useRef(false); // звонок ведётся голосом (начат с микрофона)
-  const rec = useRef<Recording | null>(null);
-  const aiTalking = () => call.ref.current.phase === "active" && call.ref.current.mode === "ai";
-
-  const cancel = useCallback(() => { rec.current?.cancel(); rec.current = null; setListening(false); }, []);
+  const turn = useRef(0);
+  const count = useRef({ misses: 0, silent: 0 }); // промахи распознавания и тишина подряд
+  const fresh = (my: number) => my === turn.current && call.ref.current.phase === "active" && call.ref.current.mode === "ai";
 
   // Шаги голосового цикла ссылаются друг на друга, поэтому объявлены как function (всплытие).
   // Внутри — только ref и стабильные функции, так что старые замыкания безопасны.
 
   /** После ответа бота в голосовом звонке: озвучить и снова слушать пациента */
-  async function afterTurn(r: ChatResponse | null) {
-    if (!r || !voiceOn.current) return;
-    await speak(r.reply);
-    if (!r.done && !r.escalation && aiTalking()) listen();
+  async function afterTurn(r: ChatResponse | null, my = turn.current) {
+    if (!r || !voiceOn.current || my !== turn.current) return;
+    await speaker.speak(r.reply);
+    if (fresh(my) && voiceOn.current && !r.done && !r.escalation) listen();
+  }
+
+  async function listen() {
+    const problem = await mic.open(() => finish(false));
+    if (!problem) return;
+    voiceOn.current = false;
+    call.notice(MIC_TEXT[problem]);
   }
 
   /** manual — пациент сам нажал «отправить»: отправляем даже тихую запись */
   async function finish(manual = false) {
-    const r = rec.current;
-    if (!r) return;
-    rec.current = null;
-    setListening(false);
-    const heard = r.heardSpeech();
-    const audio = await r.stop();
-    if (!aiTalking()) return;
-    if (!heard && !manual) { listen(); return; } // тишина — слушаем дальше
+    const my = turn.current;
+    const phrase = await mic.take();
+    if (!phrase || !fresh(my)) return;
+    if (!phrase.heard && !manual) { react(silenceReaction(++count.current.silent)); return; }
+    count.current.silent = 0;
     setTranscribing(true);
-    try {
-      const res = await recognize(audio);
-      if (!res.text) { listen(); return; }
-      await afterTurn(await call.ask(res.text, res.text, res.confidence ?? undefined));
-    } catch (e) {
-      voiceOn.current = false; // не крутим ошибку по кругу — пациент нажмёт микрофон ещё раз
-      const st = toApiError(e).status;
-      if (st === 502 || st === 503 || st === 408) call.notice(ASR_FAILED); else call.showError(e);
-    } finally {
-      setTranscribing(false);
-    }
+    const heard = await hear(phrase.audio);
+    setTranscribing(false);
+    if (!fresh(my)) return; // звонок завершили, начали заново или перехватили — фраза устарела
+    if (heard.kind === "miss") { react(missReaction(++count.current.misses)); return; }
+    if (heard.kind === "error") { voiceOn.current = false; call.showError(heard.error); return; }
+    count.current.misses = 0;
+    await afterTurn(await call.ask(heard.text, heard.text, heard.confidence), my);
   }
 
-  async function listen() {
-    if (rec.current) return;
-    try {
-      rec.current = await startRecording(() => finish(false));
-      setListening(true);
-    } catch (err) {
-      voiceOn.current = false;
-      logError(new ApiError(null, "MIC", "микрофон", `Нет доступа к микрофону: ${err instanceof Error ? err.message : err}`), "голос");
-      call.notice(MIC_DENIED);
-    }
+  /** Промах или тишина: подсказка и слушать дальше — или выключить микрофон */
+  function react(r: MissReaction) {
+    if (r.notice) call.notice(r.notice);
+    if (r.listen) { listen(); return; }
+    voiceOn.current = false;
+    count.current = { misses: 0, silent: 0 };
   }
 
-  /** Начать звонок (с первой фразой или без) и вести его голосом, если он начат с микрофона */
-  const begin = async (first?: string) => afterTurn(await call.start(first));
+  /** Остановить микрофон и озвучку; начатые шаги этого хода больше не выполнятся */
+  const cancel = () => { turn.current += 1; mic.cancel(); speaker.silence(); };
+  const stop = () => { cancel(); voiceOn.current = false; count.current = { misses: 0, silent: 0 }; };
+  /** Дождаться ответа бота и, если ход не сменился, озвучить его */
+  const follow = async (reply: Promise<ChatResponse | null>) => { const my = turn.current; await afterTurn(await reply, my); };
+  const begin = (first?: string) => follow(call.start(first));
+  /** «Заново»: прошлый звонок замолкает, новый ведётся так же — голосом или текстом */
+  const restart = () => { const voice = voiceOn.current; stop(); voiceOn.current = voice; return begin(); };
 
   /** Кнопка микрофона: позвонить / начать говорить / отправить фразу */
   const press = () => {
-    if (call.ref.current.sending || transcribing || speaking) return;
+    if (call.ref.current.sending || transcribing || speaker.speaking) return;
     if (call.ref.current.phase !== "active") { voiceOn.current = true; begin(); return; }
-    if (listening) { finish(true); return; }
+    if (mic.listening) { finish(true); return; }
     if (call.ref.current.mode === "ai") { voiceOn.current = true; listen(); }
   };
 
-  const stop = () => { cancel(); voiceOn.current = false; };
-
   return {
-    flags: { listening, transcribing, speaking },
-    canReplay,
-    press, begin, afterTurn, speak, cancel, stop,
+    flags: { listening: mic.listening, transcribing, speaking: speaker.speaking },
+    canReplay: speaker.canReplay,
+    press, begin, restart, follow, speak: speaker.speak, cancel, stop,
   };
 }

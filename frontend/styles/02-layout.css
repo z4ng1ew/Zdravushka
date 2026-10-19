@@ -1,6 +1,6 @@
 /* Каркас: шапка, профиль, панели, сетка, карточки */
 
-.page { position: relative; max-width: 1240px; margin: 0 auto; padding: 14px 18px 40px; }
+.page { position: relative; max-width: 1240px; margin: 0 auto; padding: 14px 18px 40px; overflow-x: clip; } /* страховка: ничто не растягивает страницу вбок */
 /* шапка */
 .topbar {
   display: flex;

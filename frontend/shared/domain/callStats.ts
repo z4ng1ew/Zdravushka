@@ -1,7 +1,8 @@
 // Показатели по журналу звонков (/api/calls): сегодня против вчера, доли решённых и переданных.
 
 import type { Call, Reminder } from "../types/staff";
-import { addDays, keyOf, splitDT } from "./dates";
+import { addDays, keyOf, parseDT, splitDT } from "./dates";
+import { statusKey } from "./reminders";
 
 const SOLVED = new Set(["записан", "перенесён", "отменён", "справка"]);
 const NOT_SENT = new Set(["ожидает", "в очереди"]); // напоминание ещё не прозвучало
@@ -28,7 +29,7 @@ export function dayKpi(calls: Call[], reminders: Reminder[], now = new Date()): 
   const t = onDay(calls, keyOf(now));
   const y = onDay(calls, keyOf(addDays(now, -1)));
   const count = (l: Call[], f: (c: Call) => boolean) => l.filter(f).length;
-  const sent = reminders.filter((r) => !NOT_SENT.has(r.status)).length;
+  const sent = reminders.filter((r) => !NOT_SENT.has(statusKey(r.status))).length;
   return {
     total: t.length, totalD: pctDelta(t.length, y.length),
     solved: count(t, isSolved), solvedD: pctDelta(count(t, isSolved), count(y, isSolved)),
@@ -40,3 +41,7 @@ export function dayKpi(calls: Call[], reminders: Reminder[], now = new Date()): 
 /** «12.5% от всех звонков» */
 export const shareText = (n: number, total: number) =>
   total ? `${((n / total) * 100).toFixed(1)}% от всех звонков` : "от всех звонков";
+
+/** Сначала свежие звонки (не полагаемся на порядок сервера) */
+export const newestFirst = (calls: Call[]) =>
+  [...calls].sort((a, b) => parseDT(b.started_at).getTime() - parseDT(a.started_at).getTime());

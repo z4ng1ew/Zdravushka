@@ -40,21 +40,26 @@ async def health():
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     try:
-        return await dialog.handle(req.session_id, req.text)
+        return await dialog.handle(req.session_id, req.text, req.asr_confidence)
     except Exception:
         log.exception("Ошибка диалога")
         return ChatResponse(session_id=req.session_id or "error", reply="Извините, произошёл сбой. "
                             "Соединяю с регистратором.", status="error", done=True)
 
 
+MAX_AUDIO = 25 * 1024 * 1024
+
+
 @app.post("/api/asr")
 async def asr(file: UploadFile):
-    audio = await file.read()
+    audio = await file.read(MAX_AUDIO + 1)
+    if len(audio) > MAX_AUDIO:
+        raise HTTPException(413, "Аудио больше 25 МБ — ограничение шлюза распознавания")
     try:
-        text = await ai.speech_to_text(audio, file.filename or "speech.webm")
+        text, confidence = await ai.transcribe(audio, file.filename or "speech.webm")
     except ai.AIError as e:
         raise HTTPException(502, f"Распознавание недоступно: {e}")
-    return {"text": text, "confidence": None}
+    return {"text": text, "confidence": confidence}
 
 
 class TtsRequest(BaseModel):

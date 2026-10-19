@@ -1,5 +1,6 @@
 
 from app import schedule
+from app.dialog.mis import BOOKING_LOCK
 from app.dialog.common import reply, task_done
 from app.dialog.mis import busy_slots, cancel_visit, create_visit, doctors_for
 from app.dialog.steps import choose_slot, is_same_doctor, need_identity, offer_slots, room, wanted_specialty
@@ -35,11 +36,18 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
     elif s.step == "confirm":
         if nl["answer"] == "yes":
             o = s.chosen
-            busy = await busy_slots(s)
             doc = next(d for d in doctors if d["id"] == o.doctor_id)
-            if (o.doctor_id, o.scheduled_at) in busy or not schedule.is_valid_slot(doc, schedule.from_api(o.scheduled_at)):
-                return await offer_slots(s, doctors)
-            visit = await create_visit(s, o)
+            async with BOOKING_LOCK:
+                busy = await busy_slots(s)
+                if (o.doctor_id, o.scheduled_at) in busy or not schedule.is_valid_slot(doc, schedule.from_api(o.scheduled_at)):
+                    taken = True
+                else:
+                    taken = False
+                    visit = await create_visit(s, o)
+            if taken:
+                resp = await offer_slots(s, doctors)
+                resp.reply = "Это время только что заняли. " + resp.reply
+                return resp
             done = o.model_copy(update={"visit_id": visit["id"], "status": "Запланирована"})
             extra = ""
             if (old := s.take("replace_visit")):

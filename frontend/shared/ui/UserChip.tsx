@@ -22,12 +22,14 @@ export default function UserChip({ name, role, avatar, initials, items }: {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", esc); };
   }, []);
   return (
     <div className={`chip-user ${open ? "open" : ""}`} ref={ref}>
-      <button className="chip-user-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button type="button" className="chip-user-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu">
         <span className="chip-ava">
           {avatar
             ? <img src={avatar} alt="" />

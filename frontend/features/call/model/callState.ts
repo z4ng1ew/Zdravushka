@@ -30,7 +30,7 @@ export type CallAction =
   | { type: "sending"; value: boolean }
   | { type: "line"; line: Omit<LiveLine, "at"> }
   | { type: "notice"; text: string }
-  | { type: "error"; error: ApiError }
+  | { type: "error"; error: ApiError; retry?: string }
   | { type: "clearOptions" }
   | { type: "reply"; r: ChatResponse; tags: ReplyTag[]; booking: UiBooking | null; ticket: Ticket | null };
 
@@ -60,7 +60,7 @@ export function callReducer(s: CallState, a: CallAction): CallState {
     case "sending": return { ...s, sending: a.value };
     case "line": return add(s, { type: "line", line: { ...a.line, at: nowHM() } });
     case "notice": return add(s, { type: "notice", text: a.text, at: nowHM() });
-    case "error": return add(s, { type: "error", status: a.error.status, detail: a.error.message, at: nowHM() });
+    case "error": return add(s, { type: "error", status: a.error.status, detail: a.error.message, at: nowHM(), retry: a.retry });
     case "clearOptions": return { ...s, options: [] };
     case "reply": return applyReply(s, a);
   }

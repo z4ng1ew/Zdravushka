@@ -9,6 +9,7 @@ import { failedRequests, isMisFailure } from "@/shared/domain/standRequests";
 import { usePolling } from "@/shared/hooks/usePolling";
 import type { Call } from "@/shared/types/staff";
 import { ErrorInline } from "@/shared/ui/ErrorCode";
+import { toggleRow } from "@/shared/ui/toggleRow";
 import Transcript from "@/shared/ui/Transcript";
 
 const loadFailures = () => getCalls().then((l) => l.filter(isMisFailure));
@@ -34,7 +35,7 @@ export default function MisFailures() {
         <tbody>
           {data.map((c) => (
             <Fragment key={c.id}>
-              <tr className="clickable" onClick={() => setOpen(open === c.id ? null : c.id)}>
+              <tr {...toggleRow(open === c.id, () => setOpen(open === c.id ? null : c.id))}>
                 <td className="small">{c.started_at}</td>
                 <td>{c.patient || <span className="muted">не назвался</span>}</td>
                 <td className="small">{c.result}</td>

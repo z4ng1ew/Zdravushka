@@ -8,6 +8,7 @@ import { intentLabel } from "@/shared/domain/intents";
 import { failedRequests } from "@/shared/domain/standRequests";
 import type { Call } from "@/shared/types/staff";
 import StandLog from "@/shared/ui/StandLog";
+import { toggleRow } from "@/shared/ui/toggleRow";
 import Transcript from "@/shared/ui/Transcript";
 import { resultView } from "./journalView";
 
@@ -31,7 +32,7 @@ export default function CallRow({ c }: { c: Call }) {
   const res = resultView(c.result);
   return (
     <>
-      <tr className="clickable" onClick={() => setOpen(!open)} data-tip="Нажмите, чтобы увидеть разговор">
+      <tr {...toggleRow(open, () => setOpen(!open))} data-tip="Нажмите, чтобы увидеть разговор">
         <td>{at.time} <small className="muted">{at.date === todayKey() ? "" : at.date}</small></td>
         <td><Direction out={c.direction === "исходящий"} /></td>
         <td>{c.patient || <span className="muted">не назвался</span>}</td>

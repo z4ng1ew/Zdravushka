@@ -28,7 +28,12 @@ export function useLiveBridge(call: LiveCall, handlers: LiveHandlers) {
       if (m.type === "operator_say") h.current.onOperatorSay(m.text);
     });
     channel.current = ch;
-    return () => ch.close();
+    // вкладку пациента закрыли или ушли со страницы — кабинет не должен показывать «идёт звонок» вечно
+    const bye = () => {
+      if (snapshot.current.phase === "active") ch.send({ type: "state", call: { ...snapshot.current, phase: "ended" } });
+    };
+    window.addEventListener("pagehide", bye);
+    return () => { window.removeEventListener("pagehide", bye); bye(); ch.close(); };
   }, []);
 
   useEffect(() => {

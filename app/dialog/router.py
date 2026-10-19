@@ -23,7 +23,7 @@ HANDLERS = {"reminder": task_reminder, "booking": task_booking, "reschedule": ta
 HIDDEN_STEPS = ("identity", "birth_date")
 
 
-async def handle(session_id: str | None, text: str) -> ChatResponse:
+async def handle(session_id: str | None, text: str, asr_confidence: float | None = None) -> ChatResponse:
     text = text.strip()
     s = SESSIONS.get(session_id) if session_id else None
     if s is None:
@@ -36,10 +36,12 @@ async def handle(session_id: str | None, text: str) -> ChatResponse:
     if not text:
         return reply(s, "Вы меня слышите?")
     _log_patient(s, text)
+    s.asr_confidence, s.understood_by = asr_confidence, None
 
     if (resp := await run_guards(s, text)):
         return resp
     nl = await interpret(s, text)
+    s.understood_by = nl.get("_source")
     if (resp := await run_interceptors(s, nl, text)):
         return resp
     _select_task(s, nl)

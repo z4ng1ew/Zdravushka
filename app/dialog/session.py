@@ -15,6 +15,10 @@ class Session:
     last_reply: str | None = None
     miss: int = 0
     repeats: int = 0
+    unsure: int = 0
+    id_attempts: int = 0
+    asr_confidence: float | None = None
+    understood_by: str | None = None
     medical_warned: bool = False
     warned: bool = False
     client: dict | None = None

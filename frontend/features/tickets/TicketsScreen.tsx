@@ -4,7 +4,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { matchTicket, splitTickets } from "@/shared/domain/tickets";
+import { matchTicket, splitTickets, ticketKey } from "@/shared/domain/tickets";
 import { useTickets } from "@/shared/store/ticketStorage";
 import type { Ticket } from "@/shared/types/ticket";
 import { ITicket } from "@/shared/ui/NavIcons";
@@ -14,7 +14,7 @@ import Section from "@/shared/ui/Section";
 import TicketCard from "@/shared/ui/TicketCard";
 
 const TicketList = ({ list }: { list: Ticket[] }) => (
-  <div className="ticket-list">{list.map((t) => <TicketCard key={t.number} ticket={t} />)}</div>
+  <div className="ticket-list">{list.map((t) => <TicketCard key={ticketKey(t)} ticket={t} />)}</div>
 );
 
 export default function TicketsScreen() {

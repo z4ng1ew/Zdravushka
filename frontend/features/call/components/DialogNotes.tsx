@@ -18,7 +18,7 @@ export function EmergencyBanner({ escalation }: { escalation: ChatEscalation | n
   return (
     <div className="emergency">
       <b>Звоните 103 или 112</b>
-      <span>{escalation.reason}. Это может быть опасно — не ждите записи к врачу.</span>
+      <span>{escalation.reason ? `${escalation.reason}. ` : ""}Это может быть опасно — не ждите записи к врачу.</span>
     </div>
   );
 }

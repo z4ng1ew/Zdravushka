@@ -5,10 +5,12 @@ from collections import deque
 import httpx
 
 from app import config
+from app.resilience import CircuitBreaker, backoff
+
+IDEMPOTENT = ("GET",)
 
 
 class StandError(Exception):
-    pass
 
     def __init__(self, status: int, code: str, message: str):
         super().__init__(f"{status} {code}: {message}")
@@ -17,8 +19,24 @@ class StandError(Exception):
         self.message = message
 
 
+def _retry_after(resp: httpx.Response) -> float:
+    try:
+        return max(0.0, float(resp.headers.get("Retry-After", "5")))
+    except ValueError:
+        return 5.0
+
+
+def _error_body(resp: httpx.Response) -> tuple[str, str]:
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            return body.get("code", "НЕИЗВЕСТНО"), body.get("message", resp.text[:200])
+    except ValueError:
+        pass
+    return "НЕИЗВЕСТНО", resp.text[:200]
+
+
 class RateLimiter:
-    pass
 
     def __init__(self, max_calls: int, period: float = 60.0):
         self.max_calls = max_calls
@@ -49,31 +67,53 @@ class StandClient:
         )
         self.limiter = RateLimiter(config.STAND_RATE_LIMIT)
         self._doctors: list[dict] | None = None
+        self._doctors_at = 0.0
+        self.breaker = CircuitBreaker("МИС", failures=3, cooldown=30)
 
     async def close(self):
         await self.http.aclose()
 
     async def _request(self, method: str, path: str, **kwargs):
-        for attempt in range(3):
+        if self.breaker.is_open:
+            raise StandError(503, "МИС_НЕДОСТУПНА", "стенд не отвечал несколько раз подряд, пауза 30 секунд")
+        retries = config.STAND_RETRIES if method in IDEMPOTENT else 0
+        for attempt in range(retries + 3):
             await self.limiter.wait()
-            resp = await self.http.request(method, path, **kwargs)
+            try:
+                resp = await self.http.request(method, path, **kwargs)
+            except httpx.HTTPError as e:
+                if attempt < retries:
+                    await backoff(attempt)
+                    continue
+                self.breaker.failure()
+                raise StandError(0, "НЕТ_ОТВЕТА", f"{type(e).__name__}: стенд не ответил") from e
 
             if resp.status_code == 429:
-                delay = float(resp.headers.get("Retry-After", "10"))
+                delay = _retry_after(resp)
+                if delay > config.STAND_MAX_RETRY_AFTER or attempt >= 2:
+                    raise StandError(429, "ПРЕВЫШЕН_ЛИМИТ", f"стенд просит подождать {delay:.0f} с")
                 await asyncio.sleep(delay)
                 continue
 
-            if resp.status_code >= 400:
-                try:
-                    body = resp.json()
-                except ValueError:
-                    body = {}
-                raise StandError(resp.status_code,
-                                 body.get("code", "НЕИЗВЕСТНО"),
-                                 body.get("message", resp.text))
-            return resp.json()
+            if resp.status_code >= 500:
+                if attempt < retries:
+                    await backoff(attempt)
+                    continue
+                self.breaker.failure()
+                raise StandError(resp.status_code, *_error_body(resp))
 
-        raise StandError(429, "ПРЕВЫШЕН_ЛИМИТ", "Стенд трижды ответил 429")
+            if resp.status_code >= 400:
+                self.breaker.success()
+                raise StandError(resp.status_code, *_error_body(resp))
+
+            try:
+                data = resp.json()
+            except ValueError as e:
+                self.breaker.failure()
+                raise StandError(502, "НЕВЕРНЫЙ_ОТВЕТ", "стенд вернул не JSON") from e
+            self.breaker.success()
+            return data
+        raise StandError(429, "ПРЕВЫШЕН_ЛИМИТ", "стенд несколько раз подряд ответил 429")
 
     async def _get_all(self, path: str, params: dict | None = None) -> list[dict]:
         params = dict(params or {})
@@ -88,9 +128,14 @@ class StandClient:
 
 
     async def doctors(self, refresh: bool = False) -> list[dict]:
-        if self._doctors is None or refresh:
+        stale = time.monotonic() - self._doctors_at > config.DOCTORS_CACHE_TTL
+        if self._doctors is None or refresh or stale:
             self._doctors = await self._get_all("/doctors")
+            self._doctors_at = time.monotonic()
         return self._doctors
+
+    def invalidate_doctors(self):
+        self._doctors = None
 
     async def active_doctors(self, specialty: str | None = None) -> list[dict]:
         result = [d for d in await self.doctors() if d["is_active"]]

@@ -41,22 +41,46 @@ def visit_booking(v: dict) -> Booking:
                    spoken=schedule.say_slot(dt), status=v["status"])
 
 
-async def need_identity(s: Session) -> ChatResponse | None:
+ID_ATTEMPTS = 3
+
+
+async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
     if s.client:
         return None
     c = s.fields
     if not (c.get("last_name") and c.get("first_name")):
+        if s.step == "identity":
+            s.id_attempts += 1
+            if s.id_attempts >= ID_ATTEMPTS:
+                return await _identity_failed(s, "не удалось распознать ФИО")
         s.step = "identity"
         return reply(s, "Назовите, пожалуйста, фамилию, имя, отчество и дату рождения пациента.")
     if not c.get("birth_date"):
         again = s.step == "birth_date"
         s.step = "birth_date"
         if again:
+            s.id_attempts += 1
+            if s.id_attempts >= ID_ATTEMPTS:
+                return await _identity_failed(s, "не удалось распознать дату рождения")
             return reply(s, "Назовите дату рождения полностью: число, месяц и год. "
-                             "Например: первое января тысяча девятьсот восемьдесят пятого.")
+                            "Например: первое января тысяча девятьсот восемьдесят пятого.",
+                         explanation="Для поиска в МИС нужна полная дата рождения.")
         return reply(s, "Назовите дату рождения пациента.")
-    await identify(s)
-    return None
+    if await identify(s, create=create):
+        return None
+    s.id_attempts += 1
+    for key in ("last_name", "first_name", "middle_name", "birth_date"):
+        c.pop(key, None)
+    if s.id_attempts >= ID_ATTEMPTS - 1:
+        return await _identity_failed(s, "пациент не найден в МИС")
+    s.step = "identity"
+    return reply(s, "Не нашла пациента с такими данными. Повторите, пожалуйста, фамилию, имя и полную дату рождения.",
+                 explanation="Поиск в МИС по фамилии, имени и дате рождения не дал результата.")
+
+
+async def _identity_failed(s: Session, why: str) -> ChatResponse:
+    return await escalate(s, Escalation(rule="R-07", reason="пациент не идентифицирован", priority="P3",
+                                        summary=f"Не удалось идентифицировать пациента: {why}"))
 
 
 async def offer_slots(s: Session, doctors: list[dict], exclude: str | None = None) -> ChatResponse:
@@ -83,7 +107,9 @@ async def offer_slots(s: Session, doctors: list[dict], exclude: str | None = Non
     variants = "; ".join(f"{words[i]} — {o.spoken}, врач {short_name(o.doctor_name)}"
                          for i, o in enumerate(s.options))
     return reply(s, f"{note}Есть свободное время: {variants.rstrip('.')}. Какой вариант удобен?",
-                  options=s.options)
+                 options=s.options, source="расписание + МИС",
+                 explanation="Время свободно по графику врача и в МИС нет записи на этот слот; "
+                             "сроки — по программе госгарантий.")
 
 
 def pick(s: Session, nl: dict, key: str) -> object | None:

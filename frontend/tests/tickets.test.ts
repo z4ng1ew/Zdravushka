@@ -4,7 +4,8 @@ import type { TicketsData } from "@/shared/types/ticket";
 import { booking } from "./fixtures";
 
 const empty = (): TicketsData => ({ v: 1, tickets: [], seq: {} });
-const ctx = { patient: "Петров П. П.", intent: "booking" };
+const doctors = [{ id: 5, fullName: "Иванова Анна Петровна", specialty: "Терапевт", cabinet: "214" }];
+const ctx = { patient: "Петров П. П.", intent: "booking", doctors };
 
 describe("applyBookingTo — талоны из ответов бота", () => {
   it("новая запись — талон с номером по букве специальности", () => {
@@ -13,6 +14,10 @@ describe("applyBookingTo — талоны из ответов бота", () => {
     expect(d.tickets).toHaveLength(1);
     expect(t?.number).toMatch(/^[А-ЯA-Z]-001$/);
     expect(t?.patient).toBe("Петров П. П.");
+  });
+  it("специальность и кабинет — из справочника врачей", () => {
+    const t = applyBookingTo(empty(), booking(), ctx);
+    expect(t).toMatchObject({ number: "Т-001", specialty: "Терапевт", cabinet: "214" });
   });
   it("повтор той же записи не создаёт второй талон", () => {
     const d = empty();

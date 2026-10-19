@@ -11,6 +11,7 @@
   background: linear-gradient(180deg, var(--blue-2), var(--blue));
   color: #fff;
   padding: 6px 6px 6px 22px;
+  min-height: 46px; /* одна высота — с намерением и без */
 }
 .intent-bar b { background: #fff; color: var(--blue); padding: 6px 20px; border-radius: 999px; font-size: 13px; align-items: center; gap: 10px; }
 .facts { list-style: none; margin: 0; padding: 14px 22px 18px; }
@@ -55,7 +56,13 @@
 .ch-item { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; color: #1d3b6e; }
 .ch-item svg { color: #36507c; }
 .ch-count { font-size: 12px; font-weight: 600; color: var(--muted); }
-.chevron { margin-left: auto; font-size: 20px; color: var(--blue); transition: transform .25s; line-height: 1; }
+.chevron {
+  margin-left: auto; width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; color: var(--blue);
+  background: #fff; border: 1.5px solid #c6d9f5; box-shadow: 0 4px 10px rgba(31,108,240,.12);
+  transition: transform .25s, background .2s;
+}
+.collapse-head:hover .chevron { background: var(--blue-soft); }
 .bottom-wrap.open .chevron { transform: rotate(180deg); }
 .news-dot {
   width: 10px;
@@ -68,8 +75,7 @@
 .bottom-wrap .bottom-panel { padding: 4px 24px 22px; animation: unfold .25s ease-out; }
 .result-off { background: #eef2f8; color: #52688c; }
 .intent-bar { border-radius: 18px 999px 999px 0; padding: 6px 6px 6px 22px; }
-.intent-bar b { display: inline-flex; padding: 7px 22px 7px 14px; }
-.intent-bar b svg { color: var(--blue); }
+.intent-bar b { display: inline-flex; padding: 7px 20px; }
 .ticket2 .doctor-head { padding-right: 18px; }
 .ticket2 .record-grid { grid-template-columns: repeat(3, auto); justify-content: start; column-gap: 34px; }
 .ticket2 .record-grid > div:nth-child(4) { grid-column: 1 / -1; }

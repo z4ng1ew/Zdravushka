@@ -1,14 +1,14 @@
 // Показатели дня: звонки, решено без оператора, передано, напоминания (из /api/calls и /api/reminders).
 
 import { dayKpi, shareText } from "@/shared/domain/callStats";
-import { splitDT } from "@/shared/domain/dates";
+import { remindersDay } from "@/shared/domain/reminders";
 import type { Call, Reminder } from "@/shared/types/staff";
 import Kpi from "@/shared/ui/Kpi";
 import { IBell, ICheck, IHeadset, IPhoneWave } from "@/shared/ui/NavIcons";
 
 export default function KpiRow({ calls, reminders }: { calls: Call[]; reminders: Reminder[] }) {
   const k = dayKpi(calls, reminders);
-  const day = reminders[0] ? splitDT(reminders[0].scheduled_at).date : "";
+  const day = remindersDay(reminders);
   return (
     <div className="kpi-grid">
       <Kpi icon={<IPhoneWave size={24} />} title="Звонков принято Здравушкой" value={k.total} delta={k.totalD} sub="сегодня"

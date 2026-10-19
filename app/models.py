@@ -2,8 +2,9 @@ from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    session_id: str | None = None
-    text: str = ""
+    session_id: str | None = Field(None, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    text: str = Field("", max_length=1000)
+    asr_confidence: float | None = Field(None, ge=0, le=1)
 
 
 class Booking(BaseModel):
@@ -33,5 +34,8 @@ class ChatResponse(BaseModel):
     booking: Booking | None = None
     escalation: Escalation | None = None
     done: bool = False
+    understood_by: str | None = None
+    asr_confidence: float | None = None
+    explanation: str | None = None
     status: str = "in_progress"
     source: str | None = None

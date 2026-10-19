@@ -5,7 +5,7 @@
 
 import { useMemo } from "react";
 import { callReminder, runReminders } from "@/shared/api/staff";
-import { splitDT } from "@/shared/domain/dates";
+import { canRunReminders, remindersDay, sortReminders } from "@/shared/domain/reminders";
 import type { Actions } from "@/shared/hooks/useAction";
 import type { Polled } from "@/shared/hooks/usePolling";
 import type { Reminder } from "@/shared/types/staff";
@@ -22,9 +22,9 @@ const runText = (r: { queued?: number; note?: string }) =>
 export default function Reminders({ reminders, actions, onToast }: {
   reminders: Polled<Reminder[]>; actions: Actions; onToast: (t: string) => void;
 }) {
-  const list = useMemo(() => [...(reminders.data ?? [])].sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)), [reminders.data]);
-  const day = list[0] ? splitDT(list[0].scheduled_at).date : "";
-  const canRun = list.some((r) => r.status === "ожидает");
+  const list = useMemo(() => sortReminders(reminders.data ?? []), [reminders.data]);
+  const day = remindersDay(list);
+  const canRun = canRunReminders(list);
   const runBtn = (
     <button className="sec-btn" disabled={actions.busy("run") || !canRun} data-tip-pos="bottom"
       onClick={() => actions.run("run", runReminders, (r) => onToast(runText(r)))}

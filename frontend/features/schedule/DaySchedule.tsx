@@ -2,7 +2,7 @@
 
 import { humanDay, parseKey } from "@/shared/domain/dates";
 import { workingHours, type Doctor } from "@/shared/domain/doctors";
-import { ticketTime } from "@/shared/domain/tickets";
+import { ticketKey, ticketTime } from "@/shared/domain/tickets";
 import type { Ticket, TicketStatus } from "@/shared/types/ticket";
 import { doctorDayTickets, isPast, slotTimes } from "./scheduleRules";
 
@@ -33,7 +33,7 @@ export default function DaySchedule({ doctor, dayKey, tickets }: { doctor: Docto
     <div className="slots">
       {slotTimes(doctor, day, list).map((tm) => {
         const booked = list.filter((t) => ticketTime(t) === tm);
-        if (booked.length) return booked.map((t) => <BusySlot key={t.number} time={tm} t={t} />);
+        if (booked.length) return booked.map((t) => <BusySlot key={ticketKey(t)} time={tm} t={t} />);
         return (
           <div key={tm} className={`slot slot-free ${isPast(day, tm) ? "slot-past" : ""}`}>
             <span className="slot-time">{tm}</span><span className="slot-empty">пусто</span>

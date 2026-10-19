@@ -4,12 +4,13 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { norm } from "@/shared/domain/masking";
-import { groupPatients, type PatientGroup } from "@/shared/domain/tickets";
+import { groupPatients, ticketKey, type PatientGroup } from "@/shared/domain/tickets";
 import { useTickets } from "@/shared/store/ticketStorage";
 import { IUsers } from "@/shared/ui/NavIcons";
 import SearchBox from "@/shared/ui/SearchBox";
 import Section from "@/shared/ui/Section";
 import TicketCard from "@/shared/ui/TicketCard";
+import { toggleRow } from "@/shared/ui/toggleRow";
 
 const nextText = (p: PatientGroup) =>
   p.next ? `${p.next.scheduledAt} · ${p.next.specialty.toLowerCase()} · талон ${p.next.number}` : "—";
@@ -36,11 +37,11 @@ export default function PatientsScreen() {
               const key = p.name || p.tickets[0].number;
               return (
                 <Fragment key={key}>
-                  <tr className="clickable" onClick={() => setOpen(open === key ? null : key)}>
+                  <tr {...toggleRow(open === key, () => setOpen(open === key ? null : key))}>
                     <td><b>{p.name || "не указан"}</b></td><td>{p.tickets.length}</td><td>{nextText(p)}</td>
                   </tr>
                   {open === key && (
-                    <tr><td colSpan={3}><div className="ticket-list">{p.tickets.map((t) => <TicketCard key={t.number} ticket={t} />)}</div></td></tr>
+                    <tr><td colSpan={3}><div className="ticket-list">{p.tickets.map((t) => <TicketCard key={ticketKey(t)} ticket={t} />)}</div></td></tr>
                   )}
                 </Fragment>
               );

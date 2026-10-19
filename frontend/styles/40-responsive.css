@@ -14,7 +14,7 @@
   .topbar-right { gap: 12px; }
   .bubble-wrap { max-width: 80%; }
   .grid-4, .grid-5 { grid-template-columns: 1fr; }
-  .bar-row { grid-template-columns: 110px 1fr 40px; }
+  .bar-row { grid-template-columns: 124px 1fr 42px; gap: 8px; font-size: 12.5px; } /* «Оториноларинголог» помещается целиком */
   .record-grid { grid-template-columns: 1fr; }
   .mic { width: 200px; height: 200px; }
   .collapse-head { gap: 10px; padding: 14px 16px; }
@@ -42,7 +42,6 @@
   .rail-label { display: none; }
   .main2 { padding: 14px; }
   .kpi-grid { grid-template-columns: 1fr; gap: 22px; }
-  .t2 { display: block; overflow-x: auto; }
   .ticket { grid-template-columns: 100px 1fr; }
   .ticket::before, .ticket::after { left: 89px; }
   .slot { grid-template-columns: 50px 1fr; }
@@ -50,8 +49,12 @@
   .sec-head { flex-wrap: wrap; padding: 8px 14px; gap: 8px; }
   .sec-head h2 { font-size: 16px; }
   .sec-right { margin-left: 0; width: 100%; justify-content: space-between; }
-  .q-row { grid-template-columns: 1fr; }
-  .q-row .q-patient, .q-row .q-summary { grid-column: auto; }
+  /* карточка очереди на телефоне: время, причина и статус — одной строкой сверху */
+  .q-row { grid-template-columns: auto minmax(0, 1fr); row-gap: 8px; column-gap: 12px; padding: 12px; }
+  .q-row .q-time { grid-column: 1; }
+  .q-row .q-tags { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .q-row .q-status { margin-top: 0; }
+  .q-row .q-patient, .q-row .q-summary, .q-row .q-act { grid-column: 1 / -1; }
   .page { overflow-x: hidden; }
 }
 /* синие полосы: слева скругление, справа полукруг (как «Намерение» в макете) */
@@ -65,6 +68,8 @@
 
 @media (max-width: 900px) {
   .call-detail { grid-template-columns: 1fr; }
+  /* таблицы кабинета шире экрана (меню слева + 7 колонок журнала) — прокрутка внутри таблицы, не всей страницы */
+  .t2 { display: block; overflow-x: auto; }
 }
 
 @media (max-width: 640px) {
@@ -78,4 +83,22 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sp-pulse, .spin, .mic-hint { animation: none !important; }
+}
+
+/* Шапка на телефоне: логотип и «Аа» слева, кнопка пользователя справа; плашка МИС и ссылки — второй строкой */
+@media (max-width: 640px) {
+  .topbar, .topbar2 {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    column-gap: 10px; row-gap: 10px; padding: 10px 12px;
+  }
+  .topbar-right, .topbar2 .topbar-right { display: contents; }
+  .topbar .topbar-left { grid-column: 1; grid-row: 1; gap: 10px; min-width: 0; }
+  .topbar .chip-user { grid-column: 2; grid-row: 1; justify-self: end; }
+  .topbar .mis-badge { grid-column: 1; grid-row: 2; justify-self: start; }
+  .topbar .link-staff { grid-column: 2; grid-row: 2; justify-self: end; }
+  .brand-logo { height: 40px; margin: -4px 0; }
+  .font-toggle { width: 38px; height: 34px; font-size: 14px; }
+  .chip-user-btn { padding: 4px 10px 4px 4px; gap: 6px; }
+  .chip-ava { width: 34px; height: 34px; }
+  .chip-menu { width: min(260px, calc(100vw - 40px)); min-width: 0; }
 }

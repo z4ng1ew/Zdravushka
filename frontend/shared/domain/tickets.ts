@@ -12,11 +12,20 @@ export const byTime = (a: Ticket, b: Ticket) => ticketTime(a).localeCompare(tick
 const active = (t: Ticket) => t.status === "Запланирована";
 const nowISO = () => new Date().toISOString();
 
+/** Порядковый номер уже выданного талона с этой буквой («Т-012» → 12) */
+const numberFor = (t: Ticket, letter: string) =>
+  t.number.startsWith(`${letter}-`) ? Number(t.number.slice(letter.length + 1)) || 0 : 0;
+
+/** Новый номер: буква специальности + следующий номер (больше счётчика и всех выданных — без повторов) */
 function newNumber(d: TicketsData, specialty: string): string {
   const letter = (specialty.trim()[0] || "В").toUpperCase();
-  d.seq[letter] = (d.seq[letter] || 0) + 1;
+  const last = Math.max(d.seq[letter] || 0, ...d.tickets.map((t) => numberFor(t, letter)));
+  d.seq[letter] = last + 1;
   return `${letter}-${String(d.seq[letter]).padStart(3, "0")}`;
 }
+
+/** Ключ талона для списков React: номер мог повториться в старых данных */
+export const ticketKey = (t: Ticket) => `${t.number}|${t.createdAt}`;
 
 function makeTicket(d: TicketsData, doc: Doctor, patient: string, at: string, visitId: number | null): Ticket {
   const now = nowISO();
@@ -27,7 +36,10 @@ function makeTicket(d: TicketsData, doc: Doctor, patient: string, at: string, vi
   };
 }
 
-export interface BookingContext { patient: string; intent: string | null; reply?: string | null }
+export interface BookingContext {
+  patient: string; intent: string | null; reply?: string | null;
+  doctors: Doctor[]; // справочник для ФИО, специальности и кабинета
+}
 
 /** Тот же пациент: по номеру записи МИС, иначе по маскированному ФИО */
 const samePatient = (vid: number | null, patient: string) => (t: Ticket) =>
@@ -65,7 +77,8 @@ export function applyBookingTo(d: TicketsData, b: ChatBooking, ctx: BookingConte
   if (b.status === "Отменена") return cancelTicket(d, vid, same, at);
   if (b.status !== "Запланирована") return null;
 
-  const doc = findDoctor(b.doctor_name, b.doctor_id, cabinetFrom(ctx.reply) ?? cabinetFrom(b.spoken));
+  const cabinet = cabinetFrom(ctx.reply) ?? cabinetFrom(b.spoken);
+  const doc = findDoctor(ctx.doctors, { name: b.doctor_name, id: b.doctor_id, cabinet });
   const dup = d.tickets.find((x) => same(x) && active(x) && x.scheduledAt === at && x.doctor === doc.fullName);
   if (dup) return { ...dup };
   const moved = ctx.intent === "reschedule" ? d.tickets.find((x) => same(x) && active(x)) : undefined;

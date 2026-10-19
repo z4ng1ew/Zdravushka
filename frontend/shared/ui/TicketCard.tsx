@@ -59,7 +59,8 @@ export default function TicketCard({ ticket, compact }: { ticket: Ticket; compac
           <b>{r.title}</b>
           <div>{resultNote(ticket)}</div>
         </div>
-        <button className="ticket-print" onClick={() => printOne(ref.current)} data-tip="Распечатать талон"><IPrint /></button>
+        <button type="button" className="ticket-print" onClick={() => printOne(ref.current)} data-tip="Распечатать талон"
+          aria-label={`Распечатать талон ${ticket.number}`}><IPrint /></button>
       </div>
     </div>
   );

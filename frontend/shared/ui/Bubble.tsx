@@ -30,7 +30,8 @@ interface BubbleProps {
   onReplay?: () => void; // «Повторить» — заново озвучить ответ
 }
 
-export default function Bubble({ speaker, text, at, confidence, operator, small, tags, onReplay }: BubbleProps) {
+export default function Bubble({ speaker: raw, text, at, confidence, operator, small, tags, onReplay }: BubbleProps) {
+  const speaker: Speaker = SPEAKERS[raw] ? raw : "patient"; // незнакомый говорящий — как пациент
   const who = SPEAKERS[speaker];
   const label = speaker === "operator" && operator ? `${who.label} ${operator}` : who.label;
   const avatar = <Avatar speaker={speaker} small={small} />;
@@ -67,7 +68,8 @@ function Avatar({ speaker, small }: { speaker: Speaker; small?: boolean }) {
 
 /** «✓ Распознано 92%» с подсказкой: при низкой точности ИИ переспросит */
 function Recognized({ confidence }: { confidence?: number }) {
-  const pct = confidence === undefined ? null : Math.round(confidence * 100);
+  const ok = confidence !== undefined && Number.isFinite(confidence);
+  const pct = ok ? Math.round(Math.min(1, Math.max(0, confidence)) * 100) : null;
   const tip = pct === null ? "Речь распознана ИИ" : `ИИ распознал речь с точностью ${pct}%. При низкой точности он переспросит.`;
   return <span className="recog" data-tip={tip}>✓ Распознано{pct !== null && ` ${pct}%`}</span>;
 }

@@ -30,7 +30,8 @@ async def task_info(s: Session, nl: dict) -> ChatResponse:
     if not text:
         return await escalate(s, Escalation(rule="R-08", reason="не распознано", priority="P3",
                                        summary="Справочный вопрос вне базы знаний"))
-    return task_done(s, text, "справка", source="регламент РГ-ТЕЛ-01")
+    return task_done(s, text, "справка", source="регламент РГ-ТЕЛ-01",
+                     explanation=f"Ответ дословно из базы знаний регламента, тема: {nl['topic']}.")
 
 
 async def task_home_visit(s: Session, nl: dict) -> ChatResponse:

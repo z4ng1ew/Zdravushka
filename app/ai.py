@@ -1,9 +1,16 @@
+import asyncio
 import json
+import math
 import re
 
 import httpx
 
 from app import config
+from app.resilience import CircuitBreaker, backoff
+
+_gateway = asyncio.Semaphore(config.AI_MAX_CONCURRENT)
+llm_breaker = CircuitBreaker("LLM", failures=3, cooldown=60)
+RETRY_STATUSES = (429, 500, 502, 503, 504)
 
 
 class AIError(Exception):
@@ -14,12 +21,22 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
-async def _post(url: str, timeout: float, **kw) -> httpx.Response:
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as http:
-            return await http.post(url, **kw)
-    except httpx.HTTPError as e:
-        raise AIError(f"нет ответа от {url}: {type(e).__name__}") from e
+async def _post(url: str, timeout: float, retries: int = 1, **kw) -> httpx.Response:
+    last = ""
+    for attempt in range(retries + 1):
+        try:
+            async with _gateway:
+                async with httpx.AsyncClient(timeout=timeout) as http:
+                    resp = await http.post(url, **kw)
+        except httpx.HTTPError as e:
+            last = f"нет ответа: {type(e).__name__}"
+        else:
+            if resp.status_code not in RETRY_STATUSES:
+                return resp
+            last = f"код {resp.status_code}"
+        if attempt < retries:
+            await backoff(attempt)
+    raise AIError(f"{url}: {last}")
 
 
 async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 400) -> str:
@@ -28,7 +45,13 @@ async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: i
             "temperature": temperature, "max_tokens": max_tokens}
     if not config.LLM_URL:
         raise AIError("LLM не настроена")
-    resp = await _post(url, config.LLM_TIMEOUT, json=body, headers=_headers(config.LLM_TOKEN))
+    if llm_breaker.is_open:
+        raise AIError("LLM временно отключена после серии сбоев")
+    try:
+        resp = await _post(url, config.LLM_TIMEOUT, json=body, headers=_headers(config.LLM_TOKEN))
+    except AIError:
+        llm_breaker.failure()
+        raise
     if resp.status_code != 200:
         raise AIError(f"LLM ответила {resp.status_code}: {resp.text[:300]}")
     try:
@@ -37,6 +60,7 @@ async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: i
         raise AIError(f"LLM вернула ответ неожиданного формата: {resp.text[:200]}") from e
     if not isinstance(content, str) or not content.strip():
         raise AIError("LLM вернула пустой ответ")
+    llm_breaker.success()
     return content.strip()
 
 
@@ -72,21 +96,44 @@ def is_hallucination(text: str) -> bool:
     return not low or any(h in low for h in WHISPER_HALLUCINATIONS)
 
 
-async def speech_to_text(audio: bytes, filename: str = "audio.wav") -> str:
-    url = config.STT_URL.rstrip("/") + "/audio/transcriptions"
-    files = {"file": (filename, audio)}
-    data = {"model": config.STT_MODEL, "language": "ru"}
+def asr_confidence(segments) -> float | None:
+    if not isinstance(segments, list) or not segments:
+        return None
+    scores = []
+    for seg in segments:
+        if not isinstance(seg, dict) or not isinstance(seg.get("avg_logprob"), (int, float)):
+            continue
+        speech = 1.0 - float(seg.get("no_speech_prob") or 0.0)
+        scores.append(max(0.0, min(1.0, math.exp(seg["avg_logprob"]) * speech)))
+    return round(sum(scores) / len(scores), 2) if scores else None
+
+
+async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, float | None]:
     if not config.STT_URL:
         raise AIError("распознавание речи не настроено")
-    resp = await _post(url, config.STT_TIMEOUT, files=files, data=data, headers=_headers(config.STT_TOKEN))
+    url = config.STT_URL.rstrip("/") + "/audio/transcriptions"
+    data = {"model": config.STT_MODEL, "language": "ru", "response_format": "verbose_json"}
+    resp = await _post(url, config.STT_TIMEOUT, files={"file": (filename, audio)}, data=data,
+                       headers=_headers(config.STT_TOKEN))
+    if resp.status_code == 400:
+        data.pop("response_format")
+        resp = await _post(url, config.STT_TIMEOUT, files={"file": (filename, audio)}, data=data,
+                           headers=_headers(config.STT_TOKEN))
     if resp.status_code != 200:
         raise AIError(f"STT ответил {resp.status_code}: {resp.text[:300]}")
     try:
-        text = resp.json().get("text", "")
+        body = resp.json()
+        text = body.get("text", "")
     except (ValueError, AttributeError) as e:
         raise AIError("STT вернул ответ неожиданного формата") from e
     text = text.strip() if isinstance(text, str) else ""
-    return "" if is_hallucination(text) else text
+    if is_hallucination(text):
+        return "", None
+    return text, asr_confidence(body.get("segments"))
+
+
+async def speech_to_text(audio: bytes, filename: str = "audio.wav") -> str:
+    return (await transcribe(audio, filename))[0]
 
 
 async def text_to_speech(text: str) -> bytes:
