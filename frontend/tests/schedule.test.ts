@@ -8,7 +8,7 @@ const MON = new Date(2026, 9, 19); // понедельник
 const doc = (d: Partial<Doctor> = {}): Doctor =>
   ({ id: 1, fullName: "Иванова Анна Петровна", specialty: "Терапевт", cabinet: "101", weekly: { "Пн": "08:00–09:00" }, ...d });
 const t = (scheduledAt: string, status: Ticket["status"] = "Запланирована"): Ticket => ({
-  number: "Т-001", visitId: 1, patient: "П. П.", doctor: "Иванова Анна Петровна", specialty: "Терапевт", cabinet: "101",
+  number: "1", visitId: 1, patient: "П. П.", doctor: "Иванова Анна Петровна", specialty: "Терапевт", cabinet: "101",
   scheduledAt, status, createdAt: scheduledAt, updatedAt: "", history: [],
 });
 

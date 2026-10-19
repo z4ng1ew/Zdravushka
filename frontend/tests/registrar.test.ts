@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterJournal } from "@/features/registrar/journal/journalView";
+import { filterJournal, flagLabels } from "@/features/registrar/journal/journalView";
 import { handoffPatient, matchHandoff } from "@/features/registrar/queue/queueRules";
 import { pilotStats } from "@/features/stats/pilotStats";
 import { dayKpi, newestFirst } from "@/shared/domain/callStats";
@@ -44,6 +44,14 @@ describe("журнал звонков", () => {
     expect(filterJournal(calls, "bot").map((c) => c.id)).toEqual(["new", "old"]);
     expect(filterJournal(calls, "all")).toHaveLength(3);
     expect(filterJournal(calls, "справка").map((c) => c.id)).toEqual(["mid"]);
+  });
+  it("отметка «попытка промпт-инъекции» (flags): подпись, фильтр и поиск", () => {
+    const list = [call({ id: "x", flags: ["prompt_injection"] }), call({ id: "y" }), call({ id: "z", flags: ["странное"] })];
+    expect(flagLabels(list[0])).toEqual(["⚠︎ попытка промпт-инъекции"]);
+    expect(flagLabels(list[1])).toEqual([]);
+    expect(flagLabels(list[2])).toEqual(["⚠︎ странное"]);
+    expect(filterJournal(list, "flagged").map((c) => c.id).sort()).toEqual(["x", "z"]);
+    expect(filterJournal(list, "all", "инъекц").map((c) => c.id)).toEqual(["x"]);
   });
   it("поиск по пациенту и итогу, без учёта регистра", () => {
     const list = [call({ id: "a", patient: "Петров П. П." }), call({ id: "b", patient: "Сидоров С. С.", result: "отменён" })];

@@ -30,6 +30,9 @@ export interface ChatResponse {
   done: boolean;
   status?: string | null; // in_progress | completed | handoff | error
   source?: string | null; // «МИС» | «регламент РГ-ТЕЛ-01» | null
+  explanation?: string | null; // почему ответ такой — мелким текстом под бейджем
+  understood_by?: string | null; // кто понял фразу: нейросеть (llm) или правила (rules)
+  asr_confidence?: number | null; // 0…1 — с какой точностью распознана фраза пациента
 }
 
 export interface Health {

@@ -11,7 +11,7 @@ const day = (offset: number) => {
   return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()} 10:00`;
 };
 const ticket = (extra: Record<string, unknown> = {}) => ({
-  number: "Т-001", visitId: 1, patient: "Петров П. П.", doctor: "Иванова А. П.", specialty: "Терапевт", cabinet: "214",
+  number: "1", visitId: 1, patient: "Петров П. П.", doctor: "Иванова А. П.", specialty: "Терапевт", cabinet: "214",
   scheduledAt: day(2), status: "Запланирована", createdAt: "x", updatedAt: "x", history: [], ...extra,
 });
 const store = (v: unknown) => localStorage.setItem("clinicai-store", JSON.stringify(v));
@@ -37,31 +37,30 @@ describe("журнал ошибок в браузере", () => {
 
 describe("талоны в браузере", () => {
   it("старая запись с датой рождения и полным ФИО — маскируется, дата рождения удаляется", () => {
-    store({ v: 1, tickets: [ticket({ patient: "Петров Пётр Петрович", birth: "01.01.1980" })], seq: { "Т": 1 } });
+    store({ v: 1, tickets: [ticket({ patient: "Петров Пётр Петрович", birth: "01.01.1980" })] });
     const t = loadTickets().tickets[0] as unknown as Record<string, unknown>;
     expect(t.patient).toBe("Петров П. П.");
     expect(t.birth).toBeUndefined();
   });
   it("недостающие поля — строки по умолчанию (карточка талона не упадёт)", () => {
-    store({ v: 1, tickets: [ticket({ doctor: null, specialty: 5, cabinet: undefined, visitId: "7" })], seq: {} });
-    expect(loadTickets().tickets[0]).toMatchObject({ doctor: "Врач", specialty: "", cabinet: "—", visitId: null });
+    store({ v: 1, tickets: [ticket({ doctor: null, specialty: 5, cabinet: undefined })] });
+    expect(loadTickets().tickets[0]).toMatchObject({ doctor: "Врач", specialty: "", cabinet: "—", visitId: 1 });
   });
   it("талоны старше 30 дней после приёма удаляются", () => {
-    store({ v: 1, tickets: [ticket({ number: "Т-001", scheduledAt: day(-40) }), ticket({ number: "Т-002" })], seq: {} });
-    expect(loadTickets().tickets.map((t) => t.number)).toEqual(["Т-002"]);
+    store({ v: 1, tickets: [ticket({ visitId: 1, scheduledAt: day(-40) }), ticket({ visitId: 2 })] });
+    expect(loadTickets().tickets.map((t) => t.number)).toEqual(["2"]);
   });
-  it("испорченный счётчик номеров (строка) — не ломает выдачу талона", () => {
-    store({ v: 1, tickets: [], seq: "мусор" });
-    const t = mutateTickets((d) => applyBookingTo(d, booking({ scheduled_at: day(1) }), { patient: "Петров П. П.", intent: "booking", doctors: [] }));
-    expect(t?.number).toBe("В-001");
+  it("старый талон с придуманным номером («Т-015») без записи МИС — убирается; с записью — номер из МИС", () => {
+    store({ v: 1, seq: { "Т": 15 }, tickets: [ticket({ number: "Т-015", visitId: null }), ticket({ number: "Т-016", visitId: 93 })] });
+    expect(loadTickets().tickets.map((t) => t.number)).toEqual(["93"]);
   });
-  it("счётчик потерян, а талоны есть — новый номер не повторяет старый", () => {
-    store({ v: 1, tickets: [ticket({ number: "В-004", visitId: 9, patient: "Сидоров С. С." })], seq: {} });
+  it("новый талон в браузере — номер записи из ответа сервера", () => {
     const t = mutateTickets((d) => applyBookingTo(d, booking({ scheduled_at: day(1), visit_id: 10 }), { patient: "Петров П. П.", intent: "booking", doctors: [] }));
-    expect(t?.number).toBe("В-005");
+    expect(t?.number).toBe("10");
+    expect(loadTickets().tickets).toHaveLength(1);
   });
   it("хранилище не того формата — пусто", () => {
     localStorage.setItem("clinicai-store", "[1,2,3]");
-    expect(loadTickets()).toEqual({ v: 1, tickets: [], seq: {} });
+    expect(loadTickets()).toEqual({ v: 1, tickets: [] });
   });
 });

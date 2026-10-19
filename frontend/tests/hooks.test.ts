@@ -56,7 +56,7 @@ describe("useChatSender — ответ старого звонка", () => {
     const replies = dispatch.mock.calls.filter(([a]) => a.type === "reply").map(([a]) => a.r.reply);
     expect(replies).toEqual(["Здравствуйте"]);
     await act(async () => { await result.current.send("да"); });
-    expect(chat.sendChat).toHaveBeenLastCalledWith("new", "да");
+    expect(chat.sendChat).toHaveBeenLastCalledWith("new", "да", undefined);
   });
   it("ошибка старого звонка не показывается в новом", async () => {
     const old = later<ChatResponse>();

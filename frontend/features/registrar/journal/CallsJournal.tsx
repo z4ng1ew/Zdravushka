@@ -21,6 +21,7 @@ function FilterSelect({ value, onChange }: { value: JournalFilter; onChange: (v:
     <select className="sec-select" value={value} onChange={(e) => onChange(e.target.value)} aria-label="Какие звонки показать">
       <option value="bot">Записи, переносы, отмены</option>
       <option value="all">Все звонки</option>
+      <option value="flagged">⚠︎ С отметками (промпт-инъекция)</option>
       {Object.entries(RESULT_VIEW).map(([res, a]) => <option key={res} value={res}>{a.text}</option>)}
     </select>
   );

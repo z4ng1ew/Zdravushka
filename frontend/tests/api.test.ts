@@ -108,3 +108,21 @@ describe("журнал ошибок", () => {
     expect(toLogText(readErrors()).trim().split("\n")).toHaveLength(3);
   });
 });
+
+describe("sendChat — точность распознавания уходит боту (asr_confidence)", () => {
+  const body = (f: ReturnType<typeof answer>) => JSON.parse(String(((f.mock.calls[0] as unknown[])[1] as RequestInit).body));
+  it("голосом — asr_confidence в теле запроса; новые поля ответа разобраны", async () => {
+    const f = answer(200, { session_id: "s1", reply: "Повторите, пожалуйста", explanation: "Плохо расслышала", understood_by: "rules", asr_confidence: 42 });
+    vi.stubGlobal("fetch", f);
+    const r = await sendChat("s1", "запиши", 0.42);
+    expect(body(f)).toEqual({ session_id: "s1", text: "запиши", asr_confidence: 0.42 });
+    expect(r).toMatchObject({ explanation: "Плохо расслышала", understood_by: "rules", asr_confidence: 0.42 });
+  });
+  it("текстом или без точности — поля нет; мусор в ответе — null", async () => {
+    const f = answer(200, { session_id: "s1", reply: "ок", explanation: { a: 1 }, asr_confidence: "много" });
+    vi.stubGlobal("fetch", f);
+    const r = await sendChat("s1", "да", Number.NaN);
+    expect(body(f)).toEqual({ session_id: "s1", text: "да" });
+    expect(r).toMatchObject({ explanation: null, understood_by: null, asr_confidence: null });
+  });
+});

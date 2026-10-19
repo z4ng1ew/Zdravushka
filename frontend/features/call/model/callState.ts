@@ -32,7 +32,7 @@ export type CallAction =
   | { type: "notice"; text: string }
   | { type: "error"; error: ApiError; retry?: string }
   | { type: "clearOptions" }
-  | { type: "reply"; r: ChatResponse; tags: ReplyTag[]; booking: UiBooking | null; ticket: Ticket | null };
+  | { type: "reply"; r: ChatResponse; tags: ReplyTag[]; note?: string; booking: UiBooking | null; ticket: Ticket | null };
 
 export const initialCall: CallState = {
   callNo: 0, phase: "idle", mode: "ai", operator: null, sending: false, feed: [],
@@ -44,7 +44,7 @@ const add = (s: CallState, item: FeedItem): CallState => ({ ...s, feed: [...s.fe
 function applyReply(s: CallState, a: Extract<CallAction, { type: "reply" }>): CallState {
   const { r } = a;
   let next: CallState = { ...s, intent: r.intent ?? s.intent, fields: r.collected, options: r.options };
-  if (r.reply) next = add(next, { type: "line", line: { speaker: "bot", text: r.reply, at: nowHM(), tags: a.tags } });
+  if (r.reply) next = add(next, { type: "line", line: { speaker: "bot", text: r.reply, at: nowHM(), tags: a.tags, ...(a.note ? { note: a.note } : {}) } });
   if (a.booking) next = { ...next, booking: a.booking };
   if (a.ticket) next = add({ ...next, ticket: a.ticket }, { type: "ticket", ticket: a.ticket, at: nowHM() });
   // бот передаёт пациента человеку — звонок не обрываем, ждём регистратора

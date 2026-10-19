@@ -12,25 +12,13 @@ export const byTime = (a: Ticket, b: Ticket) => ticketTime(a).localeCompare(tick
 const active = (t: Ticket) => t.status === "Запланирована";
 const nowISO = () => new Date().toISOString();
 
-/** Порядковый номер уже выданного талона с этой буквой («Т-012» → 12) */
-const numberFor = (t: Ticket, letter: string) =>
-  t.number.startsWith(`${letter}-`) ? Number(t.number.slice(letter.length + 1)) || 0 : 0;
-
-/** Новый номер: буква специальности + следующий номер (больше счётчика и всех выданных — без повторов) */
-function newNumber(d: TicketsData, specialty: string): string {
-  const letter = (specialty.trim()[0] || "В").toUpperCase();
-  const last = Math.max(d.seq[letter] || 0, ...d.tickets.map((t) => numberFor(t, letter)));
-  d.seq[letter] = last + 1;
-  return `${letter}-${String(d.seq[letter]).padStart(3, "0")}`;
-}
-
-/** Ключ талона для списков React: номер мог повториться в старых данных */
+/** Ключ талона для списков React */
 export const ticketKey = (t: Ticket) => `${t.number}|${t.createdAt}`;
 
-function makeTicket(d: TicketsData, doc: Doctor, patient: string, at: string, visitId: number | null): Ticket {
+function makeTicket(doc: Doctor, patient: string, at: string, visitId: number): Ticket {
   const now = nowISO();
   return {
-    number: newNumber(d, doc.specialty), visitId, patient, doctor: doc.fullName, specialty: doc.specialty,
+    number: String(visitId), visitId, patient, doctor: doc.fullName, specialty: doc.specialty,
     cabinet: doc.cabinet, scheduledAt: at, status: "Запланирована", createdAt: now, updatedAt: now,
     history: [{ at: now, text: "Создана через Здравушку" }],
   };
@@ -62,20 +50,23 @@ function cancelTicket(d: TicketsData, vid: number | null, same: (t: Ticket) => b
   return note(t, "Отменена через Здравушку");
 }
 
-function moveTicket(t: Ticket, doc: Doctor, at: string, vid: number | null): Ticket {
+/** Перенос: в МИС это новая запись (новый номер), прежняя отменена — талон получает новый номер */
+function moveTicket(t: Ticket, doc: Doctor, at: string, vid: number): Ticket {
   const old = t.scheduledAt;
-  Object.assign(t, { scheduledAt: at, doctor: doc.fullName, specialty: doc.specialty, cabinet: doc.cabinet, visitId: vid ?? t.visitId });
+  Object.assign(t, { scheduledAt: at, doctor: doc.fullName, specialty: doc.specialty, cabinet: doc.cabinet,
+    visitId: vid, number: String(vid) });
   return note(t, `Перенесена с ${old}`);
 }
 
-/** Применить запись из ответа бота к талонам. Меняет d, возвращает актуальный талон или null. */
+/** Применить запись из ответа бота к талонам. Меняет d, возвращает актуальный талон или null.
+ *  Новый талон — только с номером записи из МИС: без него квитанция была бы выдуманной. */
 export function applyBookingTo(d: TicketsData, b: ChatBooking, ctx: BookingContext): Ticket | null {
   const at = b.scheduled_at;
   if (!at || !b.status) return null;
   const vid = b.visit_id && b.visit_id > 0 ? b.visit_id : null;
   const same = samePatient(vid, ctx.patient);
   if (b.status === "Отменена") return cancelTicket(d, vid, same, at);
-  if (b.status !== "Запланирована") return null;
+  if (b.status !== "Запланирована" || vid === null) return null;
 
   const cabinet = cabinetFrom(ctx.reply) ?? cabinetFrom(b.spoken);
   const doc = findDoctor(ctx.doctors, { name: b.doctor_name, id: b.doctor_id, cabinet });
@@ -83,7 +74,7 @@ export function applyBookingTo(d: TicketsData, b: ChatBooking, ctx: BookingConte
   if (dup) return { ...dup };
   const moved = ctx.intent === "reschedule" ? d.tickets.find((x) => same(x) && active(x)) : undefined;
   if (moved) return moveTicket(moved, doc, at, vid);
-  const t = makeTicket(d, doc, ctx.patient, at, vid);
+  const t = makeTicket(doc, ctx.patient, at, vid);
   d.tickets.unshift(t);
   return { ...t };
 }
@@ -94,7 +85,7 @@ export interface PatientGroup { name: string; tickets: Ticket[]; next?: Ticket }
 export function groupPatients(tickets: Ticket[]): PatientGroup[] {
   const map = new Map<string, PatientGroup>();
   for (const t of tickets) {
-    const key = norm(t.patient) || `талон ${t.number}`;
+    const key = norm(t.patient) || `запись ${t.number}`;
     if (!map.has(key)) map.set(key, { name: t.patient, tickets: [] });
     map.get(key)!.tickets.push(t);
   }

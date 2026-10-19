@@ -1,7 +1,7 @@
 "use client";
 
-// Талон на приём — в прежнем виде карточки записи: Здравушка, врач, дата/время/кабинет,
-// плашка «Записано в МИС». Справа вместо фото — номер талона. Можно распечатать.
+// Талон на приём — квитанция по записи в МИС: Здравушка, врач, дата/время/кабинет, плашка «Записано в МИС».
+// Справа — номер записи в МИС (его называют в регистратуре). Можно распечатать.
 
 import { useRef } from "react";
 import { relDay, splitDT } from "@/shared/domain/dates";
@@ -18,11 +18,10 @@ const RESULT: Record<Ticket["status"], { cls: string; title: string; ok: boolean
   "Отменена": { cls: "result-off", title: "Запись отменена", ok: false },
 };
 
-/** Строка под итогом: номер талона, номер записи МИС и памятка для запланированного приёма */
+/** Строка под итогом: номер записи МИС и памятка для запланированного приёма */
 function resultNote(t: Ticket): string {
-  if (t.status !== "Запланирована") return `Талон № ${t.number}`;
-  const mis = t.visitId ? ` · запись МИС № ${t.visitId}` : "";
-  return `Талон № ${t.number}${mis} · приходите за 10 минут, возьмите паспорт и полис`;
+  if (t.status !== "Запланирована") return `Талон к записи № ${t.visitId}`;
+  return `Талон к записи № ${t.visitId} · приходите за 10 минут, возьмите паспорт и полис`;
 }
 
 export default function TicketCard({ ticket, compact }: { ticket: Ticket; compact?: boolean }) {
@@ -40,9 +39,9 @@ export default function TicketCard({ ticket, compact }: { ticket: Ticket; compac
           <b>{ticket.doctor}</b>
           <span>{specialtyTitle(ticket.specialty)}</span>
         </div>
-        <div className="ticket2-no" data-tip="Номер талона — назовите его в регистратуре">
-          <small>талон</small>
-          <b>{ticket.number}</b>
+        <div className="ticket2-no" data-tip="Номер записи в МИС — назовите его в регистратуре">
+          <small>запись №</small>
+          <b>{ticket.visitId}</b>
         </div>
       </div>
       {!compact && (
@@ -60,7 +59,7 @@ export default function TicketCard({ ticket, compact }: { ticket: Ticket; compac
           <div>{resultNote(ticket)}</div>
         </div>
         <button type="button" className="ticket-print" onClick={() => printOne(ref.current)} data-tip="Распечатать талон"
-          aria-label={`Распечатать талон ${ticket.number}`}><IPrint /></button>
+          aria-label={`Распечатать талон к записи № ${ticket.visitId}`}><IPrint /></button>
       </div>
     </div>
   );

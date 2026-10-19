@@ -15,6 +15,8 @@ describe("parseCall — строка журнала /api/calls и /api/live", ()
   });
   it("отрицательная длительность → 0; признак «идёт сейчас» сохраняется", () => {
     expect(parseCall({ id: "c1", duration_sec: -5, active: true })).toMatchObject({ duration_sec: 0, active: true });
+    expect(parseCall({ id: "c1", flags: ["prompt_injection", 5, " ", null] })?.flags).toEqual(["prompt_injection"]);
+    expect(parseCall({ id: "c1", flags: "prompt_injection" })?.flags).toEqual([]);
   });
 });
 

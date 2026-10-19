@@ -13,7 +13,7 @@ import TicketCard from "@/shared/ui/TicketCard";
 import { toggleRow } from "@/shared/ui/toggleRow";
 
 const nextText = (p: PatientGroup) =>
-  p.next ? `${p.next.scheduledAt} · ${p.next.specialty.toLowerCase()} · талон ${p.next.number}` : "—";
+  p.next ? `${p.next.scheduledAt} · ${p.next.specialty.toLowerCase()} · запись № ${p.next.visitId}` : "—";
 
 export default function PatientsScreen() {
   const { tickets } = useTickets();

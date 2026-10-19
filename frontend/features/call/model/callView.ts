@@ -39,7 +39,7 @@ export function recordTag(s: CallState): { cls: string; text: string } {
   const { options, escalation, ticket, booking, mode } = s;
   if (options.length) return { cls: "tag-info", text: `Варианты: ${options.length}` };
   if (escalation) return escalation.emergency ? { cls: "tag-bad", text: "Срочно: 103 / 112" } : { cls: "tag-warn", text: "Передано регистратору" };
-  if (ticket?.status === "Запланирована") return { cls: "tag-ok", text: `Талон ${ticket.number}` };
+  if (ticket?.status === "Запланирована") return { cls: "tag-ok", text: `Талон к записи № ${ticket.visitId}` };
   if (booking) return { cls: booking.kind === "booked" ? "tag-ok" : booking.kind === "cancelled" ? "" : "tag-warn", text: booking.title };
   if (mode !== "ai") return { cls: "tag-warn", text: mode === "operator" ? "Ведёт регистратор" : "Передано регистратору" };
   return { cls: "", text: "Пусто" };

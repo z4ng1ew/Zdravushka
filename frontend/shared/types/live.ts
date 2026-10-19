@@ -12,6 +12,7 @@ export interface LiveLine {
   at: string;
   confidence?: number; // для реплик пациента: уверенность распознавания
   tags?: ReplyTag[]; // для реплик бота: бейдж статуса и источника ответа
+  note?: string; // для реплик бота: пояснение, кем понята фраза и точность распознавания — мелко под бейджем
 }
 
 export interface LiveCall {

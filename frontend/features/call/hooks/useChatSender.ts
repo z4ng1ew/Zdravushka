@@ -9,7 +9,7 @@ import { sendChat } from "@/shared/api/chat";
 import { toApiError } from "@/shared/api/ApiError";
 import { toUiBooking } from "@/shared/domain/booking";
 import type { MisMode } from "@/shared/domain/misMode";
-import { replyTags } from "@/shared/domain/replyTags";
+import { replyNote, replyTags } from "@/shared/domain/replyTags";
 import { issueTicket } from "@/shared/store/ticketActions";
 import type { ChatResponse } from "@/shared/types/chat";
 import type { CallAction } from "../model/callState";
@@ -21,16 +21,16 @@ export function useChatSender(dispatch: Dispatch<CallAction>, mis: MisMode) {
   misRef.current = mis;
 
   /** Отправить текст боту и применить ответ. null — ошибка (уже показана в ленте) или звонок сменился */
-  const send = useCallback(async (text: string): Promise<ChatResponse | null> => {
+  const send = useCallback(async (text: string, confidence?: number): Promise<ChatResponse | null> => {
     const my = gen.current;
     dispatch({ type: "sending", value: true });
     try {
-      const r = await sendChat(session.current, text);
+      const r = await sendChat(session.current, text, confidence);
       const ticket = issueTicket(r);
       if (my !== gen.current) return null; // звонок уже другой — ответ устарел
       session.current = r.session_id || session.current;
       const booking = r.booking ? toUiBooking(r.booking, r.intent, misRef.current) : null;
-      dispatch({ type: "reply", r, tags: replyTags(r, misRef.current), booking, ticket });
+      dispatch({ type: "reply", r, tags: replyTags(r, misRef.current), note: replyNote(r, confidence), booking, ticket });
       return r;
     } catch (e) {
       // фразу пациента можно отправить ещё раз кнопкой — сами не повторяем, чтобы не записать дважды

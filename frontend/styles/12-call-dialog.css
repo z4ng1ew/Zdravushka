@@ -169,3 +169,6 @@
 /* быстрые фразы над полем ввода */
 .quick-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 6px; }
 .emergency-card { margin: 12px 14px 0; }
+
+/* пояснение под бейджем ответа: explanation · кем понято · точность распознавания */
+.reply-note { margin-top: 4px; font-size: 11px; line-height: 1.4; color: var(--muted); max-width: 520px; }

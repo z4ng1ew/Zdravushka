@@ -9,9 +9,9 @@ import { groupPatients, matchTicket } from "@/shared/domain/tickets";
 import type { Ticket } from "@/shared/types/ticket";
 import { booking, call } from "./fixtures";
 
-const t = (patient: string, scheduledAt: string, number = "Т-001", status: Ticket["status"] = "Запланирована"): Ticket => ({
-  number, visitId: null, patient, doctor: "Иванова Анна Петровна", specialty: "Терапевт", cabinet: "101",
-  scheduledAt, status, createdAt: number, updatedAt: "", history: [],
+const t = (patient: string, scheduledAt: string, visitId = 1, status: Ticket["status"] = "Запланирована"): Ticket => ({
+  number: String(visitId), visitId, patient, doctor: "Иванова Анна Петровна", specialty: "Терапевт", cabinet: "101",
+  scheduledAt, status, createdAt: String(visitId), updatedAt: "", history: [],
 });
 const quiet = { listening: false, transcribing: false, speaking: false };
 
@@ -43,14 +43,14 @@ describe("подписи и плашки", () => {
 });
 
 describe("пациенты и поиск талонов", () => {
-  const list = [t("Петров П. П.", "20.10.2030 10:00", "Т-001"), t("петров п. п.", "21.10.2030 10:00", "Т-002"), t("", "22.10.2030 10:00", "Т-003")];
+  const list = [t("Петров П. П.", "20.10.2030 10:00", 91), t("петров п. п.", "21.10.2030 10:00", 92), t("", "22.10.2030 10:00", 93)];
   it("группировка по ФИО без учёта регистра; без ФИО — отдельной строкой по номеру талона", () => {
     const g = groupPatients(list);
     expect(g.map((p) => p.tickets.length)).toEqual([1, 2]);
-    expect(g[1].next?.number).toBe("Т-001");
+    expect(g[1].next?.number).toBe("91");
   });
   it("поиск: по номеру, врачу и дате; «ё» и регистр не важны", () => {
-    expect(list.filter((x) => matchTicket(x, "т-002")).map((x) => x.number)).toEqual(["Т-002"]);
+    expect(list.filter((x) => matchTicket(x, "92")).map((x) => x.number)).toEqual(["92"]);
     expect(list.filter((x) => matchTicket(x, "ИВАНОВА")).length).toBe(3);
     expect(matchTicket(list[0], "")).toBe(true);
   });
@@ -68,7 +68,7 @@ describe("звонок: остальные состояния", () => {
   });
   it("метка «Запись на приём»: варианты, талон, ожидание подтверждения", () => {
     expect(recordTag({ ...active, options: [booking(), booking()] }).text).toBe("Варианты: 2");
-    expect(recordTag({ ...active, ticket: t("П.", "20.10.2030 10:00", "Т-007") }).text).toBe("Талон Т-007");
+    expect(recordTag({ ...active, ticket: t("П.", "20.10.2030 10:00", 7) }).text).toBe("Талон к записи № 7");
     expect(recordTag({ ...active, booking: toUiBooking(booking({ status: null }), "booking", "stand") }).cls).toBe("tag-warn");
     expect(recordTag({ ...active, mode: "operator" }).text).toBe("Ведёт регистратор");
   });

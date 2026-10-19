@@ -16,7 +16,7 @@ function BusySlot({ time, t }: { time: string; t: Ticket }) {
       <span className="slot-time">{time}</span>
       <div className="slot-who">
         <b>{t.patient || "не указан"}</b>
-        <small>талон {t.number}{t.visitId ? ` · запись МИС № ${t.visitId}` : ""}</small>
+        <small>запись МИС № {t.visitId}</small>
       </div>
       <span className={`sp ${STATUS_CLS[t.status]}`}>{t.status}</span>
     </div>

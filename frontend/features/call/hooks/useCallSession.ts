@@ -34,7 +34,7 @@ export function useCallSession(mis: MisMode) {
   const ask = useCallback(async (text: string, shown = text, confidence?: number) => {
     line("patient", shown, confidence);
     dispatch({ type: "clearOptions" });
-    return send(text);
+    return send(text, confidence);
   }, [line, send]);
 
   /** Новый звонок: приветствие (пустой текст) и, если есть, первая фраза пациента */

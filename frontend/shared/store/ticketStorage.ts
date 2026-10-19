@@ -12,29 +12,24 @@ import type { Ticket, TicketsData } from "../types/ticket";
 const KEY = STORAGE.tickets;
 const EVT = STORAGE.tickets; // событие «талоны изменились» в этой же вкладке
 
-const empty = (): TicketsData => ({ v: 1, tickets: [], seq: {} });
+const empty = (): TicketsData => ({ v: 1, tickets: [] });
 
 const STATUSES = new Set(["Запланирована", "Отменена", "Завершена", "Неявка"]);
 const text = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);
 
 /** Испорченную или чужую запись в хранилище пропускаем, чтобы она не ломала экран */
-const valid = (t: Partial<Ticket> | null): t is Ticket => !!t && typeof t.number === "string"
+/** Без номера записи МИС талон не показываем: старые версии выдавали придуманные номера («Т-015») */
+const valid = (t: Partial<Ticket> | null): t is Ticket => !!t && typeof t.visitId === "number" && t.visitId > 0
   && typeof t.scheduledAt === "string" && STATUSES.has(t.status ?? "") && Array.isArray(t.history);
 
 /** Старые версии могли хранить полное ФИО и дату рождения — маскируем и удаляем; поля — строки */
 const migrate = ({ birth: _b, ...t }: Ticket & { birth?: string }): Ticket => ({
   ...t,
   patient: maskName(text(t.patient)), doctor: text(t.doctor, "Врач"), specialty: text(t.specialty),
-  cabinet: text(t.cabinet, "—"), visitId: typeof t.visitId === "number" ? t.visitId : null,
+  cabinet: text(t.cabinet, "—"), number: String(t.visitId),
   history: t.history.filter((h) => typeof h?.text === "string"),
 });
 const fresh = (t: Ticket) => Date.now() - parseDT(t.scheduledAt).getTime() < TICKET_RETENTION_MS;
-
-/** Счётчики номеров талонов: только числа по букве */
-function cleanSeq(v: unknown): Record<string, number> {
-  if (typeof v !== "object" || v === null || Array.isArray(v)) return {};
-  return Object.fromEntries(Object.entries(v).filter(([, n]) => typeof n === "number" && Number.isFinite(n)));
-}
 
 export function loadTickets(): TicketsData {
   if (typeof window === "undefined") return empty();
@@ -42,7 +37,7 @@ export function loadTickets(): TicketsData {
     const d = JSON.parse(localStorage.getItem(KEY) ?? "null");
     if (!d || d.v !== 1) return empty();
     const tickets = (Array.isArray(d.tickets) ? d.tickets : []).filter(valid).filter(fresh).map(migrate);
-    return { v: 1, tickets, seq: cleanSeq(d.seq) };
+    return { v: 1, tickets };
   } catch {
     return empty();
   }

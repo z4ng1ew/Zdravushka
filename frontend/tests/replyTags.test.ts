@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { replyTags } from "@/shared/domain/replyTags";
+import { replyNote, replyTags, understoodText } from "@/shared/domain/replyTags";
 import { booking, reply } from "./fixtures";
 
 const text = (r: Parameters<typeof replyTags>[0]) => replyTags(r, "stand").map((t) => t.text);
@@ -27,5 +27,21 @@ describe("replyTags — бейдж под ответом Здравушки", ()
   });
   it("неизвестный статус показывается как прислал сервер", () => {
     expect(text(reply({ status: "paused" }))).toEqual(["paused"]);
+  });
+});
+
+describe("пояснение под бейджем (explanation · understood_by · asr_confidence)", () => {
+  const base = { session_id: "s", reply: "ок", intent: null, collected: {}, options: [], booking: null, escalation: null, done: false };
+  it("всё есть — через точку, проценты из ответа сервера", () => {
+    expect(replyNote({ ...base, explanation: "Нашла свободное время у терапевта", understood_by: "llm", asr_confidence: 0.874 }))
+      .toBe("Нашла свободное время у терапевта · понято нейросетью · распознано на 87 %");
+  });
+  it("правила; точности нет в ответе — берём отправленную из /api/asr", () => {
+    expect(replyNote({ ...base, understood_by: "rules" }, 0.6)).toBe("понято по правилам · распознано на 60 %");
+  });
+  it("ничего нет (старый бэкенд, текстовый ввод) — пусто", () => {
+    expect(replyNote(base)).toBe("");
+    expect(understoodText("  ")).toBe("");
+    expect(understoodText("hybrid")).toBe("понято: hybrid");
   });
 });

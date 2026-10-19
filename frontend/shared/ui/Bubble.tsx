@@ -27,10 +27,11 @@ interface BubbleProps {
   operator?: string | null; // имя регистратора
   small?: boolean;
   tags?: ReplyTag[]; // бейджи под ответом Здравушки
+  note?: string; // мелкий текст под бейджем: explanation · понято нейросетью · распознано на 87 %
   onReplay?: () => void; // «Повторить» — заново озвучить ответ
 }
 
-export default function Bubble({ speaker: raw, text, at, confidence, operator, small, tags, onReplay }: BubbleProps) {
+export default function Bubble({ speaker: raw, text, at, confidence, operator, small, tags, note, onReplay }: BubbleProps) {
   const speaker: Speaker = SPEAKERS[raw] ? raw : "patient"; // незнакомый говорящий — как пациент
   const who = SPEAKERS[speaker];
   const label = speaker === "operator" && operator ? `${who.label} ${operator}` : who.label;
@@ -51,10 +52,16 @@ export default function Bubble({ speaker: raw, text, at, confidence, operator, s
           )}
           <span>{at}</span>
         </div>
+        {speaker === "bot" && <ReplyNote note={note} />}
       </div>
       {speaker === "patient" && avatar}
     </div>
   );
+}
+
+/** Мелко под бейджем: пояснение сервера · кем понято · точность распознавания */
+function ReplyNote({ note }: { note?: unknown }) {
+  return typeof note === "string" && note ? <div className="reply-note">{note}</div> : null;
 }
 
 function Avatar({ speaker, small }: { speaker: Speaker; small?: boolean }) {

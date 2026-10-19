@@ -3,21 +3,24 @@ import { applyBookingTo, splitTickets } from "@/shared/domain/tickets";
 import type { TicketsData } from "@/shared/types/ticket";
 import { booking } from "./fixtures";
 
-const empty = (): TicketsData => ({ v: 1, tickets: [], seq: {} });
+const empty = (): TicketsData => ({ v: 1, tickets: [] });
 const doctors = [{ id: 5, fullName: "Иванова Анна Петровна", specialty: "Терапевт", cabinet: "214" }];
 const ctx = { patient: "Петров П. П.", intent: "booking", doctors };
 
 describe("applyBookingTo — талоны из ответов бота", () => {
-  it("новая запись — талон с номером по букве специальности", () => {
+  it("новая запись — талон с номером записи из МИС, а не придуманным", () => {
     const d = empty();
-    const t = applyBookingTo(d, booking({ specialty: "Терапевт" }), ctx);
+    const t = applyBookingTo(d, booking({ visit_id: 93 }), ctx);
     expect(d.tickets).toHaveLength(1);
-    expect(t?.number).toMatch(/^[А-ЯA-Z]-001$/);
-    expect(t?.patient).toBe("Петров П. П.");
+    expect(t).toMatchObject({ number: "93", visitId: 93, patient: "Петров П. П." });
+  });
+  it("нет номера записи в МИС — талон не выдаётся (квитанция была бы выдуманной)", () => {
+    expect(applyBookingTo(empty(), booking({ visit_id: null }), ctx)).toBeNull();
+    expect(applyBookingTo(empty(), booking({ visit_id: 0 }), ctx)).toBeNull();
   });
   it("специальность и кабинет — из справочника врачей", () => {
     const t = applyBookingTo(empty(), booking(), ctx);
-    expect(t).toMatchObject({ number: "Т-001", specialty: "Терапевт", cabinet: "214" });
+    expect(t).toMatchObject({ number: "7", specialty: "Терапевт", cabinet: "214" });
   });
   it("повтор той же записи не создаёт второй талон", () => {
     const d = empty();
@@ -32,6 +35,13 @@ describe("applyBookingTo — талоны из ответов бота", () => {
     expect(d.tickets).toHaveLength(1);
     expect(d.tickets[0].scheduledAt).toBe("22.10.2026 12:00");
     expect(d.tickets[0].history.at(-1)?.text).toBe("Перенесена с 20.10.2026 10:30");
+  });
+  it("перенос в МИС — новая запись: талон получает её номер", () => {
+    const d = empty();
+    applyBookingTo(d, booking({ visit_id: 93 }), ctx);
+    const t = applyBookingTo(d, booking({ visit_id: 94, scheduled_at: "22.10.2026 12:00" }), { ...ctx, intent: "reschedule" });
+    expect(d.tickets).toHaveLength(1);
+    expect(t).toMatchObject({ number: "94", visitId: 94 });
   });
   it("отмена по номеру записи МИС", () => {
     const d = empty();

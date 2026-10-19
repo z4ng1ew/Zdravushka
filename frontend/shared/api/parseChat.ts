@@ -34,6 +34,9 @@ export function parseChat(raw: unknown): ChatResponse {
     done: d.done === true,
     status: strOrNull(d.status),
     source: strOrNull(d.source),
+    explanation: strOrNull(d.explanation),
+    understood_by: strOrNull(d.understood_by),
+    asr_confidence: toConfidence(d.asr_confidence),
   };
 }
 

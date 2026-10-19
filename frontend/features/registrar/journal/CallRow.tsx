@@ -10,7 +10,7 @@ import type { Call } from "@/shared/types/staff";
 import StandLog from "@/shared/ui/StandLog";
 import { toggleRow } from "@/shared/ui/toggleRow";
 import Transcript from "@/shared/ui/Transcript";
-import { resultView } from "./journalView";
+import { flagLabels, resultView } from "./journalView";
 
 const COLS = 7;
 
@@ -30,13 +30,16 @@ export default function CallRow({ c }: { c: Call }) {
   const [open, setOpen] = useState(false);
   const at = splitDT(c.started_at);
   const res = resultView(c.result);
+  const flags = flagLabels(c);
   return (
     <>
       <tr {...toggleRow(open, () => setOpen(!open))} data-tip="Нажмите, чтобы увидеть разговор">
         <td>{at.time} <small className="muted">{at.date === todayKey() ? "" : at.date}</small></td>
         <td><Direction out={c.direction === "исходящий"} /></td>
         <td>{c.patient || <span className="muted">не назвался</span>}</td>
-        <td className={res.cls}>{res.text}</td>
+        <td><span className={res.cls}>{res.text}</span>
+          {flags.map((f) => <span key={f} className="call-flag" data-tip="Отметка сервера: фраза пациента похожа на попытку изменить поведение ИИ.">{f}</span>)}
+        </td>
         <td>{intentLabel(c.intent)}</td>
         <td>{durationText(c.duration_sec)}</td>
         <td><MisCount c={c} /></td>

@@ -30,7 +30,7 @@ export default function TicketsScreen() {
           <h1 className="panel-title">Мои талоны</h1>
           <span className="panel-sub">Куда и когда вы записаны</span>
         </div>
-        <SearchBox value={q} onChange={setQ} placeholder="Врач, специальность, номер талона или дата" />
+        <SearchBox value={q} onChange={setQ} placeholder="Врач, специальность, номер записи или дата" />
         <p className="store-note">
           Талоны хранятся только в этом браузере, без даты рождения и полного ФИО (152-ФЗ), и удаляются через 30 дней после приёма.
         </p>

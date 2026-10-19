@@ -30,6 +30,7 @@ export interface Call {
   transcript: Utterance[];
   stand_requests: StandRequest[];
   active?: boolean; // /api/live: звонок идёт прямо сейчас
+  flags?: string[]; // отметки бэкенда, например prompt_injection — попытка промпт-инъекции
 }
 
 export type HandoffStatus = "новая" | "в работе" | "перезвонили" | "закрыта";

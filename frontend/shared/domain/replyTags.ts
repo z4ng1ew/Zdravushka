@@ -55,3 +55,20 @@ export function replyTags(r: ChatResponse, mode: MisMode): ReplyTag[] {
   if (status === "completed") return [completedTag(r, mode)].filter((t): t is ReplyTag => t !== null);
   return [{ text: r.status!.trim(), tone: "muted" }];
 }
+
+/** Кто понял фразу пациента: llm → нейросетью, rules → по правилам; незнакомое — как прислал сервер */
+export function understoodText(by: string | null | undefined): string {
+  const v = (by ?? "").trim();
+  if (!v) return "";
+  if (/llm|neur|ai|gpt|giga|нейро|ии/i.test(v)) return "понято нейросетью";
+  if (/rule|regex|правил/i.test(v)) return "понято по правилам";
+  return `понято: ${v}`;
+}
+
+/** Мелкий текст под бейджем: пояснение сервера · кем понято · точность распознавания.
+ *  Точность — из ответа (asr_confidence), а если сервер её не вернул — та, что фронт отправил из /api/asr. */
+export function replyNote(r: ChatResponse, sentConfidence?: number): string {
+  const conf = r.asr_confidence ?? (typeof sentConfidence === "number" && Number.isFinite(sentConfidence) ? sentConfidence : null);
+  const pct = conf === null ? "" : `распознано на ${Math.round(Math.min(1, Math.max(0, conf)) * 100)} %`;
+  return [(r.explanation ?? "").trim(), understoodText(r.understood_by), pct].filter(Boolean).join(" · ");
+}

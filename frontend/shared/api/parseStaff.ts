@@ -36,6 +36,7 @@ export function parseCall(v: unknown): Call | null {
     transcript: softList(v.transcript, parseUtterance),
     stand_requests: softList(v.stand_requests, parseStandRequest),
     ...(typeof v.active === "boolean" ? { active: v.active } : {}),
+    flags: softList(v.flags, (f) => (typeof f === "string" && f.trim() ? f.trim() : null)),
   };
 }
 
