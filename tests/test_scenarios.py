@@ -442,6 +442,7 @@ async def test_prompt_injection_is_refused(mis, attack):
 async def test_injection_three_times_goes_to_operator(mis):
     r = await talk(*INJECTIONS[:3])
     assert r.escalation and r.escalation.rule == "R-05"
+    assert dialog.journal.CALLS[r.session_id]["flags"] == ["prompt_injection"]
 
 
 async def test_injection_does_not_break_normal_booking(mis):

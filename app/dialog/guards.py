@@ -41,7 +41,9 @@ async def which_doctors(s: Session, text: str) -> ChatResponse | None:
 async def prompt_injection(s: Session, text: str) -> ChatResponse | None:
     if not safety.is_injection(text):
         return None
-    s.call.setdefault("flags", []).append("попытка промпт-инъекции")
+    flags = s.call.setdefault("flags", [])
+    if "prompt_injection" not in flags:
+        flags.append("prompt_injection")
     s.miss += 1
     if s.miss >= 3:
         return await escalate(s, Escalation(rule="R-05", reason="не распознано", priority="P3",
