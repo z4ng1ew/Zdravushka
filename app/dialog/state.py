@@ -1,18 +1,31 @@
-from app import config
+from app import config, journal
+from app.dialog.session import Session
+from app.ports import MisPort
 from app.stand_client import StandClient
 
 
-def _make_stand() -> StandClient | None:
+def _make_stand() -> MisPort | None:
     if config.STAND_MODE == "mock":
         from app import mock_stand
         return mock_stand.client()
     return StandClient() if config.STAND_TOKEN else None
 
 
-stand = _make_stand()
+stand: MisPort | None = _make_stand()
 
 
-SESSIONS: dict[str, dict] = {}
+def use_stand(client: MisPort | None):
+    global stand
+    stand = client
+
+
+SESSIONS: dict[str, Session] = {}
+
+
+def open_session(session_id: str, direction: str = "входящий", **values) -> Session:
+    s = Session(id=session_id, call=journal.start_call(session_id, direction), **values)
+    SESSIONS[session_id] = s
+    return s
 
 
 TASKS = {"booking", "reschedule", "cancel", "status", "schedule_info", "info", "home_visit"}

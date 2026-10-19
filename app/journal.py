@@ -74,6 +74,19 @@ def handoff(call: dict, reason: str, urgent: bool, summary: str, collected: dict
     return h
 
 
+HANDOFF_STATUSES = ("новая", "в работе", "перезвонили", "закрыта")
+
+
+def set_handoff_status(handoff_id: str, status: str) -> dict:
+    if handoff_id not in HANDOFFS:
+        raise KeyError(handoff_id)
+    if status not in HANDOFF_STATUSES:
+        raise ValueError(status)
+    HANDOFFS[handoff_id]["status"] = status
+    save()
+    return HANDOFFS[handoff_id]
+
+
 def public(items: dict) -> list[dict]:
     out = [{k: v for k, v in item.items() if not k.startswith("_")} for item in items.values()]
     return list(reversed(out))

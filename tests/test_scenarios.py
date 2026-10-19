@@ -336,3 +336,49 @@ async def test_doctors_and_live_endpoints(monkeypatch):
         assert len(docs) == 85 and {"fullName", "specialty", "cabinet", "weekly"} <= set(docs[0])
         telephony.ACTIVE.clear()
         assert (await c.get("/api/live")).json() == []
+
+
+def test_session_take_resets_field():
+    from app.dialog.session import Session
+    s = Session(id="x", call={}, replace_visit={"id": 5})
+    assert s.take("replace_visit") == {"id": 5} and s.replace_visit is None
+    s.options = [1]
+    s.forget_task_data()
+    assert s.options == [] and s.visits is None
+
+
+def test_next_working_day_skips_sunday():
+    from datetime import date
+    from app.reminders import next_working_day
+    assert next_working_day(date(2026, 10, 17)) == date(2026, 10, 19)
+    assert next_working_day(date(2026, 10, 19)) == date(2026, 10, 20)
+
+
+async def test_reminder_campaign_queues_and_marks_no_answer(mis, monkeypatch):
+    import asyncio
+    from app import journal, reminders, telephony
+    await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    v = mis.visits[0]
+    monkeypatch.setattr(reminders, "tomorrow_visits", lambda: _async([v]))
+    calls = []
+
+    async def fake_call(visit):
+        calls.append(visit["id"])
+        return "не дозвонились"
+    monkeypatch.setattr(telephony, "call_reminder", fake_call)
+    journal.REMINDERS.clear()
+    assert await reminders.start_campaign() == 1
+    await asyncio.sleep(0.05)
+    assert calls == [v["id"]] and journal.REMINDERS[v["id"]]["status"] == "не дозвонились"
+
+
+async def _async(value):
+    return value
+
+
+def test_mock_stand_satisfies_mis_port():
+    import inspect
+    from app.ports import MisPort
+    from app.stand_client import StandClient
+    port = {n for n, _ in inspect.getmembers(MisPort, inspect.isfunction) if not n.startswith("_")}
+    assert port <= {n for n, _ in inspect.getmembers(StandClient, inspect.isfunction)}

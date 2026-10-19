@@ -1,9 +1,7 @@
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx
 from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -11,8 +9,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import ai, config, dialog, journal, schedule, telephony, tts
+from app import reminders as reminder_service
 from app.models import ChatRequest, ChatResponse
-from app.stand_client import StandError
 
 log = logging.getLogger("main")
 
@@ -97,86 +95,42 @@ class HandoffUpdate(BaseModel):
 
 @app.patch("/api/handoffs/{handoff_id}")
 async def update_handoff(handoff_id: str, body: HandoffUpdate):
-    if handoff_id not in journal.HANDOFFS:
-        raise HTTPException(404, "Перевод не найден")
-    if body.status not in ("новая", "в работе", "перезвонили", "закрыта"):
-        raise HTTPException(400, "Недопустимый статус")
-    journal.HANDOFFS[handoff_id]["status"] = body.status
-    journal.save()
-    return journal.HANDOFFS[handoff_id]
-
-
-async def _tomorrow_visits() -> list[dict]:
-    day = schedule.now().date()
-    while True:
-        day = day.fromordinal(day.toordinal() + 1)
-        if day.weekday() != 6:
-            break
-    d = day.strftime("%d.%m.%Y")
-    if not dialog.state.stand:
-        return []
     try:
-        return await dialog.state.stand.list_visits(status="Запланирована", date_from=d, date_to=d)
-    except (StandError, httpx.HTTPError) as e:
-        raise HTTPException(503, f"МИС недоступна: {e}")
+        return journal.set_handoff_status(handoff_id, body.status)
+    except KeyError:
+        raise HTTPException(404, "Перевод не найден")
+    except ValueError:
+        raise HTTPException(400, "Недопустимый статус")
 
 
 @app.get("/api/reminders")
 async def reminders():
-    result = []
-    for v in await _tomorrow_visits():
-        r = journal.REMINDERS.setdefault(v["id"], {"status": "ожидает"})
-        result.append({"visit_id": v["id"], "patient": f"пациент № {v['client_id']}",
-                       "doctor": v["doctor"]["full_name"], "specialty": v["doctor"]["specialty"],
-                       "scheduled_at": v["scheduled_at"], "status": r["status"], "new_time": r.get("new_time")})
-    return result
-
-
-async def _ring_all(visits: list[dict]):
-    for v in visits:
-        outcome = await telephony.call_reminder(v)
-        r = journal.REMINDERS.setdefault(v["id"], {})
-        if outcome in ("не дозвонились", "ошибка звонка") or r.get("status") in (None, "ожидает", "звоним"):
-            r["status"] = outcome if outcome != "звонок завершён" else "без ответа"
-        journal.save()
+    try:
+        return await reminder_service.reminder_rows()
+    except reminder_service.MisUnavailable as e:
+        raise HTTPException(503, f"МИС недоступна: {e}")
 
 
 @app.post("/api/reminders/run")
 async def run_reminders():
-    if RINGING["task"] and not RINGING["task"].done():
-        return {"queued": 0, "note": "обзвон уже идёт"}
-    visits = [v for v in await _tomorrow_visits()
-              if journal.REMINDERS.setdefault(v["id"], {"status": "ожидает"})["status"] in ("ожидает", "не дозвонились")]
-    for v in visits:
-        journal.REMINDERS[v["id"]]["status"] = "в очереди"
-    journal.save()
-    RINGING["task"] = asyncio.create_task(_ring_all(visits))
-    return {"queued": len(visits)}
+    try:
+        queued = await reminder_service.start_campaign()
+    except reminder_service.MisUnavailable as e:
+        raise HTTPException(503, f"МИС недоступна: {e}")
+    return {"queued": 0, "note": "обзвон уже идёт"} if queued is None else {"queued": queued}
 
 
 @app.post("/api/reminders/{visit_id}/call")
 async def call_one(visit_id: int):
-    visits = [v for v in await _visits_from_tomorrow() if v["id"] == visit_id]
-    if not visits:
-        raise HTTPException(404, "Запись не найдена или уже прошла")
-    if RINGING["task"] and not RINGING["task"].done():
-        raise HTTPException(409, "Сейчас идёт другой звонок")
-    RINGING["task"] = asyncio.create_task(_ring_all(visits))
-    return {"queued": 1}
-
-
-async def _visits_from_tomorrow() -> list[dict]:
-    if not dialog.state.stand:
-        return []
     try:
-        visits = await dialog.state.stand.list_visits(status="Запланирована")
-    except (StandError, httpx.HTTPError) as e:
+        await reminder_service.call_one(visit_id)
+    except reminder_service.MisUnavailable as e:
         raise HTTPException(503, f"МИС недоступна: {e}")
-    now = schedule.now()
-    return [v for v in visits if schedule.from_api(v["scheduled_at"]) > now]
-
-
-RINGING: dict = {"task": None}
+    except reminder_service.VisitNotFound:
+        raise HTTPException(404, "Запись не найдена или уже прошла")
+    except reminder_service.Busy:
+        raise HTTPException(409, "Сейчас идёт другой звонок")
+    return {"queued": 1}
 
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
