@@ -1,3 +1,5 @@
+# Обзвон с напоминаниями (сценарий С-10): кого звать, в каком порядке и как записать итог.
+# HTTP здесь нет — эндпоинты в app/main.py только вызывают эти функции и переводят ошибки в коды ответа.
 import asyncio
 from datetime import date, timedelta
 
@@ -7,7 +9,7 @@ from app import journal, schedule, telephony
 from app.dialog import state
 from app.stand_client import StandError
 
-WAITING = ("ожидает", "не дозвонились")
+WAITING = ("ожидает", "не дозвонились")  # кому звонить при следующем обзвоне
 
 
 class MisUnavailable(Exception):
@@ -26,6 +28,7 @@ _campaign: asyncio.Task | None = None
 
 
 def next_working_day(today: date) -> date:
+    """Следующий день, когда поликлиника принимает (воскресенье — выходной)."""
     day = today + timedelta(days=1)
     while day.weekday() == 6:
         day += timedelta(days=1)
@@ -42,11 +45,13 @@ async def _visits(**filters) -> list[dict]:
 
 
 async def tomorrow_visits() -> list[dict]:
+    """Записи на следующий рабочий день — кому звонить с напоминанием."""
     d = next_working_day(schedule.now().date()).strftime("%d.%m.%Y")
     return await _visits(date_from=d, date_to=d)
 
 
 async def upcoming_visits() -> list[dict]:
+    """Все будущие запланированные записи (для звонка по одной записи)."""
     now = schedule.now()
     return [v for v in await _visits() if schedule.from_api(v["scheduled_at"]) > now]
 
@@ -56,6 +61,7 @@ def status_of(visit_id: int) -> dict:
 
 
 async def reminder_rows() -> list[dict]:
+    """Строки экрана «Напоминания»: запись + статус обзвона."""
     return [{"visit_id": v["id"], "patient": f"пациент № {v['client_id']}",
              "doctor": v["doctor"]["full_name"], "specialty": v["doctor"]["specialty"],
              "scheduled_at": v["scheduled_at"], "status": status_of(v["id"])["status"],
@@ -68,6 +74,8 @@ def is_busy() -> bool:
 
 
 async def _ring_all(visits: list[dict]):
+    """Звоним по очереди. Итог разговора (подтвердил/отменил/перенёс) пишет сам диалог,
+    здесь — только случаи, когда разговора не было."""
     for v in visits:
         outcome = await telephony.call_reminder(v)
         r = journal.REMINDERS.setdefault(v["id"], {})
@@ -84,6 +92,7 @@ def _start(visits: list[dict]):
 
 
 async def start_campaign() -> int | None:
+    """Обзвонить всех, кто ждёт напоминания. None — обзвон уже идёт."""
     if is_busy():
         return None
     visits = [v for v in await tomorrow_visits() if status_of(v["id"])["status"] in WAITING]
@@ -95,6 +104,7 @@ async def start_campaign() -> int | None:
 
 
 async def call_one(visit_id: int):
+    """Позвонить с напоминанием по одной записи."""
     visits = [v for v in await upcoming_visits() if v["id"] == visit_id]
     if not visits:
         raise VisitNotFound(visit_id)

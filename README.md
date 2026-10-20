@@ -146,6 +146,38 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 - предлагает не больше трёх вариантов;
 - называет даты с днём недели, а время — словами.
 
+## Соответствие кейсу и критериям оценки
+
+<!-- Для проверяющего: каждая строка — требование кейса → где реализовано → каким тестом проверено
+     (tests/test_scenarios.py, 73 теста, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
+
+| Требование | Код | Автотесты |
+|---|---|---|
+| С-01 Запись к врачу (≤3 варианта, подтверждение, без дублей карточек) | `dialog/booking.py`, `dialog/mis.py` | test_booking_creates_visit, test_existing_patient_not_duplicated, test_booking_with_named_doctor, test_no_double_booking_same_slot |
+| С-03 Перенос (тот же id; к другому врачу — новая запись + отмена старой) | `dialog/visits.py` | test_reschedule_and_cancel, test_reschedule_to_other_doctor_books_new_and_cancels_old |
+| С-04 Отмена (одной / всех — только после «да») | `dialog/visits.py` | test_cancel_both_visits, test_cancel_all_needs_confirmation_and_no_keeps_visits |
+| С-05 Статус записи (неизвестного пациента не создаём) | `dialog/visits.py` | test_status_without_visits, test_unknown_patient_not_created_for_status_then_operator |
+| С-06 Вызов врача на дом (адрес, повод, педиатр детям) | `dialog/visits.py` → `POST /escalations` | test_home_visit_creates_request_with_address, test_home_visit_child_goes_to_pediatrician |
+| С-07 / справка: график, адрес, цены — только из регламента | `dialog/info.py`, `knowledge.py` | test_info_question_answered_from_regulation, test_knowledge_detects_topics, test_which_doctors_lists_specialties |
+| С-10 Звонок-напоминание: подтвердить / отменить / перенести | `reminders.py`, `dialog/reminder.py`, `telephony.py` | test_reminder_confirmed, test_reminder_cancel, test_reminder_reschedule, test_reminder_campaign_queues_and_marks_no_answer, test_reminder_emergency_still_works |
+| Экстренные симптомы → 103/112 и перевод P1 на любом шаге | `safety.py`, `dialog/guards.py` | test_heart_pain_is_emergency, test_sudden_severe_headache_is_emergency, test_emergency_mid_booking_stops_booking, test_emergency_without_identity_uses_tech_client |
+| Перевод на человека R-02…R-15 (human in the loop — требование регламента, а не недостаток) | `dialog/guards.py`, `dialog/router.py` | test_operator_request, test_complaint, test_medical_question_never_answered, test_three_misunderstandings_go_to_operator, test_hard_of_hearing_repeat_then_operator |
+| Защита от выдумывания: LLM только классифицирует, факты — из МИС | `nlu.py`, `dialog/understanding.py` | test_llm_cannot_invent_doctor_or_choice, test_no_stand_means_operator_not_fake_booking, test_llm_garbage_falls_back_to_keywords, test_whisper_hallucination_filtered |
+| Промпт-инъекции | `nlu.py` (разделители, sanitize), `safety.py`, guard prompt_injection | test_prompt_injection_is_refused, test_injection_three_times_goes_to_operator, test_phrase_is_sanitized_for_llm, test_llm_gets_phrase_inside_delimiters |
+| Сбои МИС и нейросетей (повторы, 429, предохранитель, таймауты) | `stand_client.py`, `resilience.py`, `ai.py` | test_stand_get_retries_on_timeout_then_succeeds, test_stand_post_is_not_retried_on_timeout, test_stand_long_retry_after_fails_fast, test_stand_invalid_json_and_circuit_breaker, test_ai_gateway_limits_concurrency, test_stt_timeout_is_ai_error |
+| Гонки: два звонка на один слот | `dialog/mis.py` BOOKING_LOCK (порт `SlotLock`) | test_concurrent_bookings_do_not_take_same_slot, test_slot_lock_port_is_satisfied_by_in_process_lock |
+| Ограничение кейса: только российский контур, зарубежные ИИ запрещены | `config.py` (_trusted, FORBIDDEN_AI_DOMAINS) | test_untrusted_ai_host_rejected, test_foreign_ai_hosts_rejected_even_if_listed_as_trusted |
+| 152-ФЗ: ПДн скрыты в журнале | `journal.py` | test_personal_data_hidden_in_transcript |
+| Архитектура: порты и адаптеры (МИС заменяема) | `ports.py`, `mock_stand.py` | test_mock_stand_satisfies_mis_port, test_mock_stand_adapter_end_to_end |
+
+**Почему нет локального запасного LLM.** Кейс требует моделей из контура организаторов (шлюз hub.gigaschool.ru);
+сторонние и зарубежные модели запрещены. Поэтому при недоступности LLM запасной путь — разбор по правилам
+(`knowledge.detect`), а не другая модель; при недоступности МИС — перевод на регистратора (R-06). Синтез речи — Piper локально.
+
+**Развёртывание — один процесс.** uvicorn без `--workers`: блокировка слотов `BOOKING_LOCK` работает внутри процесса.
+Для нескольких экземпляров достаточно подставить распределённую реализацию порта `SlotLock` (Redis SET NX или advisory lock БД) —
+код диалога не меняется. Сводная политика таймаутов и повторов — в шапке `app/resilience.py`.
+
 ## Запуск — пошагово
 
 ### Что нужно
@@ -217,11 +249,11 @@ STAND_MODE=mock TELEPHONY_ENABLED=0 ./run.sh      # имитация МИС в �
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q tests/                 # бэкенд: 70 тестов
+python -m pytest -q tests/                 # бэкенд: 73 теста
 cd frontend && npm ci && npm run check     # интерфейс: типы, линтер, 201 тест
 ```
 
-70 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
+73 теста на имитации стенда (настоящий МИС и лимит запросов не тратятся):
 - запись, перенос, отмена, статус, отказ на подтверждении;
 - повторный пациент без дубля, запрет двойной записи, «отмените обе»;
 - врач по фамилии, перенос к другому врачу, день вместо номера варианта;

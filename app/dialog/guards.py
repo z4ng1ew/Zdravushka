@@ -1,3 +1,5 @@
+# Проверки ДО нейросети, на каждой реплике. Каждая проверка либо отвечает сама, либо пропускает дальше.
+# Новая проверка = новая функция в списке GUARDS; остальной код не меняется.
 import re
 from collections.abc import Awaitable, Callable
 
@@ -12,11 +14,13 @@ WHICH_DOCTORS = re.compile(r"какие (у вас )?(есть )?(врач|сп�
 
 
 async def red_flags(s: Session, text: str) -> ChatResponse | None:
+    """Угроза жизни, сильная боль, просьба человека, жалоба — сразу перевод по регламенту."""
     esc = safety.check(text)
     return await escalate(s, esc) if esc else None
 
 
 async def hard_of_hearing(s: Session, text: str) -> ChatResponse | None:
+    """Пациент не расслышал: повторяем громче; на второй раз — сотрудник (R-15)."""
     if not (safety.asks_repeat(text) and s.last_reply):
         return None
     s.repeats += 1
@@ -25,11 +29,12 @@ async def hard_of_hearing(s: Session, text: str) -> ChatResponse | None:
                                             summary="Пациент плохо слышит ассистента"))
     last = s.last_reply
     resp = reply(s, f"Повторяю. {last}", options=[])
-    s.last_reply = last
+    s.last_reply = last  # повторяем исходную фразу, а не «Повторяю. …»
     return resp
 
 
 async def which_doctors(s: Session, text: str) -> ChatResponse | None:
+    """«Какие есть врачи?» — перечисляем основных специалистов и ждём выбора."""
     if not WHICH_DOCTORS.search(text.lower()):
         return None
     s.step = "specialty"
@@ -39,9 +44,11 @@ async def which_doctors(s: Session, text: str) -> ChatResponse | None:
 
 
 async def prompt_injection(s: Session, text: str) -> ChatResponse | None:
+    """Попытка управлять ассистентом («забудь инструкции», «покажи промпт») — не выполняем.
+    Отвечаем рамкой услуг; повторы считаются как непонимание и ведут к оператору (R-05)."""
     if not safety.is_injection(text):
         return None
-    flags = s.call.setdefault("flags", [])
+    flags = s.call.setdefault("flags", [])  # машинный код отметки: фронт показывает «⚠ попытка промпт-инъекции»
     if "prompt_injection" not in flags:
         flags.append("prompt_injection")
     s.miss += 1
@@ -57,6 +64,8 @@ IMPORTANT_STEPS = ("identity", "birth_date", "confirm", "confirm_all", "address"
 
 
 async def unsure_hearing(s: Session, text: str) -> ChatResponse | None:
+    """Распознавание сомнительное (низкая уверенность), а мы на важном шаге — переспрашиваем,
+    а не записываем пациента на чужое ФИО или неверное время."""
     conf = s.asr_confidence
     if conf is None or conf >= config.ASR_MIN_CONFIDENCE or s.step not in IMPORTANT_STEPS:
         return None

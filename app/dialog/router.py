@@ -1,3 +1,8 @@
+# Главная функция разговора. Только порядок шагов — каждый шаг живёт в своём модуле:
+#   guards.py       — проверки до нейросети (красные флаги, «повторите», «какие врачи»)
+#   understanding.py — понимание фразы с учётом текущего вопроса
+#   interceptors.py  — намерения, прерывающие сценарий (103, оператор, жалоба, медвопрос, прощание)
+#   HANDLERS         — сценарии регламента (запись, перенос, отмена, …)
 import uuid
 
 import httpx
@@ -16,17 +21,19 @@ from app.dialog.visits import task_cancel, task_reschedule, task_status
 from app.models import ChatResponse, Escalation
 from app.stand_client import StandError
 
+# Сценарий → обработчик. Новый сценарий = новый модуль + одна строка здесь.
 HANDLERS = {"reminder": task_reminder, "booking": task_booking, "reschedule": task_reschedule, "cancel": task_cancel,
             "status": task_status, "schedule_info": task_schedule_info, "info": task_info,
             "home_visit": task_home_visit}
 
-HIDDEN_STEPS = ("identity", "birth_date")
+HIDDEN_STEPS = ("identity", "birth_date")  # на этих шагах пациент называет ФИО и дату рождения
 
 
 async def handle(session_id: str | None, text: str, asr_confidence: float | None = None) -> ChatResponse:
+    """Одна реплика пациента → ответ ассистента. asr_confidence — уверенность распознавания (если голосом)."""
     text = text.strip()
     s = SESSIONS.get(session_id) if session_id else None
-    if s is None:
+    if s is None:  # новый разговор
         s = open_session(session_id or uuid.uuid4().hex[:12])
         if not text:
             return reply(s, GREETING)
@@ -53,11 +60,13 @@ async def handle(session_id: str | None, text: str, asr_confidence: float | None
 
 
 def _log_patient(s: Session, text: str):
+    """Реплика в расшифровку. 152-ФЗ: ФИО и дату рождения храним только в МИС, не в журнале."""
     journal.say(s.call, "patient", "[ФИО и дата рождения — скрыто]" if s.step in HIDDEN_STEPS else text)
     s.text = text.lower()
 
 
 def _select_task(s: Session, nl: dict):
+    """Новая задача или продолжение текущей."""
     intent = nl["intent"]
     if intent in TASKS and (not s.task or s.step in ("start", "more", "specialty")):
         if intent != s.task or s.step == "more":
@@ -70,6 +79,7 @@ def _select_task(s: Session, nl: dict):
 
 
 async def _not_understood(s: Session, nl: dict) -> ChatResponse:
+    """Задача не ясна: подсказка, потом предложение оператора, на третий раз — перевод (R-05)."""
     s.miss += 1
     if s.miss >= 3:
         return await escalate(s, Escalation(rule="R-05", reason="не распознано", priority="P3",
@@ -82,6 +92,7 @@ async def _not_understood(s: Session, nl: dict) -> ChatResponse:
 
 
 async def _run_task(s: Session, nl: dict) -> ChatResponse:
+    """Выполнение сценария. Любой сбой МИС → перевод на регистратора (R-06)."""
     try:
         return await HANDLERS[s.task](s, nl)
     except (StandDown, StandError, httpx.HTTPError) as e:

@@ -1,3 +1,4 @@
+# Ответы Здравушки, завершение задачи и перевод на сотрудника с заявкой в МИС.
 
 from app import config, journal, safety
 from app.dialog import state
@@ -26,7 +27,7 @@ def reply(s: Session, text: str, status: str | None = None, source: str | None =
     s.last_reply = text
     if kw.get("done"):
         s.step = "done"
-    if status is None:
+    if status is None:  # итог реплики для интерфейса: идёт разговор, задача выполнена, передано человеку
         status = "handoff" if kw.get("escalation") else "completed" if kw.get("done") else "in_progress"
     journal.save()
     return ChatResponse(session_id=s.id, reply=text, intent=s.task or s.last_task,
@@ -39,6 +40,7 @@ def finish(s: Session) -> ChatResponse:
 
 
 def task_done(s: Session, text: str, result: str, **kw) -> ChatResponse:
+    """Задача выполнена: фиксируем результат и спрашиваем, нужно ли что-то ещё."""
     s.call["result"] = result
     s.last_task, s.task, s.step = s.task, None, "more"
     s.forget_task_data()
@@ -49,6 +51,7 @@ def task_done(s: Session, text: str, result: str, **kw) -> ChatResponse:
 
 
 async def escalation_client(s: Session) -> dict | None:
+    """Клиент для заявки: названный пациент, иначе — технический «Срочный Вызов Иванович»."""
     if s.client:
         return s.client
     c = s.fields
@@ -56,6 +59,7 @@ async def escalation_client(s: Session) -> dict | None:
         if c.get("last_name") and c.get("first_name") and c.get("birth_date"):
             return await identify(s)
         t = config.TECH_CLIENT
+        # сначала ищем: карточка технического клиента заводится один раз и дальше переиспользуется
         found = await call_mis(s, "GET", "/clients", state.stand.find_client(t["last_name"], t["first_name"], t["birth_date"]))
         if found:
             return found
@@ -66,15 +70,17 @@ async def escalation_client(s: Session) -> dict | None:
         return None
 
 
-ESCALATION_MAX = 1000
+ESCALATION_MAX = 1000  # ограничение стенда на длину описания заявки
 
 
 def clean_text(text: str, limit: int = ESCALATION_MAX) -> str:
+    """Текст для МИС: без управляющих символов и не длиннее лимита стенда."""
     text = "".join(ch if ch.isprintable() else " " for ch in text)
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
 async def send_escalation(s: Session, description: str):
+    """Заявка на соединение со специалистом в МИС (POST /escalations). Без МИС — только журнал регистратора."""
     if not state.stand:
         return
     client = await escalation_client(s)
@@ -83,10 +89,11 @@ async def send_escalation(s: Session, description: str):
     try:
         await call_mis(s, "POST", "/escalations", state.stand.create_escalation(client["id"], clean_text(description)))
     except StandDown:
-        pass
+        pass  # МИС недоступна — перевод всё равно состоится, карточка есть в журнале регистратора
 
 
 async def escalate(s: Session, esc: Escalation) -> ChatResponse:
+    """Перевод на человека: заявка в МИС + карточка в очередь регистратора + фраза из регламента."""
     c = s.fields
     who = journal.mask_name(c.get("last_name"), c.get("first_name"), c.get("middle_name"))
     esc.summary = f"{esc.summary}. Пациент: {who or 'не назван'}. Задача: {s.task or '—'}."
@@ -103,6 +110,8 @@ async def escalate(s: Session, esc: Escalation) -> ChatResponse:
 
 
 def reminder_status(s: Session, status: str, new_time: str | None = None, visit_id: int | None = None):
+    """Результат обзвона — в журнал напоминаний (экран «Напоминания» в кабинете).
+    visit_id — какую запись изменили; по умолчанию та, о которой напоминаем."""
     vid = visit_id if visit_id is not None else s.reminder_visit_id
     if vid is None or (visit_id is not None and vid not in journal.REMINDERS and vid != s.reminder_visit_id):
         return

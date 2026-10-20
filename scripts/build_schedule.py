@@ -1,3 +1,7 @@
+# Превращает Excel с расписанием от организаторов в data/schedule.json,
+# который быстро читает сервер. Запускать после каждого обновления Excel:
+#   python -m scripts.build_schedule data/raw/schedule.xlsx
+# Excel тяжёлый (137 тысяч строк), поэтому читаем его один раз здесь, а не при каждом звонке.
 import json
 import sys
 from datetime import datetime
@@ -9,6 +13,7 @@ OUT = Path("data/schedule.json")
 
 
 def hhmm(t) -> str:
+    """Время из Excel (datetime.time или строка) → '08:20'."""
     return t.strftime("%H:%M") if hasattr(t, "strftime") else str(t)[:5]
 
 
@@ -16,12 +21,14 @@ def main(xlsx_path: str):
     print(f"Читаю {xlsx_path} ... (около минуты)")
     wb = openpyxl.load_workbook(xlsx_path, read_only=True)
 
+    # «Сегодня» из листа Описание: слоты раньше этой даты нам не нужны
     today = None
     for row in wb["Описание"].iter_rows(values_only=True):
         if row[0] == "Сегодня":
             today = row[1]
     today = today or datetime.now()
 
+    # Лист «Врачи»: ФИО, специальность, кабинет, длина слота, график
     doctors = {}
     for r in wb["Врачи"].iter_rows(min_row=2, values_only=True):
         if not r[0]:
@@ -32,11 +39,13 @@ def main(xlsx_path: str):
             "weekly": {},
         }
 
+    # Лист «График»: часы приёма по дням недели (для ответа «когда принимает врач»)
     days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
     for r in wb["График"].iter_rows(min_row=2, values_only=True):
         if r[1] in doctors:
             doctors[r[1]]["weekly"] = {d: v for d, v in zip(days, r[4:11]) if v and v != "—"}
 
+    # Лист «Слоты»: берём только свободные слоты, начиная с «сегодня»
     free: dict[str, dict[str, list[str]]] = {}
     count = 0
     for r in wb["Слоты"].iter_rows(min_row=2, values_only=True):

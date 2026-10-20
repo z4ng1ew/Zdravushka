@@ -1,3 +1,6 @@
+# Клиент API стенда «Регистратура».
+# Здесь собрано всё общение с МИС: пациенты, врачи, записи.
+# Остальной код не знает про HTTP — он просто вызывает функции этого класса.
 import asyncio
 import time
 from collections import deque
@@ -7,16 +10,17 @@ import httpx
 from app import config
 from app.resilience import CircuitBreaker, backoff
 
-IDEMPOTENT = ("GET",)
+IDEMPOTENT = ("GET",)  # повторять безопасно только чтение: повтор POST мог бы создать вторую запись
 
 
 class StandError(Exception):
+    """Ошибка от стенда. Хранит код ответа (400, 404, 409...) и текст на русском."""
 
     def __init__(self, status: int, code: str, message: str):
         super().__init__(f"{status} {code}: {message}")
-        self.status = status
-        self.code = code
-        self.message = message
+        self.status = status    # HTTP-код ответа, например 409
+        self.code = code        # код стенда, например КОНФЛИКТ_СТАТУСА
+        self.message = message  # описание ошибки на русском
 
 
 def _retry_after(resp: httpx.Response) -> float:
@@ -27,6 +31,7 @@ def _retry_after(resp: httpx.Response) -> float:
 
 
 def _error_body(resp: httpx.Response) -> tuple[str, str]:
+    """Код и текст ошибки стенда; если тело не JSON — общий код и начало текста."""
     try:
         body = resp.json()
         if isinstance(body, dict):
@@ -37,28 +42,32 @@ def _error_body(resp: httpx.Response) -> tuple[str, str]:
 
 
 class RateLimiter:
+    """Следит, чтобы мы не отправили больше N запросов за 60 секунд."""
 
     def __init__(self, max_calls: int, period: float = 60.0):
         self.max_calls = max_calls
         self.period = period
-        self.calls = deque()
-        self.lock = asyncio.Lock()
+        self.calls = deque()        # время отправки последних запросов
+        self.lock = asyncio.Lock()  # чтобы два запроса одновременно не сломали подсчёт
 
     async def wait(self):
         async with self.lock:
             while True:
                 now = time.monotonic()
+                # выкидываем запросы старше 60 секунд — они уже не считаются
                 while self.calls and now - self.calls[0] >= self.period:
                     self.calls.popleft()
                 if len(self.calls) < self.max_calls:
                     self.calls.append(now)
                     return
+                # лимит исчерпан: ждём, пока самый старый запрос «выйдет» из окна
                 await asyncio.sleep(self.period - (now - self.calls[0]) + 0.05)
 
 
 class StandClient:
     def __init__(self, base_url: str = config.STAND_URL, token: str = config.STAND_TOKEN,
                  transport: httpx.AsyncBaseTransport | None = None):
+        # transport нужен только для тестов (подменяем настоящий стенд заглушкой)
         self.http = httpx.AsyncClient(
             base_url=base_url,
             headers={"Authorization": f"Bearer {token}"},
@@ -66,14 +75,24 @@ class StandClient:
             transport=transport,
         )
         self.limiter = RateLimiter(config.STAND_RATE_LIMIT)
-        self._doctors: list[dict] | None = None
-        self._doctors_at = 0.0
+        self._doctors: list[dict] | None = None  # кэш справочника врачей
+        self._doctors_at = 0.0                   # когда кэш загружен (для срока жизни)
         self.breaker = CircuitBreaker("МИС", failures=3, cooldown=30)
 
     async def close(self):
         await self.http.aclose()
 
     async def _request(self, method: str, path: str, **kwargs):
+        """Единая точка отправки запросов: лимит, предохранитель, повторы, разбор ошибок.
+
+        Стратегия по видам сбоев:
+          429             — ждём Retry-After, но не дольше STAND_MAX_RETRY_AFTER (пациент на линии);
+          таймаут, обрыв  — GET повторяем с паузой; POST/PATCH не повторяем (не создать дубль записи);
+          5xx             — GET повторяем, потом считаем стенд недоступным;
+          4xx             — ошибка данных, не повторяем, отдаём код и текст стенда;
+          не JSON в ответе — «неверный ответ», не повторяем.
+        После 3 сбоев подряд предохранитель размыкается на 30 секунд — ответ «недоступно» мгновенный.
+        """
         if self.breaker.is_open:
             raise StandError(503, "МИС_НЕДОСТУПНА", "стенд не отвечал несколько раз подряд, пауза 30 секунд")
         retries = config.STAND_RETRIES if method in IDEMPOTENT else 0
@@ -81,7 +100,7 @@ class StandClient:
             await self.limiter.wait()
             try:
                 resp = await self.http.request(method, path, **kwargs)
-            except httpx.HTTPError as e:
+            except httpx.HTTPError as e:  # таймаут, обрыв соединения
                 if attempt < retries:
                     await backoff(attempt)
                     continue
@@ -103,7 +122,7 @@ class StandClient:
                 raise StandError(resp.status_code, *_error_body(resp))
 
             if resp.status_code >= 400:
-                self.breaker.success()
+                self.breaker.success()  # стенд жив, ошибка в данных
                 raise StandError(resp.status_code, *_error_body(resp))
 
             try:
@@ -116,6 +135,7 @@ class StandClient:
         raise StandError(429, "ПРЕВЫШЕН_ЛИМИТ", "стенд несколько раз подряд ответил 429")
 
     async def _get_all(self, path: str, params: dict | None = None) -> list[dict]:
+        """Списки отдаются по 50 штук. Забираем все страницы подряд."""
         params = dict(params or {})
         result, offset = [], 0
         while True:
@@ -126,8 +146,10 @@ class StandClient:
                 return result
             offset += 50
 
+    # ---------- Врачи ----------
 
     async def doctors(self, refresh: bool = False) -> list[dict]:
+        """Справочник врачей. Загружаем один раз и держим в памяти (экономим лимит)."""
         stale = time.monotonic() - self._doctors_at > config.DOCTORS_CACHE_TTL
         if self._doctors is None or refresh or stale:
             self._doctors = await self._get_all("/doctors")
@@ -135,17 +157,21 @@ class StandClient:
         return self._doctors
 
     def invalidate_doctors(self):
+        """Сбросить кэш справочника (например, стенд сообщил, что врач деактивирован)."""
         self._doctors = None
 
     async def active_doctors(self, specialty: str | None = None) -> list[dict]:
+        """Только активные врачи, при желании — одной специальности."""
         result = [d for d in await self.doctors() if d["is_active"]]
         if specialty:
             s = specialty.strip().lower()
             result = [d for d in result if d["specialty"].lower() == s]
         return result
 
+    # ---------- Пациенты ----------
 
     async def find_client(self, last_name: str, first_name: str, birth_date: str) -> dict | None:
+        """Ищем пациента по фамилии, имени и дате рождения (ДД.ММ.ГГГГ)."""
         found = await self._get_all("/clients", {
             "last_name": last_name.strip().title(),
             "first_name": first_name.strip().title(),
@@ -155,6 +181,7 @@ class StandClient:
 
     async def create_client(self, last_name: str, first_name: str, birth_date: str,
                             middle_name: str | None = None, comment: str | None = None) -> dict:
+        """Заводим пациента. Если такой уже есть — стенд вернёт существующую карточку."""
         body = {"last_name": last_name.strip().title(),
                 "first_name": first_name.strip().title(),
                 "birth_date": birth_date}
@@ -167,8 +194,10 @@ class StandClient:
     async def update_client_comment(self, client_id: int, comment: str) -> dict:
         return await self._request("PATCH", f"/clients/{client_id}", json={"comment": comment})
 
+    # ---------- Записи на приём ----------
 
     async def create_visit(self, client_id: int, doctor_id: int, scheduled_at: str) -> dict:
+        """Создаём запись. scheduled_at — строка 'ДД.ММ.ГГГГ ЧЧ:ММ' по GMT+4."""
         return await self._request("POST", "/visits", json={
             "client_id": client_id, "doctor_id": doctor_id, "scheduled_at": scheduled_at})
 
@@ -182,21 +211,26 @@ class StandClient:
 
     async def reschedule_visit(self, visit_id: int, scheduled_at: str,
                                doctor_id: int | None = None) -> dict:
+        """Перенос: меняем время (и при необходимости врача) у той же записи."""
         body = {"scheduled_at": scheduled_at}
         if doctor_id is not None:
             body["doctor_id"] = doctor_id
         return await self._request("PATCH", f"/visits/{visit_id}", json=body)
 
     async def cancel_visit(self, visit_id: int) -> dict:
+        """Отмена: запись не удаляется, а получает статус «Отменена»."""
         return await self._request("PATCH", f"/visits/{visit_id}", json={"status": "Отменена"})
 
     async def is_slot_taken(self, doctor_id: int, scheduled_at: str) -> bool:
+        """Стенд не проверяет занятость — проверяем сами по своим записям к врачу."""
         day = scheduled_at.split(" ")[0]
         visits = await self.list_visits(doctor_id=doctor_id, status="Запланирована",
                                         date_from=day, date_to=day)
         return any(v["scheduled_at"] == scheduled_at for v in visits)
 
+    # ---------- Заявки на соединение со специалистом ----------
 
     async def create_escalation(self, client_id: int, description: str) -> dict:
+        """Фиксируем в МИС, что ассистент передал разговор человеку (перевод, вызов на дом)."""
         return await self._request("POST", "/escalations", json={
             "client_id": client_id, "description": description[:1000]})

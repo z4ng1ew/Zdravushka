@@ -1,3 +1,4 @@
+# Сценарий С-01: запись на приём.
 
 from app import schedule
 from app.dialog.mis import BOOKING_LOCK
@@ -9,6 +10,7 @@ from app.dialog.session import Session
 
 
 async def task_booking(s: Session, nl: dict) -> ChatResponse:
+    """С-01. Запись на приём."""
     c = s.fields
     s.call["intent"] = "Запись к врачу"
     if c.get("doctor_name") and not c.get("specialty"):
@@ -23,7 +25,7 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         c.pop("specialty")
         s.step = "specialty"
         return reply(s, "К такому специалисту записать не могу. Назовите другого врача, например терапевта.")
-    if c.get("doctor_name"):
+    if c.get("doctor_name"):  # пациент хочет конкретного врача
         chosen_docs = [d for d in doctors if is_same_doctor(d["full_name"], c["doctor_name"])]
         if chosen_docs:
             doctors = chosen_docs
@@ -37,6 +39,8 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         if nl["answer"] == "yes":
             o = s.chosen
             doc = next(d for d in doctors if d["id"] == o.doctor_id)
+            # Стенд не проверяет занятость, поэтому проверка «слот свободен» и создание записи идут
+            # под одной блокировкой: два одновременных звонка не займут одно время
             async with BOOKING_LOCK:
                 busy = await busy_slots(s)
                 if (o.doctor_id, o.scheduled_at) in busy or not schedule.is_valid_slot(doc, schedule.from_api(o.scheduled_at)):
@@ -45,12 +49,12 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
                     taken = False
                     visit = await create_visit(s, o)
             if taken:
-                resp = await offer_slots(s, doctors)
+                resp = await offer_slots(s, doctors)  # время успели занять — предлагаем заново
                 resp.reply = "Это время только что заняли. " + resp.reply
                 return resp
             done = o.model_copy(update={"visit_id": visit["id"], "status": "Запланирована"})
             extra = ""
-            if (old := s.take("replace_visit")):
+            if (old := s.take("replace_visit")):  # «перенос» к другому врачу: старую запись отменяем
                 await cancel_visit(s, old)
                 extra = " Прежняя запись отменена."
             return task_done(s, f"Готово, вы записаны {o.spoken}{room(o.doctor_name)}.{extra} "

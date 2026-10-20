@@ -1,3 +1,4 @@
+# Сценарии с существующими записями: перенос (С-03), отмена (С-04), статус (С-05).
 import re
 
 from app import schedule
@@ -22,6 +23,7 @@ ALL_OF_THEM = re.compile(r"\b(обе|оба|все|всё|обеих|кажду�
 
 
 async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
+    """С-03. Перенос записи: та же запись, новое время у того же врача."""
     s.call["intent"] = "Перенос записи"
     if (r := await need_identity(s, create=False)):
         return r
@@ -31,6 +33,7 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
     doctor = visit["doctor"]
     wanted = s.fields.get("doctor_name")
     if wanted and not is_same_doctor(doctor["full_name"], wanted):
+        # Перенос в МИС меняет только время. К другому врачу — новая запись, старая отменяется после «да»
         s.replace_visit = visit
         s.forget_task_data()
         s.fields["specialty"] = wanted_specialty(wanted) or doctor["specialty"]
@@ -48,7 +51,7 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
     elif s.step == "confirm":
         if nl["answer"] == "yes":
             o = s.chosen
-            async with BOOKING_LOCK:
+            async with BOOKING_LOCK:  # проверка слота и перенос — атомарно (см. booking.py)
                 taken = (o.doctor_id, o.scheduled_at) in await busy_slots(s)
                 updated = None if taken else await reschedule_visit(s, visit, o)
             if taken:
@@ -69,10 +72,12 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
 
 
 async def task_cancel(s: Session, nl: dict) -> ChatResponse:
+    """С-04. Отмена записи (запись не удаляется, а получает статус «Отменена»)."""
     s.call["intent"] = "Отмена записи"
     if (r := await need_identity(s, create=False)):
         return r
     if s.step == "confirm_all":
+        # Массовая отмена — только после явного «да»: распознавание могло ослышаться («какие все…»)
         if nl["answer"] == "yes":
             for v in s.visits[:3]:
                 await cancel_visit(s, v)
@@ -103,6 +108,7 @@ async def task_cancel(s: Session, nl: dict) -> ChatResponse:
 
 
 async def task_status(s: Session, nl: dict) -> ChatResponse:
+    """С-05. Проверка своей записи. Данные называем только после идентификации."""
     s.call["intent"] = "Статус записи"
     if (r := await need_identity(s, create=False)):
         return r

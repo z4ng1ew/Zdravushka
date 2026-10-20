@@ -1,3 +1,8 @@
+# Проверка трёх нейросетей. Запуск из корня проекта: python -m scripts.check_models
+# Свой аудиофайл для STT: python -m scripts.check_models запись.wav
+# 1) LLM отвечает и умеет вернуть JSON
+# 2) TTS озвучивает фразу → файл data/tmp/check_tts.wav (можно послушать)
+# 3) STT распознаёт этот же файл обратно в текст — проверка по кругу
 import asyncio
 import sys
 import time
@@ -41,7 +46,7 @@ async def run(name: str, enabled: bool, func, *args):
         return None
     try:
         return await func(*args)
-    except Exception as e:
+    except Exception as e:  # показываем любую ошибку, но проверяем остальные модели
         print(f"  ОШИБКА: {e}")
         return None
 
@@ -49,7 +54,7 @@ async def run(name: str, enabled: bool, func, *args):
 async def main():
     await run("LLM", bool(config.LLM_URL and config.LLM_MODEL), check_llm)
     audio = await run("TTS", bool(config.TTS_URL), check_tts)
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 1:  # передан свой файл — распознаём его
         audio = Path(sys.argv[1]).read_bytes()
     if audio:
         await run("STT", bool(config.STT_URL), check_stt, audio)

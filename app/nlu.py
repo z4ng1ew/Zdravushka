@@ -1,3 +1,8 @@
+# Понимание фразы пациента (NLU — natural language understanding).
+# Нейросеть превращает свободную речь в поля JSON, а КОД проверяет каждое поле:
+# специальность — только из реального списка, даты — только настоящие, номер варианта — 1..3.
+# Всё, что не прошло проверку, выбрасывается: так выдумки модели не попадают в запись.
+# Если нейросеть недоступна — работает запасной разбор по ключевым словам.
 import difflib
 import re
 from datetime import date, datetime, timedelta
@@ -7,6 +12,7 @@ from app import ai, config, knowledge, schedule
 INTENTS = ["booking", "reschedule", "cancel", "status", "schedule_info", "info",
            "home_visit", "medical", "operator", "complaint", "emergency", "goodbye", "other"]
 
+# Как пациенты называют врачей → специальность из расписания
 SPECIALTY_ALIASES = {
     "терапевт": "Терапевт", "участков": "Терапевт", "педиатр": "Педиатр", "детск": "Педиатр",
     "окулист": "Офтальмолог", "глазн": "Офтальмолог", "офтальмолог": "Офтальмолог",
@@ -70,10 +76,11 @@ EXPECTING_TEXT = {
 }
 
 
-MAX_PHRASE = 500
+MAX_PHRASE = 500  # фраза пациента длиннее — обрезаем (в регистратуре так не говорят, а запрос дешевле)
 
 
 def sanitize(text: str) -> str:
+    """Фраза → безопасный текст для нейросети: без управляющих символов и наших тегов, ограниченной длины."""
     text = "".join(ch for ch in text if ch.isprintable() or ch == " ")
     text = text.replace("<phrase>", "").replace("</phrase>", "")
     return text[:MAX_PHRASE].strip()
@@ -84,6 +91,7 @@ def _today() -> date:
 
 
 def norm_specialty(value: str | None) -> str | None:
+    """Слова пациента → точная специальность из расписания. Неизвестное → None."""
     if not value:
         return None
     low = value.lower().replace("ё", "е")
@@ -97,6 +105,7 @@ def norm_specialty(value: str | None) -> str | None:
 
 
 def _valid_date(value, past: bool) -> str | None:
+    """Проверяем, что дата настоящая. past=True — дата рождения, иначе — будущая дата приёма."""
     if not value:
         return None
     try:
@@ -119,6 +128,7 @@ def _clean_name(value) -> str | None:
 
 
 def validate(raw: dict) -> dict:
+    """Пропускаем дальше только проверенные поля. Всё неожиданное (не тот тип, мусор) → None."""
     if not isinstance(raw, dict):
         raw = {}
     out = {}
@@ -146,7 +156,10 @@ def validate(raw: dict) -> dict:
     return out
 
 
+# ---------- Запасной разбор без нейросети ----------
+
 def fallback(text: str, expecting: str) -> dict:
+    """Простой разбор по ключевым словам — если нейросеть недоступна или ответила мусором."""
     low = text.lower().replace("ё", "е")
     raw: dict = {}
     rules = [("выпить", "medical"), ("лекарств", "medical"), ("таблетк", "medical"), ("как лечить", "medical"),
@@ -176,7 +189,7 @@ def fallback(text: str, expecting: str) -> dict:
         raw["answer"] = "yes"
     elif re.search(r"\b(нет|не надо|неверно|не так)\b", low):
         raw["answer"] = "no"
-    for d in schedule.demo_doctors():
+    for d in schedule.demo_doctors():  # фамилия врача из справочника («к Дорохову»)
         last = d["full_name"].split()[0].lower().replace("ё", "е")
         if re.search(r"\b" + last[:max(4, len(last) - 2)], low):
             raw["doctor_name"] = d["full_name"].split()[0]
@@ -195,6 +208,7 @@ def fallback(text: str, expecting: str) -> dict:
 
 
 async def understand(text: str, expecting: str) -> dict:
+    """Главная функция: фраза пациента → проверенные поля. Сначала нейросеть, при сбое — запасной разбор."""
     text = sanitize(text)
     if not (config.LLM_URL and config.LLM_MODEL):
         return {**fallback(text, expecting), "_source": "rules"}
@@ -208,6 +222,7 @@ async def understand(text: str, expecting: str) -> dict:
     except ai.AIError:
         return {**fallback(text, expecting), "_source": "rules"}
     result = validate(raw)
+    # Если модель не поняла простое «да/нет/второй» — подстрахуемся ключевыми словами
     backup = fallback(text, expecting)
     for key in ("answer", "choice", "birth_date", "topic"):
         if result[key] is None and backup[key] is not None:

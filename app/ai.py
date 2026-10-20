@@ -1,3 +1,7 @@
+# Подключение трёх нейросетей: распознавание речи (STT), синтез речи (TTS) и языковая модель (LLM).
+# Все три вызываются по OpenAI-совместимому API — его поддерживают почти все серверы:
+# vLLM, Ollama, LM Studio, faster-whisper-server/speaches, Cloud.ru и другие.
+# Адреса, токены и названия моделей — в .env, код менять не нужно.
 import asyncio
 import json
 import math
@@ -8,7 +12,9 @@ import httpx
 from app import config
 from app.resilience import CircuitBreaker, backoff
 
+# Шлюз хакатона: не больше 2 одновременных запросов на команду — третий получил бы 429.
 _gateway = asyncio.Semaphore(config.AI_MAX_CONCURRENT)
+# Предохранитель LLM: после 3 сбоев подряд минуту не ждём её, а сразу идём в запасной разбор
 llm_breaker = CircuitBreaker("LLM", failures=3, cooldown=60)
 RETRY_STATUSES = (429, 500, 502, 503, 504)
 
@@ -22,6 +28,8 @@ def _headers(token: str) -> dict:
 
 
 async def _post(url: str, timeout: float, retries: int = 1, **kw) -> httpx.Response:
+    """POST в шлюз нейросетей с единым поведением при сбоях.
+    Таймаут, обрыв, 429 и 5xx — один повтор с паузой; потом AIError (звонок не падает, работает запасной путь)."""
     last = ""
     for attempt in range(retries + 1):
         try:
@@ -40,6 +48,11 @@ async def _post(url: str, timeout: float, retries: int = 1, **kw) -> httpx.Respo
 
 
 async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 400) -> str:
+    """Отправляет диалог в LLM и возвращает текст ответа.
+
+    messages — список вида [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}].
+    temperature низкая: нам нужны точные и одинаковые ответы, а не творчество.
+    """
     url = config.LLM_URL.rstrip("/") + "/chat/completions"
     body = {"model": config.LLM_MODEL, "messages": messages,
             "temperature": temperature, "max_tokens": max_tokens}
@@ -54,7 +67,7 @@ async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: i
         raise
     if resp.status_code != 200:
         raise AIError(f"LLM ответила {resp.status_code}: {resp.text[:300]}")
-    try:
+    try:  # проверяем формат ответа, а не верим ему: любое отклонение → AIError → запасной разбор
         content = resp.json()["choices"][0]["message"]["content"]
     except (ValueError, KeyError, IndexError, TypeError) as e:
         raise AIError(f"LLM вернула ответ неожиданного формата: {resp.text[:200]}") from e
@@ -65,6 +78,7 @@ async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: i
 
 
 def parse_json(text: str) -> dict:
+    """Достаёт JSON из ответа модели, даже если она обернула его в ```json ... ``` или добавила слова."""
     match = re.search(r"\{.*\}", text, re.S)
     if not match:
         raise AIError(f"В ответе модели нет JSON: {text[:200]}")
@@ -78,6 +92,7 @@ def parse_json(text: str) -> dict:
 
 
 async def llm_json(messages: list[dict]) -> dict:
+    """LLM, которая обязана вернуть JSON. Одна повторная попытка, если ответ не разобрался."""
     text = await llm_chat(messages)
     try:
         return parse_json(text)
@@ -87,6 +102,7 @@ async def llm_json(messages: list[dict]) -> dict:
         return parse_json(await llm_chat(retry))
 
 
+# Whisper «слышит» в тишине и шуме фразы из субтитров к видео. Это не слова пациента — выбрасываем
 WHISPER_HALLUCINATIONS = ("продолжение следует", "субтитр", "спасибо за просмотр", "подписывайтесь",
                           "редактор", "корректор", "dimatorzok", "благодарю за внимание")
 
@@ -97,6 +113,8 @@ def is_hallucination(text: str) -> bool:
 
 
 def asr_confidence(segments) -> float | None:
+    """Уверенность распознавания 0..1 из ответа Whisper (verbose_json): средняя вероятность
+    слов по сегментам (exp(avg_logprob)) с поправкой на вероятность «это не речь». Нет данных — None."""
     if not isinstance(segments, list) or not segments:
         return None
     scores = []
@@ -109,13 +127,14 @@ def asr_confidence(segments) -> float | None:
 
 
 async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, float | None]:
+    """Распознавание речи: аудио → (текст, уверенность 0..1 или None, если сервер её не даёт)."""
     if not config.STT_URL:
         raise AIError("распознавание речи не настроено")
     url = config.STT_URL.rstrip("/") + "/audio/transcriptions"
     data = {"model": config.STT_MODEL, "language": "ru", "response_format": "verbose_json"}
     resp = await _post(url, config.STT_TIMEOUT, files={"file": (filename, audio)}, data=data,
                        headers=_headers(config.STT_TOKEN))
-    if resp.status_code == 400:
+    if resp.status_code == 400:  # сервер не умеет verbose_json — обычный ответ, без уверенности
         data.pop("response_format")
         resp = await _post(url, config.STT_TIMEOUT, files={"file": (filename, audio)}, data=data,
                            headers=_headers(config.STT_TOKEN))
@@ -133,10 +152,12 @@ async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, fl
 
 
 async def speech_to_text(audio: bytes, filename: str = "audio.wav") -> str:
+    """Только текст распознавания (для мест, где уверенность не нужна)."""
     return (await transcribe(audio, filename))[0]
 
 
 async def text_to_speech(text: str) -> bytes:
+    """Синтез речи: текст → аудио (wav). Возвращает байты файла."""
     url = config.TTS_URL.rstrip("/") + "/audio/speech"
     body = {"model": config.TTS_MODEL, "input": text, "voice": config.TTS_VOICE,
             "response_format": "wav"}

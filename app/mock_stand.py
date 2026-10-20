@@ -1,3 +1,6 @@
+# Локальный адаптер МИС для интеграционных тестов и отладки без токена стенда.
+# Включается явно: STAND_MODE=mock. В /api/health режим показывается как "mock",
+# чтобы его нельзя было спутать с работой на настоящем стенде.
 import json
 
 import httpx
@@ -7,6 +10,9 @@ from app.stand_client import RateLimiter, StandClient
 
 
 class MockStand:
+    """Имитация стенда «Регистратура» в памяти: те же адреса, коды ответов и ошибки, что у настоящего.
+    Нужна для автотестов и для запуска без токена (STAND_MODE=mock). Логика ассистента при этом
+    не меняется — он работает через тот же StandClient, что и с настоящим стендом."""
 
     def __init__(self, broken: bool = False):
         self.broken = broken
@@ -62,7 +68,8 @@ class MockStand:
 
 
 def client(fake: "MockStand | None" = None) -> StandClient:
+    """StandClient, который вместо сети ходит в MockStand."""
     api = StandClient(base_url="https://mock-stand/api/v1", token="mock",
                       transport=httpx.MockTransport(fake or MockStand()))
-    api.limiter = RateLimiter(1000)
+    api.limiter = RateLimiter(1000)  # у имитации нет лимита 10 запросов в минуту
     return api

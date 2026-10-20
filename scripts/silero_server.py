@@ -1,3 +1,10 @@
+# Сервер синтеза речи Silero — запускается ОТДЕЛЬНО, на вашем Mac (не на VM хакатона).
+# Отдаёт OpenAI-совместимый адрес POST /v1/audio/speech, поэтому Здравушка подключается
+# к нему без нового кода: TTS_BACKEND=openai, TTS_URL=http://адрес-мака:8020/v1, TTS_TOKEN=...
+#
+# Установка на Mac:   pip install torch fastapi uvicorn numpy
+# Запуск:             SILERO_TOKEN=придумайте_длинный_токен python silero_server.py
+# Голоса Silero (русские): baya, kseniya, xenia, aidar, eugene. Для Здравушки — baya или xenia.
 import io
 import os
 import wave
@@ -12,24 +19,21 @@ from pydantic import BaseModel
 TOKEN = os.getenv("SILERO_TOKEN", "")
 MODEL_ID = os.getenv("SILERO_MODEL", "v5_ru")
 DEFAULT_VOICE = os.getenv("SILERO_VOICE", "baya")
-SAMPLE_RATE = int(os.getenv("SILERO_RATE", "24000"))
+SAMPLE_RATE = int(os.getenv("SILERO_RATE", "24000"))   # 8000 / 24000 / 48000
 PORT = int(os.getenv("SILERO_PORT", "8020"))
 
 torch.set_num_threads(int(os.getenv("SILERO_THREADS", "4")))
 
-# Видеокарта, если есть (SILERO_DEVICE=cpu — принудительно процессор)
-DEVICE = torch.device(os.getenv("SILERO_DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
 
 def load_model():
+    """Загружаем модель один раз. Если v5_ru недоступна — берём v4_ru."""
     for model_id in (MODEL_ID, "v4_ru"):
         try:
             model, _ = torch.hub.load("snakers4/silero-models", "silero_tts",
                                       language="ru", speaker=model_id, trust_repo=True)
             print(f"Silero загружена: {model_id}")
-            model.to(DEVICE)
-            print(f"Устройство: {DEVICE}")
             return model
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — пробуем следующую версию
             print(f"Не удалось загрузить {model_id}: {e}")
     raise SystemExit("Silero не загрузилась")
 
@@ -46,7 +50,7 @@ class SpeechRequest(BaseModel):
 
 
 def to_wav(audio: torch.Tensor) -> bytes:
-    pcm = (audio.cpu().numpy() * 32767).clip(-32768, 32767).astype(np.int16)
+    pcm = (audio.numpy() * 32767).clip(-32768, 32767).astype(np.int16)
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)

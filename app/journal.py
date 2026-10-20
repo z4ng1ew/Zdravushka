@@ -1,3 +1,7 @@
+# Журнал работы ассистента для кабинета сотрудника (фронт Муслима, lib/types.ts):
+# звонки с расшифровкой, переводы на регистратора, напоминания.
+# Хранится в памяти и сохраняется в data/runtime/journal.json, чтобы пережить перезапуск.
+# ФИО в журнале маскируется («Иванов П. С.») — персональные данные не показываем целиком.
 import json
 import logging
 import os
@@ -18,7 +22,7 @@ def _load():
     if FILE.exists():
         try:
             data = json.loads(FILE.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError) as e:  # повреждённый файл — начинаем с чистого журнала, а не падаем
             log.warning("журнал не прочитан: %s", e)
             return
         CALLS.update(data.get("calls", {}))
@@ -27,6 +31,8 @@ def _load():
 
 
 def save():
+    """Сохранение атомарно (через временный файл): сбой посреди записи не портит журнал.
+    Ошибка диска не роняет звонок — журнал останется в памяти и сохранится при следующей записи."""
     try:
         FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = FILE.with_suffix(".tmp")
@@ -38,6 +44,7 @@ def save():
 
 
 def mask_name(last: str | None, first: str | None, middle: str | None = None) -> str | None:
+    """«Иванов Пётр Сергеевич» → «Иванов П. С.»"""
     if not last:
         return None
     initials = " ".join(f"{p[0]}." for p in (first, middle) if p)
@@ -57,15 +64,18 @@ def start_call(call_id: str, direction: str = "входящий") -> dict:
 
 
 def say(call: dict, speaker: str, text: str):
+    """Реплика в расшифровку: speaker = patient / bot / operator."""
     call["transcript"].append({"speaker": speaker, "text": text, "at": schedule.now().strftime("%H:%M:%S")})
     call["duration_sec"] = int(schedule.now().timestamp() - call["_t0"])
 
 
 def stand_request(call: dict, method: str, path: str, status: int, note: str = ""):
+    """Запрос к стенду, сделанный во время звонка (видно на экране «Звонки»)."""
     call["stand_requests"].append({"method": method, "path": path, "status": status, "note": note})
 
 
 def handoff(call: dict, reason: str, urgent: bool, summary: str, collected: dict) -> dict:
+    """Перевод на регистратора: карточка в очередь оператора."""
     h = {"id": uuid.uuid4().hex[:8], "call_id": call["id"], "created_at": now_str(), "reason": reason,
          "urgent": urgent, "status": "новая", "phone": "+7 *** ***-**-**", "summary": summary,
          "collected": {k: str(v) for k, v in collected.items()}, "transcript": list(call["transcript"])}
@@ -78,6 +88,7 @@ HANDOFF_STATUSES = ("новая", "в работе", "перезвонили", "
 
 
 def set_handoff_status(handoff_id: str, status: str) -> dict:
+    """Регистратор меняет статус перевода. KeyError — нет такого, ValueError — недопустимый статус."""
     if handoff_id not in HANDOFFS:
         raise KeyError(handoff_id)
     if status not in HANDOFF_STATUSES:
@@ -88,6 +99,7 @@ def set_handoff_status(handoff_id: str, status: str) -> dict:
 
 
 def public(items: dict) -> list[dict]:
+    """Без служебных полей (начинаются с _), новые сверху."""
     out = [{k: v for k, v in item.items() if not k.startswith("_")} for item in items.values()]
     return list(reversed(out))
 

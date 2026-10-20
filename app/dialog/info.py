@@ -1,3 +1,4 @@
+# Справочные сценарии: график врача (С-07), справка по регламенту, вызов врача на дом (С-06).
 from datetime import datetime, timedelta
 
 from app import journal, knowledge, schedule
@@ -9,6 +10,7 @@ from app.dialog.session import Session
 
 
 async def task_schedule_info(s: Session, nl: dict) -> ChatResponse:
+    """С-07. Когда принимает врач. Идентификация не нужна."""
     c = s.fields
     s.call["intent"] = "График врача"
     docs = []
@@ -25,6 +27,7 @@ async def task_schedule_info(s: Session, nl: dict) -> ChatResponse:
 
 
 async def task_info(s: Session, nl: dict) -> ChatResponse:
+    """Справочные вопросы — ответ дословно из регламента."""
     s.call["intent"] = "Справка"
     text = knowledge.answer(nl["topic"])
     if not text:
@@ -35,6 +38,7 @@ async def task_info(s: Session, nl: dict) -> ChatResponse:
 
 
 async def task_home_visit(s: Session, nl: dict) -> ChatResponse:
+    """С-06. Вызов врача на дом: заявка участковому врачу, адрес и повод — в комментарии."""
     c = s.fields
     s.call["intent"] = "Вызов врача на дом"
     now = schedule.now()
@@ -56,6 +60,7 @@ async def task_home_visit(s: Session, nl: dict) -> ChatResponse:
         s.step = "reason"
         return reply(s, "Коротко скажите своими словами, что случилось. Я передам врачу.")
 
+    # Заявки до 14:00 в будни (до 12:00 в субботу) — на сегодня, позже — на следующий рабочий день
     limit = 12 if now.weekday() == 5 else 14
     day = now.date() if now.hour < limit else now.date() + timedelta(days=1)
     while day.weekday() == 6 or day in schedule.HOLIDAYS:
@@ -65,6 +70,7 @@ async def task_home_visit(s: Session, nl: dict) -> ChatResponse:
     specialist = "педиатр" if child else "участковый терапевт"
     note = (f"ВЫЗОВ ВРАЧА НА ДОМ на {day.strftime('%d.%m.%Y')} ({specialist}). Адрес: {c['address']}. "
             f"Повод (слова пациента): {c['reason']}. Требует подтверждения регистратором.")
+    # Заявка на специалиста в МИС: адрес и повод — в описании (так попросили организаторы)
     await send_escalation(s, note)
     await add_comment(s, note)
     journal.handoff(s.call, "вызов на дом", False, note, collected(s))

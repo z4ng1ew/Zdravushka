@@ -1,3 +1,4 @@
+# Общие шаги сценариев: узнать пациента, подобрать время, выбрать вариант или запись.
 from datetime import datetime
 
 from app import schedule
@@ -8,11 +9,13 @@ from app.dialog.session import Session
 
 
 def short_name(name: str) -> str:
+    """«Ковалёва Людмила Петровна» → «Ковалёва Л. П.» — короче для голоса."""
     parts = name.split()
     return " ".join([parts[0]] + [f"{p[0]}." for p in parts[1:]])
 
 
 def is_same_doctor(full_name: str, wanted: str) -> bool:
+    """«Дорохов Сергей Анатольевич» и «Дорохову» — один врач (сравниваем основу фамилии)."""
     a = full_name.split()[0].lower().replace("ё", "е")
     b = wanted.split()[0].lower().replace("ё", "е")
     n = max(4, min(len(a), len(b)) - 2)
@@ -20,6 +23,7 @@ def is_same_doctor(full_name: str, wanted: str) -> bool:
 
 
 def wanted_specialty(wanted: str) -> str | None:
+    """Специальность врача, которого пациент назвал по фамилии."""
     doc = next((d for d in schedule.demo_doctors() if is_same_doctor(d["full_name"], wanted)), None)
     return doc["specialty"] if doc else None
 
@@ -41,10 +45,12 @@ def visit_booking(v: dict) -> Booking:
                    spoken=schedule.say_slot(dt), status=v["status"])
 
 
-ID_ATTEMPTS = 3
+ID_ATTEMPTS = 3  # столько раз пробуем узнать пациента, потом — регистратор (R-07)
 
 
 async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
+    """Спрашиваем ФИО и дату рождения, пока не узнаем пациента. None — пациент известен.
+    Не получается (дата не распознаётся, пациента нет в МИС) — после ID_ATTEMPTS попыток перевод (R-07)."""
     if s.client:
         return None
     c = s.fields
@@ -58,7 +64,7 @@ async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
     if not c.get("birth_date"):
         again = s.step == "birth_date"
         s.step = "birth_date"
-        if again:
+        if again:  # не поняли с первого раза (например, назвали только год) — подсказываем формат
             s.id_attempts += 1
             if s.id_attempts >= ID_ATTEMPTS:
                 return await _identity_failed(s, "не удалось распознать дату рождения")
@@ -68,6 +74,7 @@ async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
         return reply(s, "Назовите дату рождения пациента.")
     if await identify(s, create=create):
         return None
+    # Пациента с такими данными нет в МИС: даём перепроверить, потом — регистратор
     s.id_attempts += 1
     for key in ("last_name", "first_name", "middle_name", "birth_date"):
         c.pop(key, None)
@@ -84,6 +91,7 @@ async def _identity_failed(s: Session, why: str) -> ChatResponse:
 
 
 async def offer_slots(s: Session, doctors: list[dict], exclude: str | None = None) -> ChatResponse:
+    """Ищем до трёх вариантов времени с учётом пожеланий и предлагаем пациенту."""
     c = s.fields
     busy = await busy_slots(s)
     if exclude:
@@ -113,6 +121,7 @@ async def offer_slots(s: Session, doctors: list[dict], exclude: str | None = Non
 
 
 def pick(s: Session, nl: dict, key: str) -> object | None:
+    """Выбор варианта по номеру («второй») из списка s[key]."""
     items = getattr(s, key) or []
     if nl["choice"] and nl["choice"] <= len(items):
         return items[nl["choice"] - 1]
@@ -122,6 +131,8 @@ def pick(s: Session, nl: dict, key: str) -> object | None:
 
 
 async def choose_slot(s: Session, nl: dict, doctors_for_retry) -> ChatResponse | None:
+    """Шаг выбора времени: номер варианта → подтверждение; новый день/время → новый поиск."""
+    # Назван новый день («29 октября») — это новый поиск, даже если модель увидела в фразе «номер»
     chosen = None if (nl["date"] or nl["part_of_day"]) else pick(s, nl, "options")
     if chosen:
         s.chosen = chosen
@@ -134,6 +145,7 @@ async def choose_slot(s: Session, nl: dict, doctors_for_retry) -> ChatResponse |
 
 
 async def choose_visit(s: Session, nl: dict, verb: str) -> ChatResponse | None:
+    """Находим записи пациента; если их несколько — просим выбрать."""
     if s.visits is None:
         s.visits = await client_visits(s)
     visits = s.visits

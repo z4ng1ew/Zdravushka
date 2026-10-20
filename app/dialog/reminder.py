@@ -1,3 +1,4 @@
+# Исходящий звонок-напоминание (С-10): подтвердить, отменить или перенести визит.
 
 from app import config
 from app.dialog.common import escalate, reminder_status, reply
@@ -10,6 +11,7 @@ from app.dialog.session import Session
 
 
 def start_reminder(session_id: str, visit: dict) -> ChatResponse:
+    """Начало исходящего звонка: пациент уже известен (из записи), сразу напоминаем о приёме."""
     s = open_session(session_id, "исходящий", step="remind", task="reminder",
                      client={"id": visit["client_id"]}, visit=visit, reminder_visit_id=visit["id"])
     s.call["intent"] = "Напоминание о приёме"
@@ -21,6 +23,7 @@ def start_reminder(session_id: str, visit: dict) -> ChatResponse:
 
 
 async def task_reminder(s: Session, nl: dict) -> ChatResponse:
+    """Ответ пациента на напоминание: придёт / отменить / перенести."""
     intent = nl["intent"]
     if intent == "reschedule" or (s.step == "remind_no" and (nl["date"] or nl["part_of_day"]
                                                                 or nl["choice"] == 2)):

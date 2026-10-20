@@ -1,3 +1,5 @@
+# Реакции на намерения, которые прерывают любой сценарий: угроза жизни, оператор, жалоба,
+# медицинский вопрос, прощание. Новое правило = новая функция в INTERCEPTORS.
 from collections.abc import Awaitable, Callable
 
 from app.dialog.common import escalate, finish, reply
@@ -29,6 +31,7 @@ async def complaint(s: Session, nl: dict, text: str) -> ChatResponse | None:
 
 
 async def medical(s: Session, nl: dict, text: str) -> ChatResponse | None:
+    """Медицинских советов не даём: первый раз — предупреждаем, второй — переводим (R-04)."""
     if nl["intent"] != "medical":
         return None
     if s.medical_warned:
