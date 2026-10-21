@@ -9,7 +9,7 @@ import { useRef, useState } from "react";
 import { toApiError } from "@/shared/api/ApiError";
 import { recognize } from "@/shared/api/speech";
 import type { ChatResponse } from "@/shared/types/chat";
-import { ECHO_TAIL_MS, emptyReaction, MIC_TEXT, silenceReaction, type MissReaction } from "../model/speechMisses";
+import { ECHO_TAIL_MS, emptyReaction, freshCounts, MIC_TEXT, silenceReaction, type MissReaction } from "../model/speechMisses";
 import type { CallSession } from "./useCallSession";
 import { useMicrophone } from "./useMicrophone";
 import { useSpeaker } from "./useSpeaker";
@@ -38,7 +38,7 @@ export function useVoiceTurns(call: CallSession) {
   const [transcribing, setTranscribing] = useState(false);
   const voiceOn = useRef(false); // звонок ведётся голосом (начат с микрофона)
   const turn = useRef(0);
-  const count = useRef({ misses: 0, silent: 0 }); // промахи распознавания и тишина подряд
+  const count = useRef(freshCounts()); // промахи распознавания, тишина и шум подряд
   const fresh = (my: number) => my === turn.current && call.ref.current.phase === "active" && call.ref.current.mode === "ai";
 
   /** Озвучить фразу с выключенным микрофоном и, если ход тот же, снова слушать — после того как стихнет эхо */
@@ -74,19 +74,19 @@ export function useVoiceTurns(call: CallSession) {
     if (!fresh(my)) return; // звонок завершили, начали заново или перехватили — фраза устарела
     if (heard.kind === "miss") { react(emptyReaction(phrase.speechMs, count.current)); return; } // «не расслышал» — только если говорил
     if (heard.kind === "error") { voiceOn.current = false; call.showError(heard.error); return; }
-    count.current.misses = 0;
+    Object.assign(count.current, { misses: 0, noise: 0 });
     await afterTurn(await call.ask(heard.text, heard.text, heard.confidence), my);
   }
 
   /** Промах или тишина: подсказка и слушать дальше — или выключить микрофон */
   function react(r: MissReaction) {
     if (r.notice) call.notice(r.notice);
-    if (r.listen) listen(); else { voiceOn.current = false; count.current = { misses: 0, silent: 0 }; }
+    if (r.listen) listen(); else { voiceOn.current = false; count.current = freshCounts(); }
   }
 
   /** Остановить микрофон и озвучку; начатые шаги этого хода больше не выполнятся */
   const cancel = () => { turn.current += 1; mic.cancel(); speaker.silence(); };
-  const stop = () => { cancel(); voiceOn.current = false; count.current = { misses: 0, silent: 0 }; };
+  const stop = () => { cancel(); voiceOn.current = false; count.current = freshCounts(); };
   /** Дождаться ответа бота и, если ход не сменился, озвучить его */
   const follow = async (reply: Promise<ChatResponse | null>) => { const my = turn.current; await afterTurn(await reply, my); };
   const begin = (first?: string) => follow(call.start(first));

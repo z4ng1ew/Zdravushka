@@ -1,11 +1,18 @@
 // Что делать, если речь пациента не распознана, пациент молчит или микрофон недоступен.
-// Промах: первый — просим повторить и слушаем дальше; два подряд — перестаём слушать по кругу
-// и предлагаем текст или регистратора. Тишина: 15 с — слушаем дальше, 30 с — выключаем микрофон.
+// Промах: первый — молча слушаем дальше (часто это шум комнаты), второй — «не расслышал»,
+// три подряд — перестаём слушать по кругу и предлагаем текст или регистратора. Тишина: 15 с — слушаем дальше, 30 с — выключаем микрофон.
 
 import type { MicProblem } from "@/shared/browser/recorder";
 
-export const MAX_SPEECH_MISSES = 2;
+export const MAX_SPEECH_MISSES = 3; // микрофон выключаем только после 3 промахов подряд
 export const MAX_SILENT_TURNS = 2; // по 15 с записи
+/** Шум комнаты (вентилятор, улица) в паузах — не тишина и не промах: слушаем дальше молча.
+ *  Выключаем микрофон, только если одним шумом прошло столько записей подряд — пациент, видимо, отошёл. */
+export const MAX_NOISE_TURNS = 8;
+
+/** Счётчики подряд: промахи распознавания, тихие записи, записи с одним шумом */
+export interface MissCounts { misses: number; silent: number; noise: number }
+export const freshCounts = (): MissCounts => ({ misses: 0, silent: 0, noise: 0 });
 
 export const SAY_AGAIN = "Не расслышал. Повторите, пожалуйста, чуть громче и ближе к микрофону.";
 export const GIVE_UP = "Не получается разобрать речь. Напишите вопрос в поле ниже "
@@ -22,21 +29,25 @@ export type MissReaction = { listen: boolean; notice: string | null };
 
 /** «Не расслышал» — только если пациент правда говорил (не меньше этого), а распознать не вышло.
  *  Короче — это щелчок, эхо или вздох: молча слушаем дальше, как при тишине. */
-export const SAID_SOMETHING_MS = 700;
+export const SAID_SOMETHING_MS = 1200; // шум комнаты короче 1,2 с — не речь
 export const saidSomething = (speechMs: number) => speechMs >= SAID_SOMETHING_MS;
 
 /** Пауза после озвучки перед включением микрофона: хвост звука и эхо комнаты затихают */
-export const ECHO_TAIL_MS = 400;
+export const ECHO_TAIL_MS = 700; // дольше ждём, пока затихнет эхо озвучки
 
-/** misses — сколько промахов подряд, включая этот */
+/** misses — сколько промахов подряд, включая этот.
+ *  Первый — молча слушаем дальше (часто это шум), второй — «не расслышал», третий — выключаем */
 export function missReaction(misses: number): MissReaction {
-  return misses >= MAX_SPEECH_MISSES ? { listen: false, notice: GIVE_UP } : { listen: true, notice: SAY_AGAIN };
+  if (misses >= MAX_SPEECH_MISSES) return { listen: false, notice: GIVE_UP };
+  return { listen: true, notice: misses === 1 ? null : SAY_AGAIN };
 }
 
-/** Распознавание вернуло пусто. Пациент правда говорил — «не расслышал»; короткий звук (щелчок, эхо) — как тишина.
+/** Распознавание вернуло пусто. Пациент правда говорил — промах (missReaction); звук короче — шум: молча слушаем.
+ *  Шум не копится в «тишину»: иначе пара шумных пауз выключала бы микрофон у пациента, который просто думает.
  *  count — счётчики подряд (меняются на месте) */
-export function emptyReaction(speechMs: number, count: { misses: number; silent: number }): MissReaction {
-  return saidSomething(speechMs) ? missReaction(++count.misses) : silenceReaction(++count.silent);
+export function emptyReaction(speechMs: number, count: MissCounts): MissReaction {
+  if (saidSomething(speechMs)) { count.noise = 0; return missReaction(++count.misses); }
+  return ++count.noise >= MAX_NOISE_TURNS ? { listen: false, notice: NOT_HEARD } : { listen: true, notice: null };
 }
 
 /** silent — сколько записей подряд прошли в тишине, включая эту */

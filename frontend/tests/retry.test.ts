@@ -31,10 +31,13 @@ describe("retryDelay — когда повторять запрос", () => {
 });
 
 describe("missReaction — речь не распознана", () => {
-  it("первый промах — просим повторить и слушаем дальше", () => {
-    expect(missReaction(1)).toEqual({ listen: true, notice: SAY_AGAIN });
+  it("первый промах — молча слушаем дальше (часто это шум комнаты)", () => {
+    expect(missReaction(1)).toEqual({ listen: true, notice: null });
   });
-  it("второй подряд — больше не слушаем по кругу, предлагаем текст или регистратора", () => {
-    expect(missReaction(2)).toEqual({ listen: false, notice: GIVE_UP });
+  it("второй подряд — «Не расслышал», слушаем дальше", () => {
+    expect(missReaction(2)).toEqual({ listen: true, notice: SAY_AGAIN });
+  });
+  it("третий подряд — больше не слушаем по кругу, предлагаем текст или регистратора", () => {
+    expect(missReaction(3)).toEqual({ listen: false, notice: GIVE_UP });
   });
 });
