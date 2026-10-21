@@ -236,6 +236,13 @@ def fallback(text: str, expecting: str) -> dict:
         if re.search(r"\b" + last[:max(4, len(last) - 2)], low):
             raw["doctor_name"] = d["full_name"].split()[0]
             break
+    if "doctor_name" not in raw:  # одна буква распознана неверно: «Верещакин» → Верещагин
+        for w in re.findall(r"[а-я]{6,}", low):
+            d = next((d for d in schedule.demo_doctors() if difflib.SequenceMatcher(
+                None, d["full_name"].split()[0].lower().replace("ё", "е"), w).ratio() >= 0.85), None)
+            if d:
+                raw["doctor_name"] = d["full_name"].split()[0]
+                break
     if expecting == "identity":
         words_ = re.findall(r"[А-Яа-яЁё\-]+", text)
         if len(words_) >= 2:
@@ -271,9 +278,11 @@ async def understand(text: str, expecting: str) -> dict:
     result = validate(raw)
     # Если модель не поняла простое «да/нет/второй» — подстрахуемся ключевыми словами
     backup = fallback(text, expecting)
-    for key in ("answer", "choice", "birth_date", "topic"):
+    for key in ("answer", "choice", "birth_date", "topic", "specialty", "doctor_name"):
         if result[key] is None and backup[key] is not None:
             result[key] = backup[key]
+    if result["topic"] and result["intent"] in (None, "other"):
+        result["intent"] = "info"  # «Где вы находитесь?» — справка по регламенту, а не «не поняла»
     result = ground(result, text)
     result["_source"] = "llm"
     return result

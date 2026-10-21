@@ -52,7 +52,34 @@ async def goodbye(s: Session, nl: dict, text: str) -> ChatResponse | None:
     return None
 
 
-INTERCEPTORS: list[Interceptor] = [emergency, operator, complaint, medical, goodbye]
+async def side_question(s: Session, nl: dict, text: str) -> ChatResponse | None:
+    """Справочный вопрос посреди сценария («где вы находитесь?» при выборе времени):
+    отвечаем по регламенту и возвращаемся к прерванному вопросу, не теряя записи."""
+    from app import knowledge
+    if not (s.task and s.task != "info" and nl["intent"] == "info" and nl["topic"]):
+        return None
+    answer = knowledge.answer(nl["topic"])
+    if not answer or not s.last_reply:
+        return None
+    return reply(s, f"{answer} Вернёмся к записи: {s.last_reply}", options=s.options or None,
+                 source="регламент РГ-ТЕЛ-01", explanation=f"Ответ из базы знаний регламента, тема: {nl['topic']}.")
+
+
+async def other_person(s: Session, nl: dict, text: str) -> ChatResponse | None:
+    """«Хочу за другого человека / за маму» — забываем названного пациента и спрашиваем данные заново."""
+    import re
+    if not re.search(r"друго(го|й) человек|за (маму|папу|мать|отца|сына|дочь|жену|мужа|ребенка|ребёнка|бабушку|дедушку)", s.text):
+        return None
+    s.client = None
+    for key in ("last_name", "first_name", "middle_name", "birth_date", "_no_middle", "_birth_dm", "_birth_year"):
+        s.fields.pop(key, None)
+    s.id_attempts = 0
+    if s.step == "more":
+        s.step = "start"
+    return None  # дальше сценарий спросит ФИО и дату рождения другого пациента
+
+
+INTERCEPTORS: list[Interceptor] = [emergency, operator, complaint, medical, other_person, side_question, goodbye]
 
 
 async def run_interceptors(s: Session, nl: dict, text: str) -> ChatResponse | None:

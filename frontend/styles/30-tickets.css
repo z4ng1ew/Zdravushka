@@ -1,0 +1,70 @@
+/* Талон и печать */
+
+/* талон */
+.ticket {
+  position: relative;
+  display: grid;
+  grid-template-columns: 138px 1fr;
+  background: #fff;
+  border: 1.5px solid #b9d0f3;
+  border-radius: 18px;
+  box-shadow: 0 8px 22px rgba(43,98,186,.12);
+  overflow: hidden;
+}
+.ticket::before, .ticket::after {
+  content: "";
+  position: absolute;
+  left: 127px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg1);
+  border: 1.5px solid #b9d0f3;
+  z-index: 2;
+}
+.ticket::before { top: -12px; }
+.ticket::after { bottom: -12px; }
+.ticket-print {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  border: 0;
+  background: var(--blue-soft);
+  color: var(--blue);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.ticket-row { justify-content: center; animation: unfold .3s ease-out; }
+.ticket-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; padding: 6px 2px; }
+/* талон в виде прежней карточки записи */
+.ticket2 { position: relative; padding-bottom: 14px; }
+.ticket2-mascot { flex-shrink: 0; }
+.ticket2-no {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 92px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: #fff;
+  border: 2px dashed #9cc0f7;
+  color: var(--blue);
+}
+.ticket2-no small { font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.ticket2-no b { font-size: 24px; font-weight: 800; line-height: 1.1; }
+.ticket2 .rel { font-style: normal; font-size: 12px; color: var(--blue); margin-left: 4px; }
+.ticket2 .ticket-print { top: auto; bottom: 26px; right: 26px; position: static; flex-shrink: 0; background: #fff; }
+.ticket2-compact { max-width: 560px; width: 100%; }
+.ticket-row .ticket2 { box-shadow: 0 8px 22px rgba(43,98,186,.14); }
+.ticket-list { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+.ticket2-patient { padding: 12px 26px 0; font-size: 13.5px; color: #52688c; }
+.ticket2 .ticket-print { margin-left: auto; }
+
+/* пояснение под поиском «Мои талоны»: отступ от поля, выровнено по тексту внутри поля */
+.store-note { margin: 12px 0 22px; padding-left: 20px; font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 640px; }

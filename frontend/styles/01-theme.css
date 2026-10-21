@@ -1,0 +1,70 @@
+/* Тема: цвета (переменные), шрифт, фон страницы, базовые элементы */
+
+/* ClinicAI — светлая «медицинская» тема: голубой градиент, мягкие тени, скругления */
+:root {
+  --bg1: #eaf3ff;
+  --bg2: #dbe9ff;
+  --card: rgba(255, 255, 255, 0.82);
+  --card-solid: #ffffff;
+  --text: #1a2a4a;
+  --muted: #5b6f8f;
+  --line: #dbe6f6;
+  --blue: #1f6cf0;
+  --blue-2: #2f8bff;
+  --blue-soft: #e8f1ff;
+  --sky: #d7ecff;
+  --ok: #1e9b62;
+  --ok-soft: #e5f6ec;
+  --warn: #d2561c;
+  --warn-soft: #fff0ea;
+  --bad: #e03a48;
+  --bad-soft: #fde9eb;
+  --radius: 22px;
+  --shadow: 0 10px 30px rgba(43, 98, 186, 0.12), 0 2px 6px rgba(43, 98, 186, 0.06);
+  --ai-bg: #eaf2ff;
+  --ai-line: #7faaf0;
+  --ai-text: #1f5fd6;
+  --pt-bg: #f2f4f7;
+  --pt-line: #c3cbd8;
+  --pt-text: #5b6b84;
+  --op-bg: #e6f7ee;
+  --op-line: #6fcf9c;
+  --op-text: #158a52;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { background: #dbe9ff; }
+body {
+  overflow-wrap: break-word; /* длинные слова и адреса переносятся, а не вылезают за край */
+  color: var(--text);
+  font-family: "Nunito", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  min-height: 100vh;
+  /* фон — картинка клиники (волны, кардиограмма, стетоскоп); пока грузится — светло-голубой */
+  background: #eaf4fd url("/img/bg.webp?v=2") center top / cover no-repeat fixed;
+}
+a { color: inherit; text-decoration: none; }
+button { font: inherit; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: #f3f8ff; }
+select { font: inherit; padding: 8px 12px; border: 1.5px solid #c6d9f5; border-radius: 12px; background: #fff; color: var(--text); }
+select.sp { appearance: none; -webkit-appearance: none; cursor: pointer; font-family: inherit; padding: 3px 14px; }
+html.big-font body { zoom: 1; }
+/* крупный шрифт: увеличиваем только содержимое, шапка остаётся на месте */
+html.big-font .call-panel, html.big-font .bottom-wrap, html.big-font .main2 { zoom: 1.2; }
+html.big-font .main2 { zoom: 1.1; }
+html.big-font .q-act { flex-wrap: wrap; justify-content: flex-end; }

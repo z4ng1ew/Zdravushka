@@ -1,4 +1,5 @@
 # Общие шаги сценариев: узнать пациента, подобрать время, выбрать вариант или запись.
+import difflib
 import re
 from datetime import datetime, timedelta
 
@@ -20,7 +21,10 @@ def is_same_doctor(full_name: str, wanted: str) -> bool:
     a = full_name.split()[0].lower().replace("ё", "е")
     b = wanted.split()[0].lower().replace("ё", "е")
     n = max(4, min(len(a), len(b)) - 2)
-    return a[:n] == b[:n]
+    if a[:n] == b[:n]:
+        return True
+    # Ошибка распознавания в одной букве: «Верещакин» → Верещагин (живой звонок 21.10)
+    return len(b) >= 6 and difflib.SequenceMatcher(None, a, b[:len(a) + 1]).ratio() >= 0.85
 
 
 def wanted_specialty(wanted: str) -> str | None:

@@ -149,7 +149,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 ## Соответствие кейсу и критериям оценки
 
 <!-- Для проверяющего: каждая строка — требование кейса → где реализовано → каким тестом проверено
-     (tests/test_scenarios.py, 90 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
+     (tests/test_scenarios.py, 93 теста, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
 
 | Требование | Код | Автотесты |
 |---|---|---|
@@ -161,6 +161,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 | С-07 / справка: график, адрес, цены — только из регламента | `dialog/info.py`, `knowledge.py` | test_info_question_answered_from_regulation, test_knowledge_detects_topics, test_which_doctors_lists_specialties |
 | С-10 Звонок-напоминание: подтвердить / отменить / перенести | `reminders.py`, `dialog/reminder.py`, `telephony.py` | test_reminder_confirmed, test_reminder_cancel, test_reminder_reschedule, test_reminder_campaign_queues_and_marks_no_answer, test_reminder_emergency_still_works |
 | Экстренные симптомы → 103/112 и перевод P1 на любом шаге | `safety.py`, `dialog/guards.py` | test_heart_pain_is_emergency, test_sudden_severe_headache_is_emergency, test_emergency_mid_booking_stops_booking, test_emergency_without_identity_uses_tech_client |
+| Справочный вопрос посреди записи — ответ по регламенту и возврат к шагу; ошибка в одной букве фамилии врача («Верещакин»); «за другого человека» — новая идентификация | `dialog/interceptors.py` (side_question, other_person), `dialog/steps.py`, `nlu.py` | test_info_question_in_the_middle_of_booking, test_misheard_doctor_surname_and_specialty, test_cancel_for_another_person_asks_identity_again |
 | Полное ФИО: отчество спрашивается отдельно, «нет» — без отчества; дата рождения в будущем / несуществующая — ассистент говорит причину | `dialog/steps.py` (_take_middle_name, date_problem) | test_patronymic_asked_when_missing, test_no_patronymic_is_accepted, test_future_birth_date_explained, test_surname_ending_like_patronymic |
 | Живые звонки 21.10 → исправлено: зацикливание вопроса (3-й повтор → R-05), «другой день / ни один не подходит» → следующие слоты, смена врача при выборе времени, «меня к хирургу» = запись, дата рождения из двух фраз без досочинения года, «ничего не нужно» → прощание | `dialog/router.py` (_break_loop), `dialog/steps.py`, `dialog/understanding.py`, `nlu.py` | test_other_day_shows_later_slots_and_no_endless_loop, test_reminder_does_not_loop_forever, test_new_specialty_while_choosing_time, test_specialty_alone_means_booking, test_birth_date_collected_from_two_phrases, test_day_and_month_without_year_are_not_completed, test_nothing_needed_ends_call |
 | Перевод на человека R-02…R-15 (human in the loop — требование регламента, а не недостаток) | `dialog/guards.py`, `dialog/router.py` | test_operator_request, test_complaint, test_medical_question_never_answered, test_three_misunderstandings_go_to_operator, test_hard_of_hearing_repeat_then_operator |
@@ -251,11 +252,11 @@ STAND_MODE=mock TELEPHONY_ENABLED=0 ./run.sh      # имитация МИС в �
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q tests/                 # бэкенд: 90 тестов
+python -m pytest -q tests/                 # бэкенд: 93 теста
 cd frontend && npm ci && npm run check     # интерфейс: типы, линтер, 201 тест
 ```
 
-90 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
+93 теста на имитации стенда (настоящий МИС и лимит запросов не тратятся):
 - запись, перенос, отмена, статус, отказ на подтверждении;
 - повторный пациент без дубля, запрет двойной записи, «отмените обе»;
 - врач по фамилии, перенос к другому врачу, день вместо номера варианта;

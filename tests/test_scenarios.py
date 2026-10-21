@@ -810,3 +810,26 @@ async def test_surname_ending_like_patronymic(mis):
     from app import nlu
     out = nlu.ground(nlu.validate({"last_name": "Мицкевич", "first_name": "Анна"}), "Мицкевич Анна")
     assert out["last_name"] == "Мицкевич"
+
+
+
+# ---------- Живые звонки 21.10, вечер ----------
+
+async def test_info_question_in_the_middle_of_booking(mis):
+    r = await talk("запиши к хирургу", "Иванов Иван Иванович 1 января 1985", "где вы находитесь?")
+    assert "Центральной" in r.reply and "вариант" in r.reply and r.options
+    r = await dialog.handle(r.session_id, "1")
+    assert "Верно?" in r.reply
+
+
+async def test_misheard_doctor_surname_and_specialty(mis):
+    r = await talk("когда принимает Верещакин?")
+    assert "Верещагин" in r.reply
+    r = await talk("когда принимает Иксов?", "автальмолог")
+    assert "График" in r.reply
+
+
+async def test_cancel_for_another_person_asks_identity_again(mis):
+    r = await talk("отмените запись", "Козлов Андрей Петрович 10.10.1990")
+    r = await dialog.handle(r.session_id, "я хочу за другого человека отменить запись")
+    assert "фамилию" in r.reply.lower() and not dialog.SESSIONS[r.session_id].client

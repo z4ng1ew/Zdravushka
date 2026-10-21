@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from app import journal, knowledge, schedule
 from app.dialog.common import collected, escalate, reply, send_escalation, task_done
 from app.dialog.mis import add_comment
-from app.dialog.steps import need_identity
+from app.dialog.steps import is_same_doctor, need_identity
 from app.models import ChatResponse, Escalation
 from app.dialog.session import Session
 
@@ -15,9 +15,10 @@ async def task_schedule_info(s: Session, nl: dict) -> ChatResponse:
     s.call["intent"] = "График врача"
     docs = []
     if c.get("doctor_name"):
-        last = c["doctor_name"].split()[0].lower()
-        docs = [d for d in schedule.demo_doctors() if d["full_name"].lower().startswith(last)]
-    elif c.get("specialty"):
+        docs = [d for d in schedule.demo_doctors() if is_same_doctor(d["full_name"], c["doctor_name"])]
+        if not docs:
+            c.pop("doctor_name")  # такого врача нет — дальше ищем по специальности, а не по кругу
+    if not docs and c.get("specialty"):
         docs = [d for d in schedule.demo_doctors() if d["specialty"] == c["specialty"]][:3]
     if not docs:
         s.step = "specialty"

@@ -1,0 +1,73 @@
+/* Всплывающие подсказки data-tip */
+
+/* всплывающие подсказки: data-tip="текст" (в несколько строк — через перевод строки, как у плашки МИС) */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  display: none; /* скрытая подсказка не занимает места — у края экрана не появится прокрутка */
+  position: absolute;
+  z-index: 60;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 260px;
+  background: #18315c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: pre-line;
+  padding: 8px 11px;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(24, 49, 92, .25);
+  pointer-events: none;
+}
+[data-tip]:hover::after, [data-tip]:focus-visible::after { display: block; animation: tip-in .15s ease .25s both; }
+@keyframes tip-in { from { opacity: 0; } to { opacity: 1; } }
+[data-tip-pos="bottom"]::after { bottom: auto; top: calc(100% + 8px); }
+[data-tip-pos="left"]::after { bottom: auto; left: auto; right: calc(100% + 8px); top: 50%; transform: translateY(-50%); }
+/* у правого края подсказка растёт влево, у левого — вправо */
+.row.patient .who[data-tip]::after, .row.patient .recog[data-tip]::after,
+.sec-right [data-tip]::after, .td-act [data-tip]::after, .q-act [data-tip]::after { left: auto; right: 0; transform: none; }
+.row.bot .who[data-tip]::after, .row.operator .who[data-tip]::after { left: 0; transform: none; }
+.greeting[data-tip]::after { left: 0; transform: none; bottom: auto; top: calc(100% + 4px); }
+.mis-badge[data-tip]::after { max-width: 320px; }
+.chip-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 80;
+  min-width: 260px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 14px 36px rgba(24,49,92,.22);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  animation: unfold .15s ease-out;
+  width: 260px;
+  max-width: 260px;
+  gap: 2px;
+}
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 200;
+  background: #12305f;
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 14px;
+  font-weight: 700;
+  box-shadow: 0 12px 30px rgba(0,0,0,.25);
+  animation: unfold .2s ease-out;
+}
+
+/* Внутри лент разговора и талонов подсказок нет: контейнеры прокручиваются и обрезали бы их
+   (чат пациента, расшифровки в кабинете, «Звонок сейчас», талоны). Пояснения там — обычным текстом. */
+.dialog [data-tip]::after, .q-transcript [data-tip]::after, .call-detail [data-tip]::after,
+.ticket2 [data-tip]::after, .ticket2[data-tip]::after, .web-call [data-tip]::after { display: none !important; }
