@@ -43,7 +43,9 @@ function misTag(r: ChatResponse, mode: MisMode): ReplyTag {
 function completedTag(r: ChatResponse, mode: MisMode): ReplyTag | null {
   const src = (r.source ?? "").trim();
   if (isRule(src)) return { text: "📄 Ответ по регламенту", tone: "info", tip: src };
-  if (isMis(src) || (!src && r.booking?.status)) return misTag(r, mode);
+  // «Записано / Отменено» — только если в ответе есть запись; иначе это просто справка из МИС
+  // («У вас нет предстоящих записей» при намерении «отмена» — не «Отменено в МИС»)
+  if (isMis(src) || (!src && r.booking?.status)) return r.booking ? misTag(r, mode) : { text: "✓ Данные из МИС", tone: "ok", tip: "Ответ по данным МИС" };
   return src ? { text: src, tone: "muted" } : null;
 }
 

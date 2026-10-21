@@ -50,3 +50,14 @@ describe("под бейджем: пациенту — пояснение, рег
     expect(understoodText("hybrid")).toBe("понято: hybrid");
   });
 });
+
+describe("бейдж МИС без записи в ответе", () => {
+  it("«нет предстоящих записей» при отмене — «Данные из МИС», а не «Отменено в МИС»", () => {
+    const r = reply({ intent: "cancel", status: "completed", source: "МИС", booking: null, reply: "У вас нет предстоящих записей" });
+    expect(text(r)).toEqual(["✓ Данные из МИС"]);
+  });
+  it("с записью — по-прежнему «Отменено в МИС · № записи»", () => {
+    const r = reply({ intent: "cancel", status: "completed", source: "МИС", booking: booking({ status: "Отменена", visit_id: 93 }) });
+    expect(text(r)[0]).toMatch(/^✓ Отменено в МИС · № записи 93/);
+  });
+});
