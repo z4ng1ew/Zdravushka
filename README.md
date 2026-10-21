@@ -149,7 +149,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 ## Соответствие кейсу и критериям оценки
 
 <!-- Для проверяющего: каждая строка — требование кейса → где реализовано → каким тестом проверено
-     (tests/test_scenarios.py, 79 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
+     (tests/test_scenarios.py, 86 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
 
 | Требование | Код | Автотесты |
 |---|---|---|
@@ -161,6 +161,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 | С-07 / справка: график, адрес, цены — только из регламента | `dialog/info.py`, `knowledge.py` | test_info_question_answered_from_regulation, test_knowledge_detects_topics, test_which_doctors_lists_specialties |
 | С-10 Звонок-напоминание: подтвердить / отменить / перенести | `reminders.py`, `dialog/reminder.py`, `telephony.py` | test_reminder_confirmed, test_reminder_cancel, test_reminder_reschedule, test_reminder_campaign_queues_and_marks_no_answer, test_reminder_emergency_still_works |
 | Экстренные симптомы → 103/112 и перевод P1 на любом шаге | `safety.py`, `dialog/guards.py` | test_heart_pain_is_emergency, test_sudden_severe_headache_is_emergency, test_emergency_mid_booking_stops_booking, test_emergency_without_identity_uses_tech_client |
+| Живые звонки 21.10 → исправлено: зацикливание вопроса (3-й повтор → R-05), «другой день / ни один не подходит» → следующие слоты, смена врача при выборе времени, «меня к хирургу» = запись, дата рождения из двух фраз без досочинения года, «ничего не нужно» → прощание | `dialog/router.py` (_break_loop), `dialog/steps.py`, `dialog/understanding.py`, `nlu.py` | test_other_day_shows_later_slots_and_no_endless_loop, test_reminder_does_not_loop_forever, test_new_specialty_while_choosing_time, test_specialty_alone_means_booking, test_birth_date_collected_from_two_phrases, test_day_and_month_without_year_are_not_completed, test_nothing_needed_ends_call |
 | Перевод на человека R-02…R-15 (human in the loop — требование регламента, а не недостаток) | `dialog/guards.py`, `dialog/router.py` | test_operator_request, test_complaint, test_medical_question_never_answered, test_three_misunderstandings_go_to_operator, test_hard_of_hearing_repeat_then_operator |
 | Защита от выдумывания: LLM только классифицирует, факты — из МИС; ФИО и дата рождения принимаются, только если прозвучали во фразе (`nlu.ground`) | `nlu.py`, `dialog/understanding.py` | test_llm_cannot_invent_birth_date_from_year_only, test_patronymic_is_not_a_last_name, test_llm_cannot_invent_doctor_or_choice, test_no_stand_means_operator_not_fake_booking, test_llm_garbage_falls_back_to_keywords, test_whisper_hallucination_filtered |
 | Промпт-инъекции | `nlu.py` (разделители, sanitize), `safety.py`, guard prompt_injection | test_prompt_injection_is_refused, test_injection_three_times_goes_to_operator, test_phrase_is_sanitized_for_llm, test_llm_gets_phrase_inside_delimiters |
@@ -249,11 +250,11 @@ STAND_MODE=mock TELEPHONY_ENABLED=0 ./run.sh      # имитация МИС в �
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q tests/                 # бэкенд: 79 тестов
+python -m pytest -q tests/                 # бэкенд: 86 тестов
 cd frontend && npm ci && npm run check     # интерфейс: типы, линтер, 201 тест
 ```
 
-79 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
+86 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
 - запись, перенос, отмена, статус, отказ на подтверждении;
 - повторный пациент без дубля, запрет двойной записи, «отмените обе»;
 - врач по фамилии, перенос к другому врачу, день вместо номера варианта;

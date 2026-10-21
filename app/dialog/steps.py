@@ -1,6 +1,6 @@
 # Общие шаги сценариев: узнать пациента, подобрать время, выбрать вариант или запись.
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app import schedule
 from app.dialog.common import escalate, reply, task_done
@@ -98,10 +98,14 @@ async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
             if s.id_attempts >= ID_ATTEMPTS:
                 return await _identity_failed(s, "не удалось распознать ФИО")
         s.step = "identity"
+        if c.get("birth_date") or c.get("last_name"):  # часть уже назвали — просим только недостающее
+            return reply(s, "Спасибо. Теперь назовите фамилию и имя пациента полностью.")
         return reply(s, "Назовите, пожалуйста, фамилию, имя, отчество и дату рождения пациента.")
     if not c.get("birth_date"):
         again = s.step == "birth_date"
         s.step = "birth_date"
+        if s.fields.get("_birth_year") and not again:
+            return reply(s, "Назовите, пожалуйста, число и месяц рождения.")
         if again:  # не поняли с первого раза (например, назвали только год) — подсказываем формат
             s.id_attempts += 1
             if s.id_attempts >= ID_ATTEMPTS:
@@ -176,7 +180,11 @@ async def choose_slot(s: Session, nl: dict, doctors_for_retry) -> ChatResponse |
         s.chosen = chosen
         s.step = "confirm"
         return None
-    if nl["date"] or nl["part_of_day"] or nl["answer"] == "no":
+    if nl["date"] or nl["part_of_day"] or nl["answer"] == "no" or re.search(r"друг|ни один|никак|позже|не подход", s.text):
+        if not (nl["date"] or nl["part_of_day"]) and s.options:
+            # «другой день», «ни один не подходит» — ищем начиная со дня после последнего предложенного
+            last = max(schedule.from_api(o.scheduled_at) for o in s.options)
+            s.fields["date"] = (last + timedelta(days=1)).strftime("%d.%m.%Y")
         return await offer_slots(s, await doctors_for_retry())
     return reply(s, "Скажите номер варианта: первый, второй или третий. Или назовите другой день.",
                   options=s.options)

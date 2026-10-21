@@ -162,6 +162,7 @@ def validate(raw: dict) -> dict:
 # только если оно действительно прозвучало во фразе; иначе ассистент переспрашивает.
 # Тесты: test_llm_cannot_invent_birth_date_from_year_only, test_patronymic_is_not_a_last_name.
 _MONTH = re.compile(r"\b(январ|феврал|март|апрел|ма[йя]\b|июн|июл|август|сентябр|октябр|ноябр|декабр)|\b\d{1,2}[./\- ]\d{1,2}[./\- ]")
+_YEAR = re.compile(r"\b(19\d\d|20\d\d)\b|тысяч|двухтысяч")
 _PATRONYMIC = ("вич", "вна", "чна", "ична", "оглы", "кызы")
 
 
@@ -177,8 +178,16 @@ def _name_said(name: str, text: str, patronymic_ok: bool) -> bool:
 
 def ground(result: dict, text: str) -> dict:
     """Оставляет ФИО и дату рождения, только если пациент их произнёс в этой фразе."""
-    if result.get("birth_date") and not _MONTH.search(text.lower().replace("ё", "е")):
+    low = text.lower().replace("ё", "е")
+    if result.get("birth_date") and not _MONTH.search(low):
         result["birth_date"] = None  # «2006 год» — это не дата рождения: нет числа и месяца
+    elif result.get("birth_date") and not _YEAR.search(low):
+        # «13 апреля» без года — модель подставила бы год сама. Запоминаем число и месяц,
+        # год пациент назовёт отдельно (dialog/understanding.py соберёт дату из двух фраз)
+        result["birth_dm"] = result["birth_date"][:5]
+        result["birth_date"] = None
+    m = re.search(r"\b(19\d\d|20\d\d)\b", low)
+    result["birth_year"] = m.group(1) if m else None
     for key in ("last_name", "first_name", "middle_name"):
         v = result.get(key)
         if v and not _name_said(v, text, patronymic_ok=(key == "middle_name")):
@@ -230,6 +239,11 @@ def fallback(text: str, expecting: str) -> dict:
             raw["last_name"], raw["first_name"] = words_[0], words_[1]
             if len(words_) >= 3 and words_[2].lower().endswith(("вич", "вна", "чна", "ична")):
                 raw["middle_name"] = words_[2]
+    months = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
+    m = re.search(r"\b(\d{1,2})\s+(январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*(?:\s+(\d{4}))?", low)
+    if m and expecting in ("identity", "birth_date"):  # «13 апреля [2000 года]»
+        mon = next(i for i, k in enumerate(months, 1) if m.group(2).startswith(k))
+        raw["birth_date"] = f"{int(m.group(1)):02d}.{mon:02d}.{m.group(3) or 2000}"  # без года — ground() отбросит подставленный год
     if expecting == "address":
         raw["address"] = text
     if expecting == "reason":

@@ -732,3 +732,56 @@ async def test_patronymic_is_not_a_last_name(mis):
 def dialog_now_year():
     from app import schedule
     return schedule.now().year
+
+
+# ---------- Найдено на живых звонках 21.10 и исправлено ----------
+
+async def test_birth_date_collected_from_two_phrases(mis):
+    """«Иванов Иван 2000» + «13 апреля» → 13.04.2000, год не досочиняется."""
+    r = await talk("запишите к хирургу", "Иванов Иван 2000")
+    assert "число и месяц" in r.reply
+    r = await dialog.handle(r.session_id, "13 апреля")
+    assert dialog.SESSIONS[r.session_id].fields.get("birth_date") == "13.04.2000" and r.options
+
+
+async def test_day_and_month_without_year_are_not_completed(mis):
+    from app import nlu
+    out = nlu.ground(nlu.validate({"birth_date": "13.04.2026"}), "13 апреля")
+    assert out["birth_date"] is None and out["birth_dm"] == "13.04"
+
+
+async def test_specialty_alone_means_booking(mis):
+    r = await talk("меня к хирургу")
+    assert "фамилию" in r.reply.lower()
+
+
+async def test_other_day_shows_later_slots_and_no_endless_loop(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990")
+    first = {o.scheduled_at for o in r.options}
+    r = await dialog.handle(r.session_id, "другой день")
+    assert r.options and not first & {o.scheduled_at for o in r.options}
+    for _ in range(3):
+        r = await dialog.handle(r.session_id, "синий трактор")
+    assert r.escalation and r.escalation.rule == "R-05"
+
+
+async def test_new_specialty_while_choosing_time(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990")
+    r = await dialog.handle(r.session_id, "нет, я хочу к хирургу")
+    assert r.options and all(o.specialty == "Хирург" for o in r.options)
+
+
+async def test_nothing_needed_ends_call(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    r = await dialog.handle(r.session_id, "ничего")
+    assert r.done
+
+
+async def test_reminder_does_not_loop_forever(mis):
+    from app.dialog.reminder import start_reminder
+    r = await talk("запишите к терапевту", "Козлов Андрей 10.10.1990", "1", "да")
+    visit = mis.visits[-1] if isinstance(mis.visits, list) else list(mis.visits.values())[-1]
+    r = start_reminder("rem-loop", visit)
+    for p in ("не знаю", "а у вас есть другие врачи?", "вот"):
+        r = await dialog.handle("rem-loop", p)
+    assert r.escalation

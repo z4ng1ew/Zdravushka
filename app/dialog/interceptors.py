@@ -44,7 +44,8 @@ async def medical(s: Session, nl: dict, text: str) -> ChatResponse | None:
 
 async def goodbye(s: Session, nl: dict, text: str) -> ChatResponse | None:
     intent = nl["intent"]
-    if s.step == "more" and (intent == "goodbye" or (nl["answer"] == "no" and intent not in TASKS)):
+    nothing = s.text.startswith("ничего") or "ничего не нужно" in s.text or "больше ничего" in s.text
+    if s.step == "more" and (intent == "goodbye" or nothing or (nl["answer"] == "no" and intent not in TASKS)):
         return finish(s)
     if intent == "goodbye" and not s.task:
         return finish(s)

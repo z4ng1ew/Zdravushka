@@ -56,7 +56,22 @@ async def handle(session_id: str | None, text: str, asr_confidence: float | None
     if not s.task:
         return await _not_understood(s, nl)
     s.miss = 0
-    return await _run_task(s, nl)
+    before = s.last_reply
+    resp = await _run_task(s, nl)
+    return await _break_loop(s, before, resp)
+
+
+async def _break_loop(s: Session, before: str, resp: ChatResponse) -> ChatResponse:
+    """Защита от зацикливания (найдено на живых звонках: «Скажите номер варианта…» по кругу).
+    Тот же вопрос третий раз подряд — переводим на регистратора (R-05), а не мучаем пациента."""
+    if resp.done or resp.escalation or resp.reply != before:
+        s.loop = 0
+        return resp
+    s.loop += 1
+    if s.loop >= 2:
+        return await escalate(s, Escalation(rule="R-05", reason="не распознано", priority="P3",
+                                            summary=f"Ассистент трижды повторил вопрос: «{before[:120]}»"))
+    return resp
 
 
 def _log_patient(s: Session, text: str):
@@ -74,8 +89,11 @@ def _select_task(s: Session, nl: dict):
         s.task = intent
         if s.step in ("start", "more"):
             s.step = "start"
-    elif not s.task and s.step == "specialty" and nl["specialty"]:
-        s.task = "booking"
+    elif not s.task and nl["specialty"] and intent in (None, "other", "info"):
+        s.task = "booking"  # «Меня к хирургу» — без слова «запишите», но смысл ясен
+    elif s.step == "choose_slot" and nl["specialty"] and nl["specialty"] != s.fields.get("specialty"):
+        forget_task_details(s)  # посреди выбора времени попросили другого врача («хочу к педиатру»)
+        s.task, s.step = "booking", "start"
 
 
 async def _not_understood(s: Session, nl: dict) -> ChatResponse:
