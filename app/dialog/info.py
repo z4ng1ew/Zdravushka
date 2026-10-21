@@ -23,7 +23,7 @@ async def task_schedule_info(s: Session, nl: dict) -> ChatResponse:
         s.step = "specialty"
         return reply(s, "Какой врач вас интересует? Назовите фамилию или специальность.")
     lines = [f"{d['full_name']}: {schedule.weekly_text(d['full_name'])}" for d in docs[:3]]
-    return task_done(s, "График приёма. " + "; ".join(lines) + ". Записать вас?", "справка")
+    return task_done(s, "График приёма. " + "; ".join(lines) + ". Если нужно, могу записать к этому врачу.", "справка")
 
 
 async def task_info(s: Session, nl: dict) -> ChatResponse:

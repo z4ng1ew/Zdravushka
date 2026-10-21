@@ -163,7 +163,7 @@ def validate(raw: dict) -> dict:
 # Тесты: test_llm_cannot_invent_birth_date_from_year_only, test_patronymic_is_not_a_last_name.
 _MONTH = re.compile(r"\b(январ|феврал|март|апрел|ма[йя]\b|июн|июл|август|сентябр|октябр|ноябр|декабр)|\b\d{1,2}[./\- ]\d{1,2}[./\- ]")
 _YEAR = re.compile(r"\b(19\d\d|20\d\d)\b|тысяч|двухтысяч")
-_PATRONYMIC = ("вич", "вна", "чна", "ична", "оглы", "кызы")
+_PATRONYMIC = ("ич", "вна", "чна", "ична", "оглы", "кызы")
 
 
 def _words(text: str) -> list[str]:
@@ -173,7 +173,10 @@ def _words(text: str) -> list[str]:
 def _name_said(name: str, text: str, patronymic_ok: bool) -> bool:
     stem = name.lower().replace("ё", "е")
     stem = stem[:max(3, len(stem) - 1)]  # допускаем падежное окончание: «Иванов» ↔ «Иванову»
-    return any(w.startswith(stem) and (patronymic_ok or not w.endswith(_PATRONYMIC)) for w in _words(text))
+    words = _words(text)
+    # Слово на «-ович/-евич» — отчество, но первым словом это может быть фамилия («Мицкевич Анна»)
+    return any(w.startswith(stem) and (patronymic_ok or i == 0 or not w.endswith(_PATRONYMIC))
+               for i, w in enumerate(words))
 
 
 def ground(result: dict, text: str) -> dict:
@@ -237,7 +240,7 @@ def fallback(text: str, expecting: str) -> dict:
         words_ = re.findall(r"[А-Яа-яЁё\-]+", text)
         if len(words_) >= 2:
             raw["last_name"], raw["first_name"] = words_[0], words_[1]
-            if len(words_) >= 3 and words_[2].lower().endswith(("вич", "вна", "чна", "ична")):
+            if len(words_) >= 3 and words_[2].lower().endswith(("ич", "вна", "чна", "ична", "оглы", "кызы")):
                 raw["middle_name"] = words_[2]
     months = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
     m = re.search(r"\b(\d{1,2})\s+(январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*(?:\s+(\d{4}))?", low)

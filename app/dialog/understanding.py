@@ -13,10 +13,10 @@ async def interpret(s: Session, text: str) -> dict:
     nl = await nlu.understand(text, s.step)
     # ФИО берём, только когда его спрашивали (или назвали вместе с датой рождения),
     # иначе модель может принять за фамилию случайное слово из фразы
-    if s.step not in ("identity", "birth_date") and not nl["birth_date"]:
+    if s.step not in ("identity", "birth_date", "middle_name") and not nl["birth_date"]:
         for key in NAME_KEYS:
             nl[key] = None
-    if s.step in ("identity", "birth_date"):
+    if s.step in ("identity", "birth_date", "middle_name"):
         _collect_birth_date(s, nl)
     # Ждём конкретный ответ (повод вызова, адрес) — симптомы здесь это ответ, а не медицинский вопрос
     if s.step == "reason":

@@ -86,6 +86,32 @@ def age_specialty(specialty: str, age: int | None) -> str | None:
     return "Педиатр"
 
 
+_PATRONYMIC_END = ("ич", "вна", "чна", "ична", "оглы", "кызы")  # «Ильич», «Петрович», «Кузьминична»
+
+
+def _take_middle_name(s: Session) -> bool | None:
+    """Ответ на вопрос об отчестве. True — понятно (записали отчество или «нет»), None — не поняли."""
+    if re.search(r"\b(нет|без отчества|не имею|отсутствует)\b", s.text):
+        s.fields["_no_middle"] = True
+        return True
+    words = [w for w in re.findall(r"[а-яё\-]{3,}", s.text) if w not in ("отчество", "моё", "мое", "меня")]
+    word = next((w for w in words if w.endswith(_PATRONYMIC_END)), words[0] if len(words) == 1 else None)
+    if not word:
+        return None
+    s.fields["middle_name"] = word.title()
+    return True
+
+
+def date_problem(text: str) -> str | None:
+    """Почему дата рождения не подходит — чтобы сказать пациенту прямо, а не просто «повторите»."""
+    m = re.search(r"\b(19\d\d|20\d\d)\b", text)
+    if m and int(m.group(1)) > schedule.now().year:
+        return "Дата рождения не может быть в будущем."
+    if m and re.search(r"\b\d{1,2}\s+(январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)", text):
+        return "Такой даты нет в календаре — проверьте, пожалуйста, число."
+    return None
+
+
 async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
     """Спрашиваем ФИО и дату рождения, пока не узнаем пациента. None — пациент известен.
     Не получается (дата не распознаётся, пациента нет в МИС) — после ID_ATTEMPTS попыток перевод (R-07)."""
@@ -101,18 +127,30 @@ async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
         if c.get("birth_date") or c.get("last_name"):  # часть уже назвали — просим только недостающее
             return reply(s, "Спасибо. Теперь назовите фамилию и имя пациента полностью.")
         return reply(s, "Назовите, пожалуйста, фамилию, имя, отчество и дату рождения пациента.")
+    # Полное ФИО (по требованию заказчика на живой проверке): отчество спрашиваем отдельно,
+    # если его не назвали; нет отчества — пациент говорит «нет», и это фиксируется.
+    if not c.get("middle_name") and not c.get("_no_middle"):
+        if not (s.step == "middle_name" and _take_middle_name(s)):
+            s.step = "middle_name"
+            return reply(s, "Назовите, пожалуйста, отчество пациента. Если отчества нет, скажите «нет».",
+                         explanation="Для точного поиска в МИС нужны фамилия, имя и отчество.")
     if not c.get("birth_date"):
         again = s.step == "birth_date"
         s.step = "birth_date"
-        if s.fields.get("_birth_year") and not again:
-            return reply(s, "Назовите, пожалуйста, число и месяц рождения.")
+        if s.fields.get("_birth_year") and not date_problem(s.text):
+            if again:
+                s.id_attempts += 1
+                if s.id_attempts >= ID_ATTEMPTS:
+                    return await _identity_failed(s, "не удалось распознать дату рождения")
+            return reply(s, "Год записала. Назовите, пожалуйста, число и месяц рождения.")
         if again:  # не поняли с первого раза (например, назвали только год) — подсказываем формат
             s.id_attempts += 1
             if s.id_attempts >= ID_ATTEMPTS:
                 return await _identity_failed(s, "не удалось распознать дату рождения")
-            return reply(s, "Назовите дату рождения полностью: число, месяц и год. "
+            problem = date_problem(s.text)
+            return reply(s, (problem + " " if problem else "") + "Назовите дату рождения полностью: число, месяц и год. "
                             "Например: первое января тысяча девятьсот восемьдесят пятого.",
-                         explanation="Для поиска в МИС нужна полная дата рождения.")
+                         explanation=problem or "Для поиска в МИС нужна полная дата рождения.")
         return reply(s, "Назовите дату рождения пациента.")
     if await identify(s, create=create):
         return None

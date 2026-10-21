@@ -26,7 +26,7 @@ HANDLERS = {"reminder": task_reminder, "booking": task_booking, "reschedule": ta
             "status": task_status, "schedule_info": task_schedule_info, "info": task_info,
             "home_visit": task_home_visit}
 
-HIDDEN_STEPS = ("identity", "birth_date", "address")  # на этих шагах пациент называет ФИО и дату рождения
+HIDDEN_STEPS = ("identity", "middle_name", "birth_date", "address")  # на этих шагах пациент называет ФИО и дату рождения
 
 
 async def handle(session_id: str | None, text: str, asr_confidence: float | None = None) -> ChatResponse:
