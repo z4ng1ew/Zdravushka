@@ -669,3 +669,31 @@ def test_foreign_ai_hosts_rejected_even_if_listed_as_trusted(monkeypatch):
 def test_slot_lock_port_is_satisfied_by_in_process_lock():
     from app.dialog.mis import BOOKING_LOCK
     assert hasattr(BOOKING_LOCK, "__aenter__") and hasattr(BOOKING_LOCK, "__aexit__")
+
+
+
+def test_journal_retention_drops_old_and_caps_size(monkeypatch, tmp_path):
+    """Замечание техчекпоинта «управление журналами»: срок хранения и предельный размер."""
+    from app import journal
+    monkeypatch.setattr(journal, "FILE", tmp_path / "j.json")
+    monkeypatch.setattr(journal, "CALLS", {})
+    monkeypatch.setattr(journal, "HANDOFFS", {})
+    monkeypatch.setattr(config, "JOURNAL_MAX_CALLS", 3)
+    now = journal.schedule.now().timestamp()
+    journal.CALLS["old"] = {"id": "old", "_t0": now - 40 * 86400}
+    journal.HANDOFFS["oldh"] = {"id": "oldh", "created_at": "01.01.2020 10:00"}
+    for i in range(5):
+        journal.CALLS[str(i)] = {"id": str(i), "_t0": now}
+    journal.save()
+    assert "old" not in journal.CALLS and "oldh" not in journal.HANDOFFS
+    assert list(journal.CALLS) == ["2", "3", "4"]
+    assert (tmp_path / "j.json").stat().st_mode & 0o077 == 0
+
+
+def test_journal_redacts_personal_data_in_any_step():
+    from app import journal
+    call = journal.start_call("redact-test")
+    journal.say(call, "patient", "я Козлов 10.10.1990, телефон +7 912 345-67-89, СНИЛС 123-456-789 01")
+    text = call["transcript"][-1]["text"]
+    assert "10.10.1990" not in text and "345-67-89" not in text and "123-456-789" not in text
+    del journal.CALLS["redact-test"]

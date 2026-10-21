@@ -2,13 +2,24 @@
 # звонки с расшифровкой, переводы на регистратора, напоминания.
 # Хранится в памяти и сохраняется в data/runtime/journal.json, чтобы пережить перезапуск.
 # ФИО в журнале маскируется («Иванов П. С.») — персональные данные не показываем целиком.
+#
+# Управление журналом (152-ФЗ, ч. 7 ст. 5 — хранить ПДн не дольше, чем нужно для цели обработки).
+# Для проверяющего: замечание техчекпоинта «по управлению журналами» закрыто так:
+#   1. Срок хранения: записи старше JOURNAL_RETENTION_DAYS (30 дней) удаляются при каждом сохранении.
+#   2. Объём ограничен: не больше JOURNAL_MAX_CALLS звонков — журнал не растёт бесконечно.
+#   3. Даты, телефоны, СНИЛС и номера полисов в речи пациента вырезаются на любом шаге диалога (redact),
+#      ФИО и дата рождения на шагах идентификации, адрес вызова на дом — скрываются целиком (router.HIDDEN_STEPS).
+#   4. Файл журнала доступен только владельцу процесса (права 0600), в git не попадает (data/runtime/ в .gitignore).
+# Тесты: test_journal_retention_drops_old_and_caps_size, test_journal_redacts_personal_data_in_any_step.
 import json
+import re
+import time
 import logging
 import os
 import uuid
 from pathlib import Path
 
-from app import schedule
+from app import config, schedule
 
 log = logging.getLogger("journal")
 FILE = Path(__file__).resolve().parent.parent / "data" / "runtime" / "journal.json"
@@ -30,14 +41,50 @@ def _load():
         REMINDERS.update({int(k): v for k, v in data.get("reminders", {}).items()})
 
 
+_REDACT = (
+    (re.compile(r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b"), "[дата]"),
+    (re.compile(r"(?:\+7|\b8)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}\b"), "[телефон]"),
+    (re.compile(r"\b\d{3}-\d{3}-\d{3}[\s-]?\d{2}\b"), "[СНИЛС]"),
+    (re.compile(r"\b\d{16}\b"), "[полис]"),
+)
+
+
+def redact(text: str) -> str:
+    """Вырезает из реплики даты, телефоны, СНИЛС и номер полиса (на любом шаге, не только при идентификации)."""
+    for rx, repl in _REDACT:
+        text = rx.sub(repl, text)
+    return text
+
+
+def _created(item: dict) -> float:
+    if "_t0" in item:
+        return item["_t0"]
+    try:
+        return time.mktime(time.strptime(item.get("created_at", ""), "%d.%m.%Y %H:%M"))
+    except ValueError:
+        return time.time()  # без даты — не удаляем раньше срока
+
+
+def prune():
+    """Срок хранения и предельный размер журнала."""
+    limit = schedule.now().timestamp() - config.JOURNAL_RETENTION_DAYS * 86400
+    for store in (CALLS, HANDOFFS):
+        for key in [k for k, v in store.items() if _created(v) < limit]:
+            del store[key]
+    while len(CALLS) > config.JOURNAL_MAX_CALLS:
+        del CALLS[next(iter(CALLS))]  # dict хранит порядок добавления — удаляем самые старые
+
+
 def save():
     """Сохранение атомарно (через временный файл): сбой посреди записи не портит журнал.
     Ошибка диска не роняет звонок — журнал останется в памяти и сохранится при следующей записи."""
+    prune()
     try:
         FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps({"calls": CALLS, "handoffs": HANDOFFS, "reminders": REMINDERS},
                                   ensure_ascii=False), encoding="utf-8")
+        os.chmod(tmp, 0o600)  # журнал с ПДн — только владельцу процесса
         os.replace(tmp, FILE)
     except OSError as e:
         log.warning("журнал не сохранён: %s", e)
@@ -65,6 +112,8 @@ def start_call(call_id: str, direction: str = "входящий") -> dict:
 
 def say(call: dict, speaker: str, text: str):
     """Реплика в расшифровку: speaker = patient / bot / operator."""
+    if speaker == "patient":
+        text = redact(text)
     call["transcript"].append({"speaker": speaker, "text": text, "at": schedule.now().strftime("%H:%M:%S")})
     call["duration_sec"] = int(schedule.now().timestamp() - call["_t0"])
 

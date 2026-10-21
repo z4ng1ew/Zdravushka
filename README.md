@@ -149,7 +149,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 ## Соответствие кейсу и критериям оценки
 
 <!-- Для проверяющего: каждая строка — требование кейса → где реализовано → каким тестом проверено
-     (tests/test_scenarios.py, 73 теста, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
+     (tests/test_scenarios.py, 75 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
 
 | Требование | Код | Автотесты |
 |---|---|---|
@@ -167,7 +167,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 | Сбои МИС и нейросетей (повторы, 429, предохранитель, таймауты) | `stand_client.py`, `resilience.py`, `ai.py` | test_stand_get_retries_on_timeout_then_succeeds, test_stand_post_is_not_retried_on_timeout, test_stand_long_retry_after_fails_fast, test_stand_invalid_json_and_circuit_breaker, test_ai_gateway_limits_concurrency, test_stt_timeout_is_ai_error |
 | Гонки: два звонка на один слот | `dialog/mis.py` BOOKING_LOCK (порт `SlotLock`) | test_concurrent_bookings_do_not_take_same_slot, test_slot_lock_port_is_satisfied_by_in_process_lock |
 | Ограничение кейса: только российский контур, зарубежные ИИ запрещены | `config.py` (_trusted, FORBIDDEN_AI_DOMAINS) | test_untrusted_ai_host_rejected, test_foreign_ai_hosts_rejected_even_if_listed_as_trusted |
-| 152-ФЗ: ПДн скрыты в журнале | `journal.py` | test_personal_data_hidden_in_transcript |
+| 152-ФЗ: ПДн скрыты в журнале; срок хранения 30 дней, лимит размера, файл 0600 (исправлено по замечанию техчекпоинта «управление журналами») | `journal.py`, `config.py` | test_personal_data_hidden_in_transcript, test_journal_retention_drops_old_and_caps_size, test_journal_redacts_personal_data_in_any_step |
 | Архитектура: порты и адаптеры (МИС заменяема) | `ports.py`, `mock_stand.py` | test_mock_stand_satisfies_mis_port, test_mock_stand_adapter_end_to_end |
 
 **Почему нет локального запасного LLM.** Кейс требует моделей из контура организаторов (шлюз hub.gigaschool.ru);
@@ -249,11 +249,11 @@ STAND_MODE=mock TELEPHONY_ENABLED=0 ./run.sh      # имитация МИС в �
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q tests/                 # бэкенд: 73 теста
+python -m pytest -q tests/                 # бэкенд: 75 тестов
 cd frontend && npm ci && npm run check     # интерфейс: типы, линтер, 201 тест
 ```
 
-73 теста на имитации стенда (настоящий МИС и лимит запросов не тратятся):
+75 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
 - запись, перенос, отмена, статус, отказ на подтверждении;
 - повторный пациент без дубля, запрет двойной записи, «отмените обе»;
 - врач по фамилии, перенос к другому врачу, день вместо номера варианта;

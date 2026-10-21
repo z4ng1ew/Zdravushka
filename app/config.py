@@ -130,3 +130,8 @@ TTS_URL = _trusted(TTS_URL)
 # Технический клиент для заявок, когда пациент не успел назваться (экстренный случай, просьба оператора)
 TECH_CLIENT = {"last_name": "Срочный", "first_name": "Вызов", "middle_name": "Иванович",
                "birth_date": os.getenv("TECH_CLIENT_BIRTH_DATE", "01.01.1970")}
+
+
+# Журнал звонков (152-ФЗ): срок хранения и предельный размер, см. app/journal.py
+JOURNAL_RETENTION_DAYS = int(os.getenv("JOURNAL_RETENTION_DAYS", "30"))
+JOURNAL_MAX_CALLS = int(os.getenv("JOURNAL_MAX_CALLS", "1000"))
