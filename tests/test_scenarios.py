@@ -697,3 +697,38 @@ def test_journal_redacts_personal_data_in_any_step():
     text = call["transcript"][-1]["text"]
     assert "10.10.1990" not in text and "345-67-89" not in text and "123-456-789" not in text
     del journal.CALLS["redact-test"]
+
+
+
+async def test_minor_is_booked_to_children_doctor(mis):
+    """Найдено на живом звонке: 17-летнего записали к врачу «Взрослые 18+»."""
+    year = dialog_now_year() - 10
+    r = await talk("запишите к офтальмологу", f"Козлов Андрей 10.10.{year}")
+    assert r.options and all("Детский" in o.specialty or o.specialty == "Педиатр" for o in r.options)
+    assert "восемнадцати" in r.reply
+
+
+async def test_adult_is_not_booked_to_pediatrician(mis):
+    r = await talk("запишите к педиатру", "Козлов Андрей 10.10.1990")
+    assert r.options and all(o.specialty == "Терапевт" for o in r.options)
+
+
+async def test_llm_cannot_invent_birth_date_from_year_only(mis):
+    """Найдено на живом звонке: «2006 год» + «Иван Иванович» → модель досочинила ФИО и дату рождения."""
+    from app import nlu
+    fake = {"intent": "booking", "last_name": "Иванов", "first_name": "Иван", "middle_name": "Иванович",
+            "birth_date": "01.01.2006"}
+    out = nlu.ground(nlu.validate(fake), "Иван Иванович, 2006 год")
+    assert out["birth_date"] is None and out["last_name"] is None and out["first_name"] == "Иван"
+    full = nlu.ground(nlu.validate(fake), "Иванов Иван Иванович, первое января две тысячи шестого")
+    assert full["birth_date"] == "01.01.2006" and full["last_name"] == "Иванов"
+
+
+async def test_patronymic_is_not_a_last_name(mis):
+    r = await talk("запишите к терапевту", "Иван Иванович")
+    assert not dialog.SESSIONS[r.session_id].client and "фамилию" in r.reply.lower()
+
+
+def dialog_now_year():
+    from app import schedule
+    return schedule.now().year

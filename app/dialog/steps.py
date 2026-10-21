@@ -1,4 +1,5 @@
 # Общие шаги сценариев: узнать пациента, подобрать время, выбрать вариант или запись.
+import re
 from datetime import datetime
 
 from app import schedule
@@ -46,6 +47,43 @@ def visit_booking(v: dict) -> Booking:
 
 
 ID_ATTEMPTS = 3  # столько раз пробуем узнать пациента, потом — регистратор (R-07)
+
+
+# ---------- Возраст пациента и врачи (взрослые 18+ / дети 0–17) ----------
+# Для проверяющего: найдено на живом звонке — 17-летнего пациента записали к травматологу «Взрослые 18+».
+# Теперь после идентификации врачи фильтруются по полю «Пациенты» из расписания поликлиники:
+# ребёнка — к детскому специалисту той же профили (иначе к педиатру), взрослого — не к детскому врачу.
+# Тесты: test_minor_is_booked_to_children_doctor, test_adult_is_not_booked_to_pediatrician.
+
+def patient_age(s: Session) -> int | None:
+    raw = s.fields.get("birth_date") or (s.client or {}).get("birth_date")
+    try:
+        born = datetime.strptime(str(raw), "%d.%m.%Y").date()
+    except ValueError:
+        return None
+    today = schedule.now().date()
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
+
+def fits_age(doctor: dict, age: int | None) -> bool:
+    patients = ((schedule.excel_doctor(doctor["full_name"]) or {}).get("patients") or "").lower()
+    if age is None or not patients or "дети и взрослые" in patients:
+        return True
+    return "дет" in patients if age < 18 else not patients.startswith("дети")
+
+
+def age_specialty(specialty: str, age: int | None) -> str | None:
+    """Специальность для возраста пациента, если запрошенная ему не подходит."""
+    if age is None:
+        return None
+    if age >= 18:
+        return "Терапевт" if specialty == "Педиатр" else None
+    wanted = specialty.lower()
+    for spec in schedule.specialties():
+        low = spec.lower()
+        if low.startswith("детск") and any(len(w) > 5 and w in wanted for w in re.split(r"[\s\-()]+", low)[1:]):
+            return spec
+    return "Педиатр"
 
 
 async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:

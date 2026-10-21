@@ -156,6 +156,36 @@ def validate(raw: dict) -> dict:
     return out
 
 
+# ---------- Сверка с фразой: модель не может «досочинить» ФИО и дату рождения ----------
+# Для проверяющего (защита от выдумывания): найден на живом звонке случай — пациент сказал «2006 год»,
+# потом «Иван Иванович», а модель дополнила фамилию и полную дату рождения сама. Теперь поле принимается,
+# только если оно действительно прозвучало во фразе; иначе ассистент переспрашивает.
+# Тесты: test_llm_cannot_invent_birth_date_from_year_only, test_patronymic_is_not_a_last_name.
+_MONTH = re.compile(r"\b(январ|феврал|март|апрел|ма[йя]\b|июн|июл|август|сентябр|октябр|ноябр|декабр)|\b\d{1,2}[./\- ]\d{1,2}[./\- ]")
+_PATRONYMIC = ("вич", "вна", "чна", "ична", "оглы", "кызы")
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[а-яе\-]+", text.lower().replace("ё", "е"))
+
+
+def _name_said(name: str, text: str, patronymic_ok: bool) -> bool:
+    stem = name.lower().replace("ё", "е")
+    stem = stem[:max(3, len(stem) - 1)]  # допускаем падежное окончание: «Иванов» ↔ «Иванову»
+    return any(w.startswith(stem) and (patronymic_ok or not w.endswith(_PATRONYMIC)) for w in _words(text))
+
+
+def ground(result: dict, text: str) -> dict:
+    """Оставляет ФИО и дату рождения, только если пациент их произнёс в этой фразе."""
+    if result.get("birth_date") and not _MONTH.search(text.lower().replace("ё", "е")):
+        result["birth_date"] = None  # «2006 год» — это не дата рождения: нет числа и месяца
+    for key in ("last_name", "first_name", "middle_name"):
+        v = result.get(key)
+        if v and not _name_said(v, text, patronymic_ok=(key == "middle_name")):
+            result[key] = None  # отчество («Иванович») — не фамилия и не имя
+    return result
+
+
 # ---------- Запасной разбор без нейросети ----------
 
 def fallback(text: str, expecting: str) -> dict:
@@ -211,7 +241,7 @@ async def understand(text: str, expecting: str) -> dict:
     """Главная функция: фраза пациента → проверенные поля. Сначала нейросеть, при сбое — запасной разбор."""
     text = sanitize(text)
     if not (config.LLM_URL and config.LLM_MODEL):
-        return {**fallback(text, expecting), "_source": "rules"}
+        return {**ground(fallback(text, expecting), text), "_source": "rules"}
     today = _today()
     prompt = SYSTEM_PROMPT.format(today=today.strftime("%d.%m.%Y"), weekday=WEEKDAYS[today.weekday()],
                                   intents=INTENTS, topics=knowledge.TOPICS,
@@ -220,12 +250,13 @@ async def understand(text: str, expecting: str) -> dict:
         raw = await ai.llm_json([{"role": "system", "content": prompt},
                                  {"role": "user", "content": f"<phrase>{text}</phrase>"}])
     except ai.AIError:
-        return {**fallback(text, expecting), "_source": "rules"}
+        return {**ground(fallback(text, expecting), text), "_source": "rules"}
     result = validate(raw)
     # Если модель не поняла простое «да/нет/второй» — подстрахуемся ключевыми словами
     backup = fallback(text, expecting)
     for key in ("answer", "choice", "birth_date", "topic"):
         if result[key] is None and backup[key] is not None:
             result[key] = backup[key]
+    result = ground(result, text)
     result["_source"] = "llm"
     return result

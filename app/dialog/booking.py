@@ -4,7 +4,8 @@ from app import schedule
 from app.dialog.mis import BOOKING_LOCK
 from app.dialog.common import reply, task_done
 from app.dialog.mis import busy_slots, cancel_visit, create_visit, doctors_for
-from app.dialog.steps import choose_slot, is_same_doctor, need_identity, offer_slots, room, wanted_specialty
+from app.dialog.steps import (age_specialty, choose_slot, fits_age, is_same_doctor, need_identity, offer_slots,
+                               patient_age, room, wanted_specialty)
 from app.models import ChatResponse
 from app.dialog.session import Session
 
@@ -31,6 +32,19 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
             doctors = chosen_docs
     if (r := await need_identity(s)):
         return r
+    age = patient_age(s)
+    note = ""
+    if not any(fits_age(d, age) for d in doctors) and (spec := age_specialty(c["specialty"], age)):
+        who = "Пациенту нет восемнадцати лет" if age < 18 else "Педиатр принимает только детей"
+        note = f"{who}, поэтому записываю к специалисту: {spec.lower()}. "
+        c["specialty"] = spec
+        c.pop("doctor_name", None)
+        doctors = await doctors_for(spec)
+    doctors = [d for d in doctors if fits_age(d, age)]
+    if not doctors:
+        c.pop("specialty", None)
+        s.step = "specialty"
+        return reply(s, "К этому специалисту по возрасту пациента записать не могу. Назовите другого врача.")
 
     if s.step == "choose_slot":
         if (r := await choose_slot(s, nl, lambda: doctors_for(c["specialty"]))):
@@ -63,7 +77,9 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
             return await offer_slots(s, doctors)
         return reply(s, "Подтвердите, пожалуйста: записываю? Скажите «да» или «нет».", booking=s.chosen)
     else:
-        return await offer_slots(s, doctors)
+        resp = await offer_slots(s, doctors)
+        resp.reply = note + resp.reply
+        return resp
 
     o = s.chosen
     return reply(s, f"Записываю: {o.specialty.lower()}, врач {o.doctor_name}, {o.spoken}{room(o.doctor_name)}. Верно?",

@@ -149,11 +149,11 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 ## Соответствие кейсу и критериям оценки
 
 <!-- Для проверяющего: каждая строка — требование кейса → где реализовано → каким тестом проверено
-     (tests/test_scenarios.py, 75 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
+     (tests/test_scenarios.py, 79 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
 
 | Требование | Код | Автотесты |
 |---|---|---|
-| С-01 Запись к врачу (≤3 варианта, подтверждение, без дублей карточек) | `dialog/booking.py`, `dialog/mis.py` | test_booking_creates_visit, test_existing_patient_not_duplicated, test_booking_with_named_doctor, test_no_double_booking_same_slot |
+| С-01 Запись к врачу (≤3 варианта, подтверждение, без дублей карточек; врач по возрасту: дети — к детским специалистам, взрослые — не к педиатру) | `dialog/booking.py`, `dialog/steps.py`, `dialog/mis.py` | test_minor_is_booked_to_children_doctor, test_adult_is_not_booked_to_pediatrician, test_booking_creates_visit, test_existing_patient_not_duplicated, test_booking_with_named_doctor, test_no_double_booking_same_slot |
 | С-03 Перенос (тот же id; к другому врачу — новая запись + отмена старой) | `dialog/visits.py` | test_reschedule_and_cancel, test_reschedule_to_other_doctor_books_new_and_cancels_old |
 | С-04 Отмена (одной / всех — только после «да») | `dialog/visits.py` | test_cancel_both_visits, test_cancel_all_needs_confirmation_and_no_keeps_visits |
 | С-05 Статус записи (неизвестного пациента не создаём) | `dialog/visits.py` | test_status_without_visits, test_unknown_patient_not_created_for_status_then_operator |
@@ -162,7 +162,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 | С-10 Звонок-напоминание: подтвердить / отменить / перенести | `reminders.py`, `dialog/reminder.py`, `telephony.py` | test_reminder_confirmed, test_reminder_cancel, test_reminder_reschedule, test_reminder_campaign_queues_and_marks_no_answer, test_reminder_emergency_still_works |
 | Экстренные симптомы → 103/112 и перевод P1 на любом шаге | `safety.py`, `dialog/guards.py` | test_heart_pain_is_emergency, test_sudden_severe_headache_is_emergency, test_emergency_mid_booking_stops_booking, test_emergency_without_identity_uses_tech_client |
 | Перевод на человека R-02…R-15 (human in the loop — требование регламента, а не недостаток) | `dialog/guards.py`, `dialog/router.py` | test_operator_request, test_complaint, test_medical_question_never_answered, test_three_misunderstandings_go_to_operator, test_hard_of_hearing_repeat_then_operator |
-| Защита от выдумывания: LLM только классифицирует, факты — из МИС | `nlu.py`, `dialog/understanding.py` | test_llm_cannot_invent_doctor_or_choice, test_no_stand_means_operator_not_fake_booking, test_llm_garbage_falls_back_to_keywords, test_whisper_hallucination_filtered |
+| Защита от выдумывания: LLM только классифицирует, факты — из МИС; ФИО и дата рождения принимаются, только если прозвучали во фразе (`nlu.ground`) | `nlu.py`, `dialog/understanding.py` | test_llm_cannot_invent_birth_date_from_year_only, test_patronymic_is_not_a_last_name, test_llm_cannot_invent_doctor_or_choice, test_no_stand_means_operator_not_fake_booking, test_llm_garbage_falls_back_to_keywords, test_whisper_hallucination_filtered |
 | Промпт-инъекции | `nlu.py` (разделители, sanitize), `safety.py`, guard prompt_injection | test_prompt_injection_is_refused, test_injection_three_times_goes_to_operator, test_phrase_is_sanitized_for_llm, test_llm_gets_phrase_inside_delimiters |
 | Сбои МИС и нейросетей (повторы, 429, предохранитель, таймауты) | `stand_client.py`, `resilience.py`, `ai.py` | test_stand_get_retries_on_timeout_then_succeeds, test_stand_post_is_not_retried_on_timeout, test_stand_long_retry_after_fails_fast, test_stand_invalid_json_and_circuit_breaker, test_ai_gateway_limits_concurrency, test_stt_timeout_is_ai_error |
 | Гонки: два звонка на один слот | `dialog/mis.py` BOOKING_LOCK (порт `SlotLock`) | test_concurrent_bookings_do_not_take_same_slot, test_slot_lock_port_is_satisfied_by_in_process_lock |
@@ -249,11 +249,11 @@ STAND_MODE=mock TELEPHONY_ENABLED=0 ./run.sh      # имитация МИС в �
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q tests/                 # бэкенд: 75 тестов
+python -m pytest -q tests/                 # бэкенд: 79 тестов
 cd frontend && npm ci && npm run check     # интерфейс: типы, линтер, 201 тест
 ```
 
-75 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
+79 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
 - запись, перенос, отмена, статус, отказ на подтверждении;
 - повторный пациент без дубля, запрет двойной записи, «отмените обе»;
 - врач по фамилии, перенос к другому врачу, день вместо номера варианта;
