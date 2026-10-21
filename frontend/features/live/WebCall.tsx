@@ -10,14 +10,14 @@ import LiveFacts from "./LiveFacts";
 import LiveStatusBar from "./LiveStatusBar";
 import OperatorReply from "./OperatorReply";
 
-export default function WebCall({ call, onSay, onTakeover, onRelease }: {
-  call: LiveCall; onSay: (text: string) => void; onTakeover: () => void; onRelease: () => void;
+export default function WebCall({ call, title, onSay, onTakeover, onRelease }: {
+  call: LiveCall; title?: string; onSay: (text: string) => void; onTakeover: () => void; onRelease: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); }, [call.lines.length]);
   return (
     <>
-      <h2 className="live-sub">Демо-звонок из этого браузера</h2>
+      <h2 className="live-sub">{title ?? "Демо-звонок из этого браузера"}</h2>
       <div className="grid grid-queue" style={{ gridTemplateColumns: "1.5fr 1fr" }}>
         <div className="card">
           <LiveStatusBar call={call} onTakeover={onTakeover} onRelease={onRelease} />

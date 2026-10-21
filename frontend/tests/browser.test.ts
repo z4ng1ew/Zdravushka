@@ -87,7 +87,15 @@ describe("микрофон и канал между вкладками", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(got).toHaveBeenCalledWith({ type: "hello" });
     expect(got).toHaveBeenCalledTimes(1);
-    a.close(); b.close();
-    expect(() => b.send({ type: "release" })).not.toThrow();
+    // состояние без номера вкладки и команда без адресата — не наши (не понять, чей звонок)
+    const raw = new BroadcastChannel("clinicai-live");
+    raw.postMessage({ type: "state", call: {} });
+    raw.postMessage({ type: "takeover", operator: "" });
+    raw.postMessage({ type: "state", call: { phase: "active" }, from: "t1" });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(got).toHaveBeenCalledTimes(2);
+    expect(got.mock.calls[1][0]).toMatchObject({ type: "state", from: "t1", call: { phase: "active" } });
+    raw.close(); a.close(); b.close();
+    expect(() => b.send({ type: "release", to: "t1" })).not.toThrow();
   });
 });

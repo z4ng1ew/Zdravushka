@@ -1,6 +1,7 @@
 "use client";
 
-// «Звонок сейчас»: телефонные звонки с сервера (GET /api/live) и демо-звонок из этого браузера.
+// «Звонок сейчас»: телефонные звонки с сервера (GET /api/live) и звонки с сайта из вкладок этого браузера —
+// каждый своей карточкой (несколько пациентов не перебивают друг друга).
 
 import { ErrorInline } from "@/shared/ui/ErrorCode";
 import PhoneCallCard from "./PhoneCallCard";
@@ -24,7 +25,7 @@ export default function LiveScreen() {
   const phone = usePhoneCalls();
   const web = useLiveCall();
   const calls = phone.data ?? [];
-  const webCall = web.call && web.call.phase !== "idle" ? web.call : null;
+  const many = web.calls.length > 1;
   return (
     <>
       <h1 className="page-title">Звонок сейчас</h1>
@@ -33,8 +34,11 @@ export default function LiveScreen() {
       </p>
       {phone.error && <ErrorInline status={phone.error.status} detail={phone.error.message} />}
       {calls.map((c) => <PhoneCallCard key={c.id} call={c} />)}
-      {webCall && <WebCall call={webCall} onSay={web.say} onTakeover={web.takeover} onRelease={web.release} />}
-      {!calls.length && !webCall && <NoCall />}
+      {web.calls.map((w, i) => (
+        <WebCall key={w.id} call={w.call} title={many ? `Звонок с сайта № ${i + 1}` : undefined}
+          onSay={(text) => web.say(w.id, text)} onTakeover={() => web.takeover(w.id)} onRelease={() => web.release(w.id)} />
+      ))}
+      {!calls.length && !web.calls.length && <NoCall />}
     </>
   );
 }

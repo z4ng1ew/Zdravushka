@@ -26,9 +26,11 @@ export interface LiveCall {
   operator: string | null;
 }
 
+// Пациентов может быть несколько (несколько вкладок): у каждой свой номер from,
+// команды регистратора адресуются одной вкладке полем to.
 export type LiveMessage =
-  | { type: "state"; call: LiveCall } // экран пациента → регистратору
-  | { type: "hello" } // регистратор открыл вкладку и просит текущее состояние
-  | { type: "takeover"; operator: string } // регистратор перехватил разговор
-  | { type: "release" } // регистратор вернул разговор ИИ
-  | { type: "operator_say"; text: string }; // реплика регистратора
+  | { type: "state"; call: LiveCall; from: string } // экран пациента → регистратору
+  | { type: "hello" } // регистратор открыл вкладку и просит текущее состояние у всех
+  | { type: "takeover"; operator: string; to: string } // регистратор перехватил разговор
+  | { type: "release"; to: string } // регистратор вернул разговор ИИ
+  | { type: "operator_say"; text: string; to: string }; // реплика регистратора

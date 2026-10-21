@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <!-- Фон ClinicAI: мягкие волны и медицинские значки (векторно — чётко на любом экране) -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9f4fd"/><stop offset=".5" stop-color="#f5faff"/><stop offset="1" stop-color="#e4f1fc"/>
+    </linearGradient>
+    <linearGradient id="w1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#cfe7fa" stop-opacity=".9"/><stop offset=".55" stop-color="#e6f3fd" stop-opacity=".5"/><stop offset="1" stop-color="#cbe5fa" stop-opacity=".9"/>
+    </linearGradient>
+    <linearGradient id="w2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".85"/><stop offset="1" stop-color="#ffffff" stop-opacity=".35"/>
+    </linearGradient>
+    <linearGradient id="cross" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7fd0ff"/><stop offset="1" stop-color="#3aa8f2"/>
+    </linearGradient>
+    <g id="cs"><rect x="-7" y="-21" width="14" height="42" rx="3.5"/><rect x="-21" y="-7" width="42" height="14" rx="3.5"/></g>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+
+  <!-- волны -->
+  <path d="M0 120 C260 60 420 210 700 150 S1180 40 1600 110 V0 H0Z" fill="url(#w2)"/>
+  <path d="M0 470 C240 420 420 560 760 520 S1260 380 1600 440 V560 C1280 520 1060 640 760 640 S260 520 0 590Z" fill="url(#w1)" opacity=".7"/>
+  <path d="M0 560 C300 500 520 640 820 610 S1300 500 1600 560 V700 C1300 650 1080 760 800 750 S260 640 0 700Z" fill="url(#w2)"/>
+  <path d="M0 820 C280 760 520 880 820 850 S1320 760 1600 820 V1000 H0Z" fill="url(#w1)" opacity=".75"/>
+  <path d="M0 900 C320 850 560 960 860 930 S1340 860 1600 905 V1000 H0Z" fill="url(#w2)"/>
+  <circle cx="-60" cy="560" r="200" fill="none" stroke="#d6ebfb" stroke-width="26" opacity=".5"/>
+  <circle cx="-60" cy="560" r="150" fill="none" stroke="#e0f0fc" stroke-width="18" opacity=".45"/>
+
+  <!-- крестики: яркий слева сверху и мелкие светлые -->
+  <use href="#cs" transform="translate(140 66) scale(.95)" fill="url(#cross)"/>
+  <g fill="#bfe2f8">
+    <use href="#cs" transform="translate(52 48) scale(.55)"/><use href="#cs" transform="translate(222 108) scale(.6)"/>
+    <use href="#cs" transform="translate(96 138) scale(.42)"/>
+    <use href="#cs" transform="translate(1268 64) scale(.6)"/><use href="#cs" transform="translate(1238 128) scale(.42)"/>
+    <use href="#cs" transform="translate(1540 70) scale(.5)"/><use href="#cs" transform="translate(1470 150) scale(.42)"/>
+    <use href="#cs" transform="translate(60 820) scale(.5)"/><use href="#cs" transform="translate(286 832) scale(.55)"/>
+    <use href="#cs" transform="translate(1356 812) scale(.5)"/>
+  </g>
+  <g fill="#9fd4f6">
+    <use href="#cs" transform="translate(1550 130) scale(.62)"/>
+    <use href="#cs" transform="translate(1530 560) scale(.62)"/>
+    <use href="#cs" transform="translate(1520 920) scale(.6)"/>
+    <use href="#cs" transform="translate(70 590) scale(.55)"/><use href="#cs" transform="translate(250 600) scale(.55)"/>
+  </g>
+
+  <!-- кардиограммы -->
+  <g fill="none" stroke="#8ccbf3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M50 640 H112 L121 630 L130 652 L141 596 L153 682 L163 636 L171 640 H230"/>
+    <path d="M1340 668 H1402 L1411 658 L1420 680 L1431 624 L1443 710 L1453 664 L1461 668 H1520"/>
+    <path d="M50 850 H112 L121 840 L130 862 L141 806 L153 892 L163 846 L171 850 H230" opacity=".85"/>
+  </g>
+
+  <!-- стетоскоп и планшет справа сверху -->
+  <g fill="none" stroke="#8fcdf4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity=".9" transform="translate(1290 70) scale(.62) translate(-1300 0)">
+    <path d="M1330 30 C1310 60 1300 100 1330 130 C1360 160 1400 150 1410 120 L1420 90"/>
+    <path d="M1360 26 C1380 60 1400 80 1410 100"/>
+    <circle cx="1425" cy="78" r="13"/><circle cx="1425" cy="78" r="5" fill="#cfe9fb"/>
+    <g transform="translate(1440 40) rotate(8)">
+      <rect x="0" y="12" width="96" height="130" rx="12" fill="#eef7fe"/>
+      <rect x="30" y="0" width="36" height="22" rx="6" fill="#eef7fe"/>
+      <path d="M18 50 H78 M18 70 H78 M18 90 H70 M18 110 H60" stroke-width="4"/>
+    </g>
+  </g>
+  <!-- стетоскоп и планшет справа снизу -->
+  <g fill="none" stroke="#8fcdf4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity=".85" transform="translate(1330 790) scale(.6) translate(-1360 -840)">
+    <path d="M1384 850 C1364 880 1356 916 1384 944 C1412 972 1448 962 1458 934 L1466 906"/>
+    <circle cx="1470" cy="894" r="12"/>
+    <g transform="translate(1486 858) rotate(8)">
+      <rect x="0" y="10" width="84" height="116" rx="11" fill="#eef7fe"/>
+      <rect x="26" y="0" width="32" height="20" rx="6" fill="#eef7fe"/>
+      <path d="M16 44 H68 M16 62 H68 M16 80 H60 M16 98 H52" stroke-width="4"/>
+    </g>
+  </g>
+</svg>
