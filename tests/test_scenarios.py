@@ -859,3 +859,13 @@ async def test_reply_label_from_backend(mis):
     assert r.label.startswith("🚑 Срочно: 103")
     r = await talk("запишите к терапевту")
     assert r.label is None  # разговор идёт — подписи нет
+
+
+async def test_silero_failure_falls_back_to_piper(monkeypatch):
+    """Голос Silero не загрузился (нет torch / модели) — Здравушка не молчит, говорит голосом Piper."""
+    from app import tts
+    monkeypatch.setattr(config, "TTS_BACKEND", "silero")
+    monkeypatch.setattr(tts, "_silero", lambda text: (_ for _ in ()).throw(RuntimeError("нет torch")))
+    monkeypatch.setattr(tts, "piper_available", lambda: True)
+    monkeypatch.setattr(tts, "_piper", lambda text: b"WAV-PIPER")
+    assert await tts.speak("Здравствуйте") == b"WAV-PIPER"

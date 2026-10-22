@@ -1,5 +1,6 @@
 # Сервер Здравушки. Запуск: uvicorn app.main:app --reload --port 8000
 # Документация API для фронтенда: http://localhost:8000/docs
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,7 +22,9 @@ log = logging.getLogger("main")
 async def lifespan(app: FastAPI):
     """При старте сервера поднимаем мост телефонии (AudioSocket для Asterisk)."""
     server = await telephony.start_server() if config.TELEPHONY_ENABLED else None
+    warm = asyncio.create_task(tts.warm_up())  # Silero грузится в фоне, сервер отвечает сразу
     yield
+    warm.cancel()
     if server:
         server.close()
 

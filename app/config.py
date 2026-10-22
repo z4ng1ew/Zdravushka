@@ -68,6 +68,12 @@ TTS_TIMEOUT = float(os.getenv("TTS_TIMEOUT", "30"))
 # Где синтезировать речь: piper — локально, openai — внешний сервер (TTS_URL)
 TTS_BACKEND = os.getenv("TTS_BACKEND", "piper")
 # Файл голоса Piper (.onnx, рядом должен лежать .onnx.json)
+# Silero (TTS_BACKEND=silero): голоса baya, xenia, kseniya — женские; aidar, eugene — мужские
+SILERO_MODEL = os.getenv("SILERO_MODEL", "v4_ru")
+SILERO_MODEL_PATH = os.getenv("SILERO_MODEL_PATH", "data/voices/silero_v4_ru.pt")
+SILERO_VOICE = os.getenv("SILERO_VOICE", "xenia")
+SILERO_RATE = int(os.getenv("SILERO_RATE", "24000"))
+SILERO_THREADS = int(os.getenv("SILERO_THREADS", "2"))
 PIPER_MODEL = os.getenv("PIPER_MODEL", "data/voices/ru_RU-irina-medium.onnx")
 
 # ---------- Телефония (Asterisk → AudioSocket) ----------

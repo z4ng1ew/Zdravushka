@@ -1,0 +1,4 @@
+# Необязательно: голос Silero (TTS_BACKEND=silero). Без этих пакетов сервер говорит голосом Piper.
+# Ставить CPU-сборку torch (≈200 МБ вместо ≈2,5 ГБ с CUDA):
+#   pip install -r requirements-silero.txt --extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2,<3

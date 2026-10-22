@@ -1,6 +1,9 @@
 # Синтез речи для Здравушки.
 # Варианты (TTS_BACKEND в .env):
 #   piper  — локально на нашем сервере (Piper, без интернета, быстро на процессоре);
+#   silero — локально на нашем сервере (Silero TTS, российская модель, голос естественнее Piper).
+#            Модель загружается один раз в фоне при старте; пока не загрузилась или упала — говорим Piper.
+#            Речь пациента и ответы никуда не уходят (152-ФЗ). Зависимости: requirements-silero.txt.
 #   openai — удалённый сервер с OpenAI-совместимым API: наш Silero на Mac (scripts/silero_server.py)
 #            или любой другой. Если удалённый сервер не ответил — автоматически говорим голосом Piper.
 # Перед синтезом цифры превращаются в слова: синтезаторы плохо читают «кабинет 126».
@@ -76,6 +79,35 @@ def _piper(text: str) -> bytes:
     return buf.getvalue()
 
 
+@lru_cache(maxsize=1)
+def _silero_model():
+    import torch  # импорт здесь: torch нужен только для варианта silero
+    torch.set_num_threads(config.SILERO_THREADS)
+    path = Path(config.SILERO_MODEL_PATH)
+    if path.exists():  # файл модели скачан заранее (scripts/get_silero.sh) — без интернета
+        return torch.package.PackageImporter(str(path)).load_pickle("tts_models", "model")
+    model, _ = torch.hub.load("snakers4/silero-models", "silero_tts", language="ru",
+                              speaker=config.SILERO_MODEL, trust_repo=True)
+    return model
+
+
+def _silero(text: str) -> bytes:
+    audio = _silero_model().apply_tts(text=text[:900], speaker=config.SILERO_VOICE,
+                                      sample_rate=config.SILERO_RATE, put_accent=True, put_yo=True)
+    pcm = (audio.numpy() * 32767).clip(-32768, 32767).astype(np.int16)
+    return pcm_to_wav(pcm.tobytes(), config.SILERO_RATE)
+
+
+async def warm_up():
+    """Загрузить Silero в фоне при старте сервера, чтобы первый звонок не ждал 10–20 секунд."""
+    if config.TTS_BACKEND == "silero":
+        try:
+            await asyncio.to_thread(_silero, "Здравствуйте.")
+        except Exception as e:  # noqa: BLE001 — нет torch или модели: работаем на Piper
+            import logging
+            logging.getLogger("tts").warning("Silero не загрузился, говорим голосом Piper: %s", e)
+
+
 def piper_available() -> bool:
     return Path(config.PIPER_MODEL).exists()
 
@@ -83,7 +115,13 @@ def piper_available() -> bool:
 async def speak(text: str) -> bytes:
     """Текст → WAV. Удалённый голос с запасным локальным."""
     text = normalize(text)
-    if config.TTS_BACKEND == "openai" and config.TTS_URL:
+    if config.TTS_BACKEND == "silero":
+        try:
+            return await asyncio.to_thread(_silero, text)
+        except Exception:  # torch/модель недоступны — не молчим, говорим голосом Piper
+            if not piper_available():
+                raise
+    elif config.TTS_BACKEND == "openai" and config.TTS_URL:
         try:
             return await ai.text_to_speech(text)
         except Exception:  # удалённый сервер недоступен — не молчим, говорим голосом Piper
