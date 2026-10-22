@@ -1057,3 +1057,14 @@ async def test_callback_number_without_dash(mis):
     r = await talk("где вы находитесь?")
     assert await telephony.callback_plan(r.session_id, "phone049") == ("PJSIP/phone-049@gateway", None)
     assert (await telephony.callback_plan(r.session_id, "expert3"))[0] == "PJSIP/expert-3@gateway"
+
+
+
+async def test_reminder_i_will_come_is_yes(mis):
+    v = await _booked(mis)
+    dialog.start_reminder("rem-come", v)
+    r = await dialog.handle("rem-come", "А я приду.")
+    assert r.done and "ждём вас" in r.reply
+    dialog.start_reminder("rem-nocome", v)
+    r = await dialog.handle("rem-nocome", "нет, не приду")
+    assert "Отменить запись" in r.reply

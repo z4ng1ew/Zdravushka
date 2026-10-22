@@ -8,7 +8,7 @@ import { ECHO_TAIL_MS, LISTEN_MS, MAX_NOISE_TURNS, NOT_HEARD } from "@/features/
 import { resetTextsForTests } from "@/shared/store/uiTexts";
 import { reply, TEXTS } from "./fixtures";
 
-const mic = vi.hoisted(() => ({ open: vi.fn(), take: vi.fn(), cancel: vi.fn(), listening: false }));
+const mic = vi.hoisted(() => ({ open: vi.fn(), take: vi.fn(), cancel: vi.fn(), release: vi.fn(), listening: false }));
 vi.mock("@/features/call/hooks/useMicrophone", () => ({ useMicrophone: () => mic }));
 const speech = vi.hoisted(() => ({ recognize: vi.fn(), synthesize: vi.fn() }));
 vi.mock("@/shared/api/speech", () => speech);
@@ -83,5 +83,26 @@ describe("голосовой цикл: подсказки, шум, пауза и
     await act(echoTail);
     expect(order).toEqual(["speak:Здравствуйте!", "mic"]);
     speaker.speak.mockImplementation(async () => {});
+  });
+  it("звонок закончился ответом сервера (done) — после озвучки микрофон выключается совсем", async () => {
+    const call = fakeCall();
+    speech.recognize.mockResolvedValue({ text: "спасибо", confidence: 0.9 });
+    mic.take.mockResolvedValue(phrase());
+    call.ask.mockResolvedValue(reply({ reply: "До свидания!", done: true }));
+    const { result } = renderHook(() => useVoiceTurns(call));
+    await act(async () => { result.current.press(); });
+    await act(async () => { pause(); });
+    expect(mic.release).toHaveBeenCalled();
+  });
+  it("пациент сам нажал «отправить», а распознано пусто — это речь, не шум: промахи считаются", async () => {
+    const call = fakeCall();
+    speech.recognize.mockResolvedValue({ text: "", confidence: null });
+    mic.take.mockResolvedValue(phrase(true, 400)); // короткая фраза
+    mic.listening = true;
+    const { result } = renderHook(() => useVoiceTurns(call));
+    await act(async () => { result.current.press(); }); // 1-й промах — молча
+    await act(async () => { result.current.press(); }); // 2-й — «не расслышала»
+    mic.listening = false;
+    expect(call.notice.mock.calls.map(([t]) => t)).toEqual([TEXTS.hints.say_again]);
   });
 });

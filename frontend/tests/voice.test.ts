@@ -7,7 +7,7 @@ import { ECHO_TAIL_MS, GIVE_UP, MIC_TEXT, NOT_HEARD, SAID_SOMETHING_MS, SAY_AGAI
 import { resetTextsForTests } from "@/shared/store/uiTexts";
 import { reply, TEXTS } from "./fixtures";
 
-const mic = vi.hoisted(() => ({ open: vi.fn(), take: vi.fn(), cancel: vi.fn(), listening: false }));
+const mic = vi.hoisted(() => ({ open: vi.fn(), take: vi.fn(), cancel: vi.fn(), release: vi.fn(), listening: false }));
 vi.mock("@/features/call/hooks/useMicrophone", () => ({ useMicrophone: () => mic }));
 const speech = vi.hoisted(() => ({ recognize: vi.fn(), synthesize: vi.fn() }));
 vi.mock("@/shared/api/speech", () => speech);

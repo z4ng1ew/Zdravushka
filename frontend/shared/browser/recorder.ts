@@ -27,7 +27,11 @@ export function micProblem(): MicProblem | null {
   return null;
 }
 
-/** Громкость микрофона (RMS). Порог — не ниже фонового шума комнаты, замеренного в первые WARMUP_MS */
+/** Фон комнаты выше этого не считаем: иначе голос, начатый сразу, поднял бы порог и фразу пропустили бы */
+const MAX_FLOOR = 0.02;
+
+/** Громкость микрофона (RMS). Порог — не ниже фонового шума комнаты: самый тихий момент первых WARMUP_MS,
+ *  но не выше MAX_FLOOR (пациент мог начать говорить сразу — его голос не фон) */
 function silenceDetector(stream: MediaStream, threshold: number) {
   const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new Ctx();
@@ -41,11 +45,9 @@ function silenceDetector(stream: MediaStream, threshold: number) {
     for (const v of buf) sum += v * v;
     return Math.sqrt(sum / buf.length);
   };
-  let floor = 0;
-  let samples = 0;
-  /** Замер фона: в начале записи пациент обычно ещё молчит */
-  const calibrate = () => { floor = (floor * samples + level()) / (samples + 1); samples += 1; };
-  const loud = () => level() > Math.max(threshold, floor * 2.5);
+  let floor = Number.POSITIVE_INFINITY;
+  const calibrate = () => { floor = Math.min(floor, level(), MAX_FLOOR); };
+  const loud = () => level() > Math.max(threshold, (Number.isFinite(floor) ? floor : 0) * 2.5);
   return { calibrate, loud, close: () => { ctx.close().catch(() => {}); } };
 }
 
@@ -59,18 +61,34 @@ export async function startRecording(
 ): Promise<Recording> {
   const problem = micProblem();
   if (problem) throw new MicError(problem, problem === "insecure" ? "страница открыта не по https" : "браузер не умеет записывать звук");
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-  } catch (e) {
-    throw new MicError("denied", e instanceof Error ? e.message : String(e));
-  }
+  const stream = await openStream();
   try {
     return record(stream, onAutoStop, silenceMs, maxMs, threshold);
   } catch (e) {
-    stream.getTracks().forEach((t) => t.stop()); // не оставляем микрофон включённым
+    releaseMicrophone(); // не оставляем микрофон включённым
     throw new MicError("unsupported", e instanceof Error ? e.message : String(e));
   }
+}
+
+// Микрофон открыт весь звонок: повторный запрос у браузера на каждой фразе занимал 0,2–1 с,
+// и начало фразы пациента терялось. Выключаем releaseMicrophone() — звонок завершён или голос выключен.
+let shared: MediaStream | null = null;
+
+async function openStream(): Promise<MediaStream> {
+  if (shared?.getTracks().some((t) => t.readyState !== "ended")) return shared;
+  try {
+    shared = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+    return shared;
+  } catch (e) {
+    shared = null;
+    throw new MicError("denied", e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** Выключить микрофон совсем (индикатор записи в браузере гаснет) */
+export function releaseMicrophone(): void {
+  shared?.getTracks().forEach((t) => t.stop());
+  shared = null;
 }
 
 function record(stream: MediaStream, onAutoStop: () => void, silenceMs: number, maxMs: number, threshold: number): Recording {
@@ -101,7 +119,7 @@ function record(stream: MediaStream, onAutoStop: () => void, silenceMs: number, 
     const spoke = speech > 0;
     if (!fired && ((spoke && now - quietSince > silenceMs) || now - started > maxMs)) { fired = true; onAutoStop(); }
   }, TICK_MS);
-  const cleanup = () => { clearInterval(tick); stream.getTracks().forEach((t) => t.stop()); detector.close(); };
+  const cleanup = () => { clearInterval(tick); detector.close(); }; // сам микрофон не выключаем — он нужен следующей фразе
   return {
     stop: () => new Promise<Blob>((resolve) => {
       rec.onstop = () => { cleanup(); resolve(new Blob(chunks, { type: rec.mimeType || "audio/webm" })); };

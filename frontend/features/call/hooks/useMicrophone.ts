@@ -3,10 +3,10 @@
 // Микрофон для голосового звонка: открыть запись, забрать фразу, выбросить запись.
 // Микрофон недоступен — пишем в журнал ошибок и возвращаем причину (подсказку покажет звонок).
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError } from "@/shared/api/ApiError";
 import { logError } from "@/shared/api/errorLog";
-import { MicError, startRecording, type MicProblem, type Recording } from "@/shared/browser/recorder";
+import { MicError, releaseMicrophone, startRecording, type MicProblem, type Recording } from "@/shared/browser/recorder";
 
 export interface Phrase { audio: Blob; heard: boolean; speechMs: number } // heard — был голос, а не только тишина
 
@@ -42,5 +42,10 @@ export function useMicrophone() {
 
   const cancel = useCallback(() => { rec.current?.cancel(); rec.current = null; setListening(false); }, []);
 
-  return { listening, open, take, cancel };
+  /** Звонок завершён или голос выключен — выключить микрофон совсем */
+  const release = useCallback(() => { cancel(); releaseMicrophone(); }, [cancel]);
+
+  useEffect(() => () => { rec.current?.cancel(); releaseMicrophone(); }, []); // ушли со страницы — микрофон выключен
+
+  return { listening, open, take, cancel, release };
 }

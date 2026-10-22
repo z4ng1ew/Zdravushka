@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SPEECH_MIN_MS, startRecording, WARMUP_MS } from "@/shared/browser/recorder";
+import { releaseMicrophone, SPEECH_MIN_MS, startRecording, WARMUP_MS } from "@/shared/browser/recorder";
 
 // Громкость микрофона по шагам по 100 мс: тест задаёт, что «слышно» в каждый момент
 let level = 0;
 let constraints: unknown = null;
+let asked = 0; // сколько раз просили микрофон у браузера
+const trackStop = vi.fn();
 
 class FakeAnalyser {
   fftSize = 4;
@@ -32,10 +34,10 @@ beforeEach(() => {
   vi.stubGlobal("MediaRecorder", FakeRecorder);
   Object.defineProperty(navigator, "mediaDevices", {
     configurable: true,
-    value: { getUserMedia: async (c: unknown) => { constraints = c; return { getTracks: () => [{ stop: () => {} }] }; } },
+    value: { getUserMedia: async (c: unknown) => { constraints = c; asked += 1; return { getTracks: () => [{ stop: trackStop, readyState: "live" }] }; } },
   });
 });
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { releaseMicrophone(); asked = 0; trackStop.mockClear(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("запись с микрофона: что считать речью", () => {
   it("микрофон просим с подавлением эха и шума", async () => {
@@ -77,5 +79,23 @@ describe("запись с микрофона: что считать речью",
     expect(stop).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(800);
     expect(stop).toHaveBeenCalledTimes(1);
+  });
+  it("пациент начал говорить сразу — голос не принимается за фон, фраза засчитана", async () => {
+    level = 0.3; // говорит с первой миллисекунды
+    const r = await startRecording(() => {});
+    await vi.advanceTimersByTimeAsync(WARMUP_MS + 800);
+    expect(r.heardSpeech()).toBe(true);
+  });
+  it("микрофон открыт весь звонок: на следующую фразу браузер не спрашиваем заново; release — выключает", async () => {
+    const a = await startRecording(() => {});
+    a.cancel();
+    const b = await startRecording(() => {});
+    b.cancel();
+    expect(asked).toBe(1);
+    expect(trackStop).not.toHaveBeenCalled(); // между фразами микрофон не выключается
+    releaseMicrophone();
+    expect(trackStop).toHaveBeenCalledTimes(1);
+    await startRecording(() => {});
+    expect(asked).toBe(2); // после выключения — снова спрашиваем
   });
 });

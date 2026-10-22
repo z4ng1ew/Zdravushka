@@ -13,7 +13,7 @@ import { recognize } from "@/shared/api/speech";
 import { textsNow } from "@/shared/store/uiTexts";
 import type { ChatResponse } from "@/shared/types/chat";
 import type { HintKey } from "@/shared/types/texts";
-import { ECHO_TAIL_MS, emptyReaction, freshCounts, LISTEN_MS, MIC_TEXT, silenceReaction, type MissReaction } from "../model/speechMisses";
+import { ECHO_TAIL_MS, emptyReaction, freshCounts, LISTEN_MS, MIC_TEXT, SAID_SOMETHING_MS, silenceReaction, type MissReaction } from "../model/speechMisses";
 import type { CallSession } from "./useCallSession";
 import { useMicrophone } from "./useMicrophone";
 import { useSpeaker } from "./useSpeaker";
@@ -50,7 +50,8 @@ export function useVoiceTurns(call: CallSession) {
 
   /** Озвучить фразу с выключенным микрофоном и, если ход тот же, снова слушать — после того как стихнет эхо */
   async function sayThenListen(text: string, my: number, again: boolean) {
-    mic.cancel(); // микрофон не должен записать самого ассистента
+    // микрофон не должен записать самого ассистента; дальше слушать не будем (конец, перевод) — выключаем совсем
+    if (again) mic.cancel(); else mic.release();
     await speaker.speak(text);
     const go = () => again && fresh(my) && voiceOn.current && !speaker.busy();
     if (go()) { await wait(ECHO_TAIL_MS); if (go()) listen(); }
@@ -79,7 +80,8 @@ export function useVoiceTurns(call: CallSession) {
     const heard = await hear(phrase.audio);
     setTranscribing(false);
     if (!fresh(my)) return; // звонок завершили, начали заново или перехватили — фраза устарела
-    if (heard.kind === "miss") { react(emptyReaction(phrase.speechMs, count.current)); return; } // «не расслышал» — только если говорил
+    // пусто: «не расслышала» — только если говорил (или сам нажал «отправить» — значит, говорил); иначе это шум
+    if (heard.kind === "miss") { react(emptyReaction(manual ? SAID_SOMETHING_MS : phrase.speechMs, count.current)); return; }
     if (heard.kind === "error") { voiceOn.current = false; call.showError(heard.error); return; }
     Object.assign(count.current, { misses: 0, noise: 0 });
     await afterTurn(await call.ask(heard.text, heard.text, heard.confidence), my);
@@ -88,12 +90,12 @@ export function useVoiceTurns(call: CallSession) {
   /** Промах или тишина: подсказка и слушать дальше — или выключить микрофон */
   function react(r: MissReaction) {
     const text = r.notice ? hintText(r.notice) : ""; if (text) call.notice(text);
-    if (r.listen) listen(); else { voiceOn.current = false; count.current = freshCounts(); }
+    if (r.listen) listen(); else { voiceOn.current = false; count.current = freshCounts(); mic.release(); }
   }
 
   /** Остановить микрофон и озвучку; начатые шаги этого хода больше не выполнятся */
   const cancel = () => { turn.current += 1; mic.cancel(); speaker.silence(); };
-  const stop = () => { cancel(); voiceOn.current = false; count.current = freshCounts(); };
+  const stop = () => { cancel(); mic.release(); voiceOn.current = false; count.current = freshCounts(); };
   const follow = async (reply: Promise<ChatResponse | null>) => { const my = turn.current; await afterTurn(await reply, my); };
   const begin = (first?: string) => follow(call.start(first));
   /** «Заново»: прошлый звонок замолкает, новый ведётся так же — голосом или текстом */

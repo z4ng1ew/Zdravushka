@@ -269,7 +269,7 @@ def fallback(text: str, expecting: str) -> dict:
              ("диагноз", "medical"), ("это опасно", "medical"), ("нормальн", "medical"),
              ("перенес", "reschedule"), ("перезапиш", "reschedule"), ("отмен", "cancel"),
              ("на дом", "home_visit"), ("когда я записан", "status"), ("моя запись", "status"),
-             ("когда принимает", "schedule_info"), ("запиш", "booking"), ("запис", "booking"),
+             ("когда принимает", "schedule_info"), ("запиш", "booking"), ("запис", "booking"), ("напишите к", "booking"),
              ("талон", "booking"), ("до свидания", "goodbye"), ("спасибо, все", "goodbye")]
     raw["intent"] = next((i for k, i in rules if k in low), "other")
     raw["topic"] = knowledge.detect(text)
@@ -289,8 +289,10 @@ def fallback(text: str, expecting: str) -> dict:
     # «Перу», «пер», «фторой» — так Whisper слышит короткие «первый», «второй» (живой звонок 22.10)
     words = {"перв": 1, "перу": 1, "втор": 2, "фтор": 2, "трет": 3, "трит": 3}
     raw["choice"] = int(m.group(1)) if m else next((v for k, v in words.items() if k in low), None)
-    if re.search(r"\b(да|верно|хорошо|подтверждаю|согласен|согласна|давайте)\b", low):
-        raw["answer"] = "yes"
+    if re.search(r"\bне (приду|смогу|получится|буду)\b", low):
+        raw["answer"] = "no"
+    elif re.search(r"\b(да|верно|хорошо|подтверждаю|согласен|согласна|давайте|приду|буду|окей|ок|конечно|обязательно)\b", low):
+        raw["answer"] = "yes"  # «А я приду», «буду обязательно» — тоже «да» (живой звонок-напоминание 22.10)
     elif re.search(r"\b(нет|не надо|неверно|не так)\b", low):
         raw["answer"] = "no"
     for d in schedule.demo_doctors():  # фамилия врача из справочника («к Дорохову»)
