@@ -78,6 +78,9 @@ SILERO_MODEL = os.getenv("SILERO_MODEL", "v4_ru")
 SILERO_MODEL_PATH = os.getenv("SILERO_MODEL_PATH", "data/voices/silero_v4_ru.pt")
 SILERO_VOICE = os.getenv("SILERO_VOICE", "xenia")
 SILERO_RATE = int(os.getenv("SILERO_RATE", "24000"))
+# Голос персонажа: SILERO_PITCH = x-low / low / medium / high / x-high; SILERO_SHIFT 1.0 — как есть, 1.18 — «детский»
+SILERO_PITCH = os.getenv("SILERO_PITCH", "medium")
+SILERO_SHIFT = float(os.getenv("SILERO_SHIFT", "1.0"))
 SILERO_THREADS = int(os.getenv("SILERO_THREADS", "2"))
 PIPER_MODEL = os.getenv("PIPER_MODEL", "data/voices/ru_RU-irina-medium.onnx")
 

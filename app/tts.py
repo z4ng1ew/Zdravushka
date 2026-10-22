@@ -92,9 +92,20 @@ def _silero_model():
 
 
 def _silero(text: str) -> bytes:
-    audio = _silero_model().apply_tts(text=text[:900], speaker=config.SILERO_VOICE,
-                                      sample_rate=config.SILERO_RATE, put_accent=True, put_yo=True)
-    pcm = (audio.numpy() * 32767).clip(-32768, 32767).astype(np.int16)
+    """Голос персонажа: высота (SILERO_PITCH через SSML) и «детскость» (SILERO_SHIFT > 1 — выше и звонче)."""
+    model, text = _silero_model(), text[:900]
+    if config.SILERO_PITCH != "medium" or config.SILERO_SHIFT != 1.0:
+        safe = text.replace("&", " и ").replace("<", " ").replace(">", " ")
+        rate = "slow" if config.SILERO_SHIFT > 1.0 else "medium"  # сдвиг ускоряет речь — заранее замедляем
+        audio = model.apply_tts(ssml_text=f'<speak><prosody pitch="{config.SILERO_PITCH}" rate="{rate}">{safe}</prosody></speak>',
+                                speaker=config.SILERO_VOICE, sample_rate=config.SILERO_RATE).numpy()
+    else:
+        audio = model.apply_tts(text=text, speaker=config.SILERO_VOICE, sample_rate=config.SILERO_RATE,
+                                put_accent=True, put_yo=True).numpy()
+    if config.SILERO_SHIFT != 1.0 and len(audio):
+        n = int(len(audio) / config.SILERO_SHIFT)
+        audio = np.interp(np.linspace(0, len(audio) - 1, n), np.arange(len(audio)), audio)
+    pcm = (audio * 32767).clip(-32768, 32767).astype(np.int16)
     return pcm_to_wav(pcm.tobytes(), config.SILERO_RATE)
 
 
