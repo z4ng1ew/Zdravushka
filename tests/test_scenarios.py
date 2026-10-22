@@ -1023,3 +1023,28 @@ async def test_client_comment_written_in_background(mis, monkeypatch):
     assert "записаны" in r.reply
     await asyncio.sleep(0.05)
     assert "SMS Запись создана" in (mis.clients[0]["comment"] or "")
+
+
+# ---------- Перезвон эксперту после звонка (техчекпоинт 23.10) ----------
+
+async def test_callback_after_booking_reminds_about_visit(mis):
+    from app import telephony
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    endpoint, visit = await telephony.callback_plan(r.session_id, "expert-3")
+    assert endpoint == "PJSIP/expert-3@gateway" and visit["id"] == r.booking.visit_id
+    r2 = await talk("где вы находитесь?")
+    assert await telephony.callback_plan(r2.session_id, "expert-3") == ("PJSIP/expert-3@gateway", None)
+
+
+async def test_callback_only_for_allowed_numbers(mis):
+    from app import telephony
+    r = await talk("где вы находитесь?")
+    assert await telephony.callback_plan(r.session_id, "79991234567") is None
+    assert await telephony.callback_plan(r.session_id, "") is None
+
+
+def test_caller_endpoint_only_from_localhost():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    resp = TestClient(app).get("/api/telephony/caller", params={"call": "u1", "num": "expert-1"})
+    assert resp.status_code == 403  # тестовый клиент — не localhost Asterisk

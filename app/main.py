@@ -5,7 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -43,6 +43,15 @@ async def health():
             "pd_trusted_ai_only": not config.REJECTED_AI_URLS,
             "llm": bool(config.LLM_URL), "stt": bool(config.STT_URL), "tts": config.TTS_BACKEND,
             "telephony": f"{config.AUDIOSOCKET_HOST}:{config.AUDIOSOCKET_PORT}" if config.TELEPHONY_ENABLED else None}
+
+
+@app.get("/api/telephony/caller")
+async def telephony_caller(call: str, num: str, request: Request):
+    """Asterisk сообщает номер звонящего перед AudioSocket (для перезвона). Только с этой машины."""
+    if request.client is None or request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "только для Asterisk на этой машине")
+    telephony.register_caller(call, num[:40])
+    return {"ok": True}
 
 
 @app.get("/api/texts")

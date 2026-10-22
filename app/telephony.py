@@ -50,6 +50,48 @@ def louder(pcm: bytes, gain: float = 1.8) -> bytes:
 # Asterisk открывает AudioSocket с этим UUID — так понимаем, что это напоминание и о какой записи.
 OUTBOUND: dict[str, dict] = {}
 
+# ---------- Перезвон после звонка (техчекпоинт 23.10) ----------
+# Для проверяющего: эксперты звонят с номеров expert-1…6. Asterisk перед AudioSocket сообщает серверу,
+# кто звонит (GET /api/telephony/caller, только с localhost), а после разговора ассистент сам перезванивает:
+#   • в разговоре записались / перенесли — звонок-напоминание о записи (С-10: «Вы придёте?»);
+#   • записи нет — короткий обратный звонок по обращению, дальше обычный разговор.
+# Перезваниваем только номерам из CALLBACK_ALLOWED и только в ответ на звонок (без звонка — никому).
+# Тесты: test_callback_after_booking_reminds_about_visit, test_callback_only_for_allowed_numbers.
+CALLERS: dict[str, str] = {}   # UUID звонка → номер звонящего (из dialplan)
+
+
+def register_caller(call_uuid: str, number: str):
+    CALLERS[call_uuid] = number
+
+
+async def callback_plan(session_id: str, number: str) -> tuple[str, dict | None] | None:
+    """Кому и о чём перезвонить. None — не перезваниваем."""
+    import re
+    if not (config.CALLBACK_ENABLED and number and re.match(config.CALLBACK_ALLOWED, number)):
+        return None
+    endpoint = f"PJSIP/{number}@gateway"
+    s = dialog.SESSIONS.get(session_id)
+    if s and s.client and dialog.state.stand:
+        try:
+            visits = await dialog.state.stand.list_visits(client_id=s.client["id"], status="Запланирована")
+        except Exception:  # noqa: BLE001 — МИС недоступна: перезвоним без записи
+            visits = []
+        if visits:
+            return endpoint, max(visits, key=lambda v: v["id"])  # самая свежая запись — сделанная в этом звонке
+    return endpoint, None
+
+
+async def callback(session_id: str, number: str):
+    """Перезвонить звонившему после разговора."""
+    plan = await callback_plan(session_id, number)
+    if not plan:
+        return
+    endpoint, visit = plan
+    await asyncio.sleep(config.CALLBACK_DELAY_SEC)  # даём шлюзу освободить линию
+    log.info("Перезвон %s (%s)", number, "напоминание" if visit else "обратный звонок")
+    await call_reminder(visit, endpoint=endpoint)
+
+
 # Идущие сейчас телефонные звонки (id сессии) — для экрана «Звонок сейчас» в кабинете
 ACTIVE: set[str] = set()
 
@@ -219,7 +261,11 @@ class Call:
         self.outbound = OUTBOUND.get(self.call_uuid)
         if self.outbound:  # пациент взял трубку на звонке-напоминании
             self.outbound["answered"].set()
-            greeting = dialog.start_reminder(self.session_id, self.outbound["visit"])
+            visit = self.outbound["visit"]
+            greeting = (dialog.start_reminder(self.session_id, visit) if visit else dialog.start_followup(
+                self.session_id, f"Здравствуйте! Это {config.ASSISTANT_NAME}, виртуальный помощник регистратуры "
+                "поликлиники номер семь. Перезваниваю по вашему обращению. Разговор записывается. "
+                "Чем ещё могу помочь?"))
         else:
             greeting = await dialog.handle(self.session_id, "")
         await self.say(greeting.reply)
@@ -249,6 +295,10 @@ class Call:
         ACTIVE.discard(self.session_id)
         if self.outbound:
             self.outbound["finished"].set()
+        elif (number := CALLERS.pop(self.call_uuid, "")):  # входящий звонок — перезваниваем
+            task = asyncio.create_task(callback(self.session_id, number))
+            _CALLBACKS.add(task)
+            task.add_done_callback(_CALLBACKS.discard)
         log.info("Звонок %s завершён", self.session_id)
 
     async def process(self, pcm: bytes):
@@ -302,14 +352,17 @@ async def _asterisk(command: str) -> tuple[int, str]:
     return 1, text if "text" in locals() else "asterisk не найден"
 
 
-async def call_reminder(visit: dict, ring_sec: int = 60) -> str:
+_CALLBACKS: set = set()
+
+
+async def call_reminder(visit: dict | None, ring_sec: int = 60, endpoint: str | None = None) -> str:
     """Звоним пациенту и ждём конца разговора. Возвращает итог для журнала напоминаний."""
     call_uuid = str(uuid.uuid4())
     entry = {"visit": visit, "answered": asyncio.Event(), "finished": asyncio.Event()}
     OUTBOUND[call_uuid] = entry
     try:
         code, out = await _asterisk(
-            f"channel originate {config.REMINDER_ENDPOINT} application AudioSocket "
+            f"channel originate {endpoint or config.REMINDER_ENDPOINT} application AudioSocket "
             f"{call_uuid},{config.AUDIOSOCKET_HOST}:{config.AUDIOSOCKET_PORT}")
         if code:
             log.warning("originate: %s", out.strip())

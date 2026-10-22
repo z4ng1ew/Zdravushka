@@ -13,6 +13,14 @@ from app.models import ChatResponse, Escalation
 from app.dialog.session import Session
 
 
+def start_followup(session_id: str, text: str) -> ChatResponse:
+    """Обратный звонок без записи на приём (обращение передано регистратору, справка):
+    короткое сообщение, дальше — обычный разговор, как при входящем звонке."""
+    s = open_session(session_id, "исходящий")
+    s.call["intent"] = "Обратный звонок"
+    return reply(s, text)
+
+
 def start_reminder(session_id: str, visit: dict) -> ChatResponse:
     """Начало исходящего звонка: пациент уже известен (из записи), сразу напоминаем о приёме."""
     s = open_session(session_id, "исходящий", step="remind", task="reminder",
