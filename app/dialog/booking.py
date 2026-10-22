@@ -69,7 +69,7 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
             done = o.model_copy(update={"visit_id": visit["id"], "status": "Запланирована"})
             extra = ""
             if (old := s.take("replace_visit")):  # «перенос» к другому врачу: старую запись отменяем
-                await cancel_visit(s, old)
+                await cancel_visit(s, old, notify=False)
                 extra = " Прежняя запись отменена."
             return task_done(s, f"Готово, вы записаны {o.spoken}{room(o.doctor_name)}.{extra} "
                                  "Возьмите паспорт и полис ОМС.", "записан", booking=done)

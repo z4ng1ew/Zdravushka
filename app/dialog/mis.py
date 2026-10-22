@@ -85,17 +85,61 @@ async def client_visits(s: Session) -> list[dict]:
 
 
 async def create_visit(s: Session, o: Booking) -> dict:
-    return await call_mis(s, "POST", "/visits", api().create_visit(s.client["id"], o.doctor_id, o.scheduled_at))
+    visit = await call_mis(s, "POST", "/visits", api().create_visit(s.client["id"], o.doctor_id, o.scheduled_at))
+    sms(s, "Перенос" if s.replace_visit else "Запись создана", visit["id"])
+    return visit
 
 
 async def reschedule_visit(s: Session, visit: dict, o: Booking) -> dict:
-    return await call_mis(s, "PATCH", f"/visits/{visit['id']}", api().reschedule_visit(visit["id"], o.scheduled_at))
+    updated = await call_mis(s, "PATCH", f"/visits/{visit['id']}", api().reschedule_visit(visit["id"], o.scheduled_at))
+    sms(s, "Перенос", visit["id"])
+    return updated
 
 
-async def cancel_visit(s: Session, visit: dict) -> dict:
-    return await call_mis(s, "PATCH", f"/visits/{visit['id']}", api().cancel_visit(visit["id"]))
+async def cancel_visit(s: Session, visit: dict, notify: bool = True) -> dict:
+    updated = await call_mis(s, "PATCH", f"/visits/{visit['id']}", api().cancel_visit(visit["id"]))
+    if notify:  # при переносе к другому врачу старую отменяем молча: пациент получает одно SMS «Перенос»
+        sms(s, "Отмена", visit["id"])
+    return updated
+
+
+# ---------- Отметки в карточке пациента (формат организаторов, чат хакатона 21–22.10) ----------
+# Для проверяющего: SMS ассистент не отправляет — по договорённости с организаторами каждое «SMS»
+# фиксируется строкой в комментарии клиента (PATCH /clients/{id}, поле comment):
+#   SMS <событие> #<id записи> ДД.ММ.ГГГГ ЧЧ:ММ   — событие = шаблон из Приложения Б регламента,
+#                                                   время — момент отправки; без записи #<id> не пишется;
+#   Подтверждена запись #<id> ДД.ММ.ГГГГ ЧЧ:ММ    — время приёма (звонок-напоминание С-10);
+#   Отказ от обзвона ДД.ММ.ГГГГ                    — «не звоните мне больше» (код OPT_OUT).
+# PATCH заменяет комментарий целиком, поэтому сначала читаем текущий и дописываем строки (append_comment).
+# Тесты: test_sms_lines_written_to_client_comment, test_comment_is_appended_not_replaced,
+#        test_reminder_confirmation_line_format, test_reminder_opt_out.
+
+def sms(s: Session, event: str, visit_id: int | None = None):
+    """Отметка «SMS отправлено» (Приложение Б) — в очередь на запись в карточку пациента."""
+    when = schedule.now().strftime("%d.%m.%Y %H:%M")
+    s.notes.append(f"SMS {event} #{visit_id} {when}" if visit_id else f"SMS {event} {when}")
+
+
+async def append_comment(client_id: int, lines: list[str]):
+    """Дописать строки в комментарий клиента, не стирая прежние отметки."""
+    current = ((await api().get_client(client_id)) or {}).get("comment") or ""
+    text = "\n".join([current.rstrip()] + lines) if current.strip() else "\n".join(lines)
+    await api().update_client_comment(client_id, text[-2000:])
+
+
+async def flush_notes(s: Session):
+    """Записать накопленные отметки разговора одним чтением и одной записью (лимит стенда 10 запросов/мин).
+    Сбой МИС здесь не ломает разговор: действие уже выполнено, отметка останется в журнале."""
+    if not (s.notes and s.client):
+        return
+    lines, s.notes = s.notes, []
+    try:
+        await append_comment(s.client["id"], lines)
+        journal.stand_request(s.call, "PATCH", f"/clients/{s.client['id']}", 200, "; ".join(lines)[:120])
+    except Exception as e:  # noqa: BLE001
+        journal.stand_request(s.call, "PATCH", f"/clients/{s.client['id']}", 0, f"отметка не записана: {e}"[:120])
 
 
 async def add_comment(s: Session, note: str):
-    """Комментарий в карточку пациента (подтверждение визита, вызов на дом)."""
-    await call_mis(s, "PATCH", f"/clients/{s.client['id']}", api().update_client_comment(s.client["id"], note))
+    """Строка в комментарий карточки пациента (вызов на дом) — дописывается к прежним."""
+    s.notes.append(note)

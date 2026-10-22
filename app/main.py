@@ -150,6 +150,8 @@ async def run_reminders():
         queued = await reminder_service.start_campaign()
     except reminder_service.MisUnavailable as e:
         raise HTTPException(503, f"МИС недоступна: {e}")
+    except reminder_service.OutsideWindow:
+        return {"queued": 0, "note": "вне окна обзвона С-10: будни 10:00–19:00, суббота 10:00–15:00 (демо: REMINDER_DEMO=1)"}
     return {"queued": 0, "note": "обзвон уже идёт"} if queued is None else {"queued": queued}
 
 

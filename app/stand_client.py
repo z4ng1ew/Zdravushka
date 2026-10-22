@@ -191,6 +191,9 @@ class StandClient:
             body["comment"] = comment
         return await self._request("POST", "/clients", json=body)
 
+    async def get_client(self, client_id: int) -> dict:
+        return await self._request("GET", f"/clients/{client_id}")
+
     async def update_client_comment(self, client_id: int, comment: str) -> dict:
         return await self._request("PATCH", f"/clients/{client_id}", json={"comment": comment})
 

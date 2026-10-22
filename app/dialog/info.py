@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from app import journal, knowledge, schedule
 from app.dialog.common import collected, escalate, reply, send_escalation, task_done
-from app.dialog.mis import add_comment
+from app.dialog.mis import add_comment, sms
 from app.dialog.steps import is_same_doctor, need_identity
 from app.models import ChatResponse, Escalation
 from app.dialog.session import Session
@@ -74,6 +74,7 @@ async def task_home_visit(s: Session, nl: dict) -> ChatResponse:
     # Заявка на специалиста в МИС: адрес и повод — в описании (так попросили организаторы)
     await send_escalation(s, note)
     await add_comment(s, note)
+    sms(s, "Вызов на дом принят")  # записи нет — без #id (формат организаторов)
     journal.handoff(s.call, "вызов на дом", False, note, collected(s))
     when_text = "сегодня" if day == now.date() else schedule.say_date(day)
     return task_done(s, f"Заявка принята на {when_text}. Врач придёт до восемнадцати часов, точное время "

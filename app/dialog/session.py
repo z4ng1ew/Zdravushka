@@ -30,6 +30,7 @@ class Session:
     options: list[Booking] = field(default_factory=list)  # предложенные варианты времени
     chosen: Booking | None = None                # выбранный вариант, ждёт подтверждения
     replace_visit: dict | None = None            # «перенос» к другому врачу: старая запись к отмене
+    notes: list = field(default_factory=list)    # строки для комментария клиента в МИС (SMS, подтверждение) — пишутся одним PATCH
     reminder_visit_id: int | None = None         # звонок-напоминание: о какой записи
 
     def forget_task_data(self):

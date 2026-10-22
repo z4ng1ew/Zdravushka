@@ -166,6 +166,15 @@ _YEAR = re.compile(r"\b(19\d\d|20\d\d)\b|тысяч|двухтысяч")
 _PATRONYMIC = ("ич", "вна", "чна", "ична", "оглы", "кызы")
 
 
+OUT_OF_BASE = re.compile(r"парковк|стоянк|припарков|банкомат|кафе|столов|буфет|wi-?fi|вай-?фай|аптек")
+
+
+def _out_of_base(result: dict, text: str) -> dict:
+    if OUT_OF_BASE.search(text.lower()):
+        result["topic"], result["intent"] = None, "info"
+    return result
+
+
 def _words(text: str) -> list[str]:
     return re.findall(r"[а-яе\-]+", text.lower().replace("ё", "е"))
 
@@ -265,7 +274,7 @@ async def understand(text: str, expecting: str) -> dict:
     """Главная функция: фраза пациента → проверенные поля. Сначала нейросеть, при сбое — запасной разбор."""
     text = sanitize(text)
     if not (config.LLM_URL and config.LLM_MODEL):
-        return {**ground(fallback(text, expecting), text), "_source": "rules"}
+        return {**_out_of_base(ground(fallback(text, expecting), text), text), "_source": "rules"}
     today = _today()
     prompt = SYSTEM_PROMPT.format(today=today.strftime("%d.%m.%Y"), weekday=WEEKDAYS[today.weekday()],
                                   intents=INTENTS, topics=knowledge.TOPICS,
@@ -281,6 +290,10 @@ async def understand(text: str, expecting: str) -> dict:
     for key in ("answer", "choice", "birth_date", "topic", "specialty", "doctor_name"):
         if result[key] is None and backup[key] is not None:
             result[key] = backup[key]
+    if OUT_OF_BASE.search(text.lower()):
+        # «Где у вас парковка?» — в базе знаний ответа нет: не подставляем похожую тему (адрес),
+        # а переводим на регистратора по R-08 (контрольный диалог регламента)
+        result["topic"], result["intent"] = None, "info"
     if result["topic"] and result["intent"] in (None, "other"):
         result["intent"] = "info"  # «Где вы находитесь?» — справка по регламенту, а не «не поняла»
     result = ground(result, text)

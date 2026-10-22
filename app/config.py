@@ -92,6 +92,8 @@ AUDIOSOCKET_PORT = int(os.getenv("AUDIOSOCKET_PORT", "9092"))
 REMINDER_ENDPOINT = os.getenv("REMINDER_ENDPOINT", "PJSIP/phone-049@gateway")
 # Детектор речи: громкость, выше которой считаем, что человек говорит (подбирается на живом звонке)
 VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "500"))
+# Демо-режим обзвона: звонить вне окна С-10 и без паузы 2 часа между попытками (для показа жюри вечером)
+REMINDER_DEMO = os.getenv("REMINDER_DEMO", "0") == "1"
 END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "1200"))
 # На шагах ФИО / дата рождения / адрес пациент вспоминает и делает паузы — ждём дольше
 END_OF_SPEECH_SLOW_MS = int(os.getenv("END_OF_SPEECH_SLOW_MS", "2000"))   # пауза, после которой фраза закончена

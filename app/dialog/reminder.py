@@ -2,7 +2,10 @@
 
 from app import config
 from app.dialog.common import escalate, reminder_status, reply
-from app.dialog.mis import add_comment, cancel_visit
+import re
+
+from app import schedule
+from app.dialog.mis import add_comment, cancel_visit, sms
 from app.dialog.state import open_session
 from app.dialog.steps import room, visit_booking
 from app.dialog.visits import task_reschedule
@@ -22,9 +25,32 @@ def start_reminder(session_id: str, visit: dict) -> ChatResponse:
                      f"{b.spoken}{room(b.doctor_name)}. Вы придёте?", booking=b)
 
 
+def _opt_out(s: Session, all_messages: bool) -> ChatResponse:
+    """«Не звоните мне больше» (С-10): отметка в МИС, код OPT_OUT. Запись на приём не меняется.
+    Отказ от звонков — SMS-напоминания приходят; отказ от всех уведомлений — и SMS не шлём."""
+    today = schedule.now().strftime("%d.%m.%Y")
+    s.notes.clear()
+    if all_messages:
+        add_note = f"Отказ от уведомлений {today}"
+        text = "Хорошо, напоминаний больше не будет — ни звонком, ни SMS. Ваша запись остаётся. Всего доброго!"
+    else:
+        add_note = f"Отказ от обзвона {today}"
+        sms(s, "Напоминание", s.visit["id"])
+        text = "Хорошо, больше не буду звонить с напоминаниями. Вы будете получать только SMS. Всего доброго!"
+    s.notes.insert(0, add_note)
+    reminder_status(s, "отказ от обзвона")
+    s.call["result"] = "OPT_OUT"
+    return reply(s, text, done=True, source="регламент РГ-ТЕЛ-01, С-10")
+
+
 async def task_reminder(s: Session, nl: dict) -> ChatResponse:
     """Ответ пациента на напоминание: придёт / отменить / перенести."""
     intent = nl["intent"]
+    if re.search(r"не звоните|не звонить|больше не звон|не надо звонить|не беспокойте", s.text):
+        return _opt_out(s, all_messages=bool(re.search(r"смс|sms|сообщени|уведомлен|ничего не присылайте", s.text)))
+    if not s.call.get("_sms_reminder"):  # SMS-напоминание за день — при любом исходе звонка (С-10), один раз
+        s.call["_sms_reminder"] = True
+        sms(s, "Напоминание", s.visit["id"])
     if intent == "reschedule" or (s.step == "remind_no" and (nl["date"] or nl["part_of_day"]
                                                                 or nl["choice"] == 2)):
         s.task, s.step = "reschedule", "start"
@@ -38,7 +64,7 @@ async def task_reminder(s: Session, nl: dict) -> ChatResponse:
     if s.step == "remind" and nl["answer"] == "yes":
         reminder_status(s, "подтвердил")
         s.call["result"] = "подтверждён"
-        await add_comment(s, f"Подтвердил визит {s.visit['scheduled_at']} (звонок-напоминание)")
+        await add_comment(s, f"Подтверждена запись #{s.visit['id']} {s.visit['scheduled_at']}")
         return reply(s, "Спасибо, ждём вас. Возьмите паспорт и полис ОМС. Всего доброго!", done=True)
     if s.step == "remind" and nl["answer"] == "no":
         s.step = "remind_no"

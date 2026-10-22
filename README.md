@@ -149,7 +149,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 ## Соответствие кейсу и критериям оценки
 
 <!-- Для проверяющего: каждая строка — требование кейса → где реализовано → каким тестом проверено
-     (tests/test_scenarios.py, 96 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
+     (tests/test_scenarios.py, 106 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
 
 | Требование | Код | Автотесты |
 |---|---|---|
@@ -163,6 +163,9 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 | Экстренные симптомы → 103/112 и перевод P1 на любом шаге | `safety.py`, `dialog/guards.py` | test_heart_pain_is_emergency, test_sudden_severe_headache_is_emergency, test_emergency_mid_booking_stops_booking, test_emergency_without_identity_uses_tech_client |
 | Справочный вопрос посреди записи — ответ по регламенту и возврат к шагу; ошибка в одной букве фамилии врача («Верещакин»); «за другого человека» — новая идентификация | `dialog/interceptors.py` (side_question, other_person), `dialog/steps.py`, `nlu.py` | test_info_question_in_the_middle_of_booking, test_misheard_doctor_surname_and_specialty, test_cancel_for_another_person_asks_identity_again |
 | Голос: Piper или Silero локально на VM (`TTS_BACKEND=silero`), при сбое Silero — автоматически Piper; речь никуда не уходит (152-ФЗ) | `tts.py`, `requirements-silero.txt`, `scripts/get_silero.sh` | test_silero_failure_falls_back_to_piper |
+| Отметки для жюри (ответы организаторов 21–22.10): «SMS <событие> #id ДД.ММ.ГГГГ ЧЧ:ММ» (шаблоны Приложения Б), «Подтверждена запись #id …», «Отказ от обзвона …» — в комментарии клиента, дописываются к прежним; заявка — первая строка «ПЕРЕВОД R-xx Pn» | `dialog/mis.py` (sms, append_comment, flush_notes), `dialog/reminder.py`, `dialog/common.py` | test_sms_lines_written_to_client_comment, test_comment_is_appended_not_replaced, test_escalation_first_line_format, test_reminder_opt_out, test_reminder_confirmed |
+| Правила обзвона С-10: окно будни 10–19 / сб 10–15, 2 попытки с интервалом ≥ 2 ч, затем SMS; не звоним при отказе и подтверждённой записи; демо-режим `REMINDER_DEMO=1` | `reminders.py` | test_reminder_window, test_reminder_skips_opt_out_and_confirmed, test_reminder_campaign_queues_and_marks_no_answer |
+| Вопрос вне базы знаний («где парковка?») → R-08, без подмены похожей темой | `nlu.py` (OUT_OF_BASE) | test_parking_is_out_of_knowledge_base |
 | Один источник текстов (замечание прогона 22.10, тикет #207): приветствие, имя ассистента, подсказки — `GET /api/texts`; подпись под ответом — поле `label` в `/api/chat` | `ui_texts.py`, `main.py`, `dialog/common.py` | test_ui_texts_single_source, test_reply_label_from_backend |
 | Полное ФИО: отчество спрашивается отдельно, «нет» — без отчества; дата рождения в будущем / несуществующая — ассистент говорит причину | `dialog/steps.py` (_take_middle_name, date_problem) | test_patronymic_asked_when_missing, test_no_patronymic_is_accepted, test_future_birth_date_explained, test_surname_ending_like_patronymic |
 | Живые звонки 21.10 → исправлено: зацикливание вопроса (3-й повтор → R-05), «другой день / ни один не подходит» → следующие слоты, смена врача при выборе времени, «меня к хирургу» = запись, дата рождения из двух фраз без досочинения года, «ничего не нужно» → прощание | `dialog/router.py` (_break_loop), `dialog/steps.py`, `dialog/understanding.py`, `nlu.py` | test_other_day_shows_later_slots_and_no_endless_loop, test_reminder_does_not_loop_forever, test_new_specialty_while_choosing_time, test_specialty_alone_means_booking, test_birth_date_collected_from_two_phrases, test_day_and_month_without_year_are_not_completed, test_nothing_needed_ends_call |
@@ -254,11 +257,11 @@ STAND_MODE=mock TELEPHONY_ENABLED=0 ./run.sh      # имитация МИС в �
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q tests/                 # бэкенд: 96 тестов
+python -m pytest -q tests/                 # бэкенд: 106 тестов
 cd frontend && npm ci && npm run check     # интерфейс: типы, линтер, 201 тест
 ```
 
-96 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
+106 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
 - запись, перенос, отмена, статус, отказ на подтверждении;
 - повторный пациент без дубля, запрет двойной записи, «отмените обе»;
 - врач по фамилии, перенос к другому врачу, день вместо номера варианта;

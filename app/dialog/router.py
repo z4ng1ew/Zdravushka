@@ -10,6 +10,7 @@ import httpx
 from app import journal
 from app.dialog.booking import task_booking
 from app.dialog.common import GREETING, collected, escalate, reply
+from app.dialog.mis import flush_notes
 from app.dialog.guards import run_guards
 from app.dialog.info import task_home_visit, task_info, task_schedule_info
 from app.dialog.interceptors import run_interceptors
@@ -115,3 +116,5 @@ async def _run_task(s: Session, nl: dict) -> ChatResponse:
         return await HANDLERS[s.task](s, nl)
     except (StandDown, StandError, httpx.HTTPError) as e:
         return await escalate(s, Escalation(rule="R-06", reason="сбой МИС", priority="P2", summary=f"Сбой МИС: {e}"))
+    finally:
+        await flush_notes(s)  # отметки SMS / подтверждения — в комментарий клиента одним PATCH

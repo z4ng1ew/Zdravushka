@@ -58,10 +58,12 @@ async def side_question(s: Session, nl: dict, text: str) -> ChatResponse | None:
     from app import knowledge
     if not (s.task and s.task != "info" and nl["intent"] == "info" and nl["topic"]):
         return None
+    if s.step in ("identity", "middle_name", "birth_date", "address", "reason") or nl["address"] or nl["last_name"]:
+        return None  # пациент отвечает на вопрос («…адрес: улица Ленина»), а не спрашивает справку
     answer = knowledge.answer(nl["topic"])
     if not answer or not s.last_reply:
         return None
-    return reply(s, f"{answer} Вернёмся к записи: {s.last_reply}", options=s.options or None,
+    return reply(s, f"{answer} Вернёмся к записи: {s.last_reply}", options=s.options or [],
                  source="регламент РГ-ТЕЛ-01", explanation=f"Ответ из базы знаний регламента, тема: {nl['topic']}.")
 
 

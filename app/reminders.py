@@ -5,11 +5,46 @@ from datetime import date, timedelta
 
 import httpx
 
-from app import journal, schedule, telephony
+import time
+
+from app import config, journal, schedule, telephony
 from app.dialog import state
 from app.stand_client import StandError
 
 WAITING = ("ожидает", "не дозвонились")  # кому звонить при следующем обзвоне
+
+# ---------- Правила С-10 (регламент + ответы организаторов 21.10) ----------
+# Для проверяющего: обзвон «Обзвонить всех» соблюдает правила С-10:
+#   • окно обзвона: будни 10:00–19:00, суббота 10:00–15:00, в воскресенье не звоним (часы клиники, GMT+4);
+#   • не больше 2 попыток с интервалом не меньше 2 часов; не дозвонились — SMS-напоминание (строка в комментарии);
+#   • не звоним, если запись создана меньше 24 часов назад, есть отказ от обзвона или запись уже подтверждена.
+# Демонстрация вне окна (техчекпоинт идёт вечером): REMINDER_DEMO=1 в .env — на демо говорим, что включён демо-режим.
+# Кнопка «Позвонить» у одной записи — ручное действие регистратора, окно на неё не действует.
+# Тесты: test_reminder_window, test_reminder_skips_opt_out_and_confirmed, test_reminder_two_attempts_then_sms.
+MAX_ATTEMPTS = 2
+RETRY_AFTER_SEC = 2 * 3600
+
+
+def in_call_window(now) -> bool:
+    if now.weekday() == 6 or now.date() in schedule.HOLIDAYS:
+        return False
+    end = 15 if now.weekday() == 5 else 19
+    return 10 <= now.hour < end
+
+
+def _created_recently(v: dict) -> bool:
+    raw = v.get("created_at")
+    if not raw:
+        return False  # стенд не отдаёт дату создания — правило проверить нельзя, звоним
+    try:
+        return (schedule.now() - schedule.from_api(raw)).total_seconds() < 24 * 3600
+    except ValueError:
+        return False
+
+
+def _blocked_by_comment(comment: str, visit_id: int) -> bool:
+    return ("Отказ от обзвона" in comment or "Отказ от уведомлений" in comment
+            or f"Подтверждена запись #{visit_id} " in comment)
 
 
 class MisUnavailable(Exception):
@@ -18,6 +53,10 @@ class MisUnavailable(Exception):
 
 class Busy(Exception):
     """Уже идёт звонок: софтфон один, звоним по одному."""
+
+
+class OutsideWindow(Exception):
+    """Вне окна обзвона С-10 (будни 10–19, суббота 10–15, воскресенье — нет)."""
 
 
 class VisitNotFound(Exception):
@@ -77,13 +116,47 @@ async def _ring_all(visits: list[dict]):
     """Звоним по очереди. Итог разговора (подтвердил/отменил/перенёс) пишет сам диалог,
     здесь — только случаи, когда разговора не было."""
     for v in visits:
-        outcome = await telephony.call_reminder(v)
         r = journal.REMINDERS.setdefault(v["id"], {})
+        r["attempts"] = r.get("attempts", 0) + 1
+        r["last_try"] = time.time()
+        outcome = await telephony.call_reminder(v)
         if outcome in ("не дозвонились", "ошибка звонка"):
             r["status"] = outcome
+            if r["attempts"] >= MAX_ATTEMPTS:  # 2 попытки — дальше только SMS-напоминание
+                r["status"] = "без ответа"
+                await _note_sms(v)
         elif r.get("status") in (None, "ожидает", "в очереди", "звоним"):
             r["status"] = "без ответа"
         journal.save()
+
+
+async def _note_sms(v: dict):
+    """Не дозвонились — SMS-напоминание: строка «SMS Напоминание #id ДД.ММ.ГГГГ ЧЧ:ММ» в комментарий клиента."""
+    from app.dialog.mis import append_comment
+    try:
+        await append_comment(v["client_id"], [f"SMS Напоминание #{v['id']} {schedule.now().strftime('%d.%m.%Y %H:%M')}"])
+    except Exception:  # noqa: BLE001 — МИС недоступна: статус «без ответа» уже в журнале
+        pass
+
+
+async def due_for_call(visits: list[dict]) -> list[dict]:
+    """Кому звонить сейчас по правилам С-10."""
+    out = []
+    for v in visits:
+        r = status_of(v["id"])
+        if r["status"] not in WAITING or r.get("attempts", 0) >= MAX_ATTEMPTS or _created_recently(v):
+            continue
+        if not config.REMINDER_DEMO and time.time() - r.get("last_try", 0) < RETRY_AFTER_SEC:
+            continue
+        try:
+            comment = ((await state.stand.get_client(v["client_id"])) or {}).get("comment") or ""
+        except Exception:  # noqa: BLE001 — не прочитали карточку: звоним, отказ проверит сам разговор
+            comment = ""
+        if _blocked_by_comment(comment, v["id"]):
+            r["status"] = "подтвердил" if f"#{v['id']} " in comment else "отказ от обзвона"
+            continue
+        out.append(v)
+    return out
 
 
 def _start(visits: list[dict]):
@@ -95,7 +168,9 @@ async def start_campaign() -> int | None:
     """Обзвонить всех, кто ждёт напоминания. None — обзвон уже идёт."""
     if is_busy():
         return None
-    visits = [v for v in await tomorrow_visits() if status_of(v["id"])["status"] in WAITING]
+    if not config.REMINDER_DEMO and not in_call_window(schedule.now()):
+        raise OutsideWindow()
+    visits = await due_for_call(await tomorrow_visits())
     for v in visits:
         status_of(v["id"])["status"] = "в очереди"
     journal.save()

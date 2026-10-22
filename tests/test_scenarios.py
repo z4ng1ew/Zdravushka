@@ -1,3 +1,4 @@
+import re
 # Автотесты сценариев Здравушки, включая пограничные случаи (edge cases).
 # Стенд «Регистратура» подменяется заглушкой в памяти — тесты не трогают настоящий МИС и не тратят лимит.
 # Нейросеть не нужна: работает запасной разбор фраз (как при сбое LLM).
@@ -212,7 +213,7 @@ async def test_reminder_confirmed(mis):
     r = await dialog.handle("rem1", "да, приду")
     assert r.done and "ждём вас" in r.reply
     assert dialog.journal.REMINDERS[v["id"]]["status"] == "подтвердил"
-    assert "Подтвердил" in mis.clients[0]["comment"]
+    assert f"Подтверждена запись #{mis.visits[0]['id']} {mis.visits[0]['scheduled_at']}" in mis.clients[0]["comment"]
 
 
 async def test_reminder_cancel(mis):
@@ -397,6 +398,7 @@ async def test_reminder_campaign_queues_and_marks_no_answer(mis, monkeypatch):
         return "не дозвонились"
     monkeypatch.setattr(telephony, "call_reminder", fake_call)
     journal.REMINDERS.clear()
+    monkeypatch.setattr(config, "REMINDER_DEMO", True)  # тест не зависит от времени суток
     assert await reminders.start_campaign() == 1
     await asyncio.sleep(0.05)
     assert calls == [v["id"]] and journal.REMINDERS[v["id"]]["status"] == "не дозвонились"
@@ -889,3 +891,63 @@ async def test_phone_waits_longer_when_patient_names_identity(mis):
     assert call.end_of_speech_ms() == config.END_OF_SPEECH_SLOW_MS > config.END_OF_SPEECH_MS
 
     assert r.listen_ms > 1300  # и сайт ждёт дольше: фронт берёт паузу из ответа (listen_ms)
+
+
+
+# ---------- Формат отметок для жюри (чат организаторов 21–22.10) ----------
+
+async def test_sms_lines_written_to_client_comment(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    vid = r.booking.visit_id
+    assert re.search(rf"^SMS Запись создана #{vid} \d\d\.\d\d\.\d{{4}} \d\d:\d\d$", mis.clients[0]["comment"], re.M)
+    r = await talk("отмените запись", "Козлов Андрей Петрович 10.10.1990", "да")
+    assert f"SMS Отмена #{vid} " in mis.clients[0]["comment"]
+
+
+async def test_comment_is_appended_not_replaced(mis):
+    await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    mis.clients[0]["comment"] = "Отметка регистратора"
+    await talk("запишите к хирургу", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    lines = mis.clients[0]["comment"].split("\n")
+    assert lines[0] == "Отметка регистратора" and lines[1].startswith("SMS Запись создана #")
+
+
+async def test_escalation_first_line_format(mis):
+    await talk("позовите оператора")
+    assert mis.escalations[-1]["description"].split("\n")[0] == "ПЕРЕВОД R-02 P2"
+
+
+async def test_reminder_opt_out(mis):
+    v = await _booked(mis)
+    dialog.start_reminder("rem-opt", v)
+    r = await dialog.handle("rem-opt", "не звоните мне больше")
+    assert r.done and "только SMS" in r.reply
+    assert re.search(r"Отказ от обзвона \d\d\.\d\d\.\d{4}", mis.clients[0]["comment"])
+    assert dialog.journal.REMINDERS[v["id"]]["status"] == "отказ от обзвона"
+
+
+def test_reminder_window():
+    from datetime import datetime
+    from app import reminders
+    assert reminders.in_call_window(datetime(2026, 10, 22, 10, 0))       # четверг 10:00
+    assert not reminders.in_call_window(datetime(2026, 10, 22, 19, 0))   # четверг 19:00
+    assert not reminders.in_call_window(datetime(2026, 10, 24, 15, 30))  # суббота после 15
+    assert not reminders.in_call_window(datetime(2026, 10, 25, 12, 0))   # воскресенье
+
+
+def test_reminder_skips_opt_out_and_confirmed():
+    from app import reminders
+    assert reminders._blocked_by_comment("Отказ от обзвона 21.10.2026", 5)
+    assert reminders._blocked_by_comment("Подтверждена запись #5 23.10.2026 09:20", 5)
+    assert not reminders._blocked_by_comment("Подтверждена запись #51 23.10.2026 09:20", 5)
+
+
+async def test_parking_is_out_of_knowledge_base(mis):
+    r = await talk("где у вас парковка?")
+    assert r.escalation and r.escalation.rule == "R-08"
+
+
+async def test_home_visit_with_address_in_identity_phrase_does_not_crash(mis):
+    """Живой звонок 22.10: «Иванов Пётр Сергеевич, адрес: улица Ленина, дом 5» → был сбой."""
+    r = await talk("вызовите врача на дом", "Иванов Пётр Сергеевич, адрес: улица Ленина, дом 5, квартира 3")
+    assert r.status != "error"

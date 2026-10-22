@@ -77,7 +77,7 @@ ESCALATION_MAX = 1000  # ограничение стенда на длину о�
 
 def clean_text(text: str, limit: int = ESCALATION_MAX) -> str:
     """Текст для МИС: без управляющих символов и не длиннее лимита стенда."""
-    text = "".join(ch if ch.isprintable() else " " for ch in text)
+    text = "".join(ch if ch.isprintable() or ch == "\n" else " " for ch in text)
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
@@ -100,7 +100,8 @@ async def escalate(s: Session, esc: Escalation) -> ChatResponse:
     who = journal.mask_name(c.get("last_name"), c.get("first_name"), c.get("middle_name"))
     esc.summary = f"{esc.summary}. Пациент: {who or 'не назван'}. Задача: {s.task or '—'}."
     details = "; ".join(f"{k}: {v}" for k, v in collected(s).items())
-    await send_escalation(s, clean_text(f"[{esc.rule}, {esc.priority}] {esc.reason}. {esc.summary}"
+    # Первая строка — «ПЕРЕВОД R-xx Pn» (формат организаторов для проверки жюри), дальше — карточка перевода
+    await send_escalation(s, clean_text(f"ПЕРЕВОД {esc.rule} {esc.priority}\n{esc.reason}. {esc.summary}"
                                         + (f" Собрано: {details}." if details else "")))
     journal.handoff(s.call, esc.reason, esc.priority == "P1", esc.summary, collected(s))
     s.call["result"] = "переведён"
