@@ -1,6 +1,6 @@
 "use client";
 
-// Строка очереди переводов и раскрывающийся разговор (что пациент уже сказал Здравушке).
+// Строка очереди переводов и раскрывающийся разговор (что пациент уже сказал ИИ).
 
 import Link from "next/link";
 import { useState } from "react";
@@ -49,7 +49,7 @@ export default function HandoffRow({ h, busy, error, onStatus }: {
           {error && <ErrorInline status={error.status} detail={error.message} />}
           <HandoffActions handoff={h} busy={busy} onStatus={onStatus} />
           <button className="btn-mini" onClick={() => setOpen(!open)}
-            data-tip="Что пациент уже сказал Здравушке — переспрашивать не нужно">{open ? "Скрыть" : "Разговор"}</button>
+            data-tip="Что пациент уже сказал ИИ — переспрашивать не нужно">{open ? "Скрыть" : "Разговор"}</button>
         </div>
       </div>
       {open && <Details h={h} />}

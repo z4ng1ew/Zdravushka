@@ -1,6 +1,18 @@
+import type { UiTexts } from "@/shared/types/texts";
 // Заготовки ответов сервера для тестов: меняем только нужные поля.
 import type { ChatBooking, ChatResponse } from "@/shared/types/chat";
 import type { Call, Handoff } from "@/shared/types/staff";
+
+/** Мок-ответ GET /api/texts — тексты интерфейса с сервера */
+export const TEXTS: UiTexts = {
+  assistant_name: "Здравушка",
+  greeting: "Здравствуйте! Я Здравушка. Чем могу помочь?",
+  goodbye: "До свидания!",
+  operator_greeting: "Здравствуйте, регистратура. Слушаю вас.",
+  hints: { say_again: "Не расслышала. Повторите, пожалуйста.", give_up: "Не получается разобрать речь. Нажмите «Регистратор».",
+    not_heard: "Не слышу вас.", error: "Что-то пошло не так." },
+  mascot: { idle: "Привет!", thinking: "Минутку…", error: "Ой, сбой.", done: "Готово!", escalated: "Передаю регистратору." },
+};
 
 export const booking = (b: Partial<ChatBooking> = {}): ChatBooking => ({
   visit_id: 7, doctor_id: null, doctor_name: "Иванова Анна Петровна", specialty: "Терапевт",

@@ -1,4 +1,4 @@
-// Разговор со Здравушкой: POST /api/chat {session_id, text, asr_confidence?} → ChatResponse.
+// Разговор с ассистентом: POST /api/chat {session_id, text, asr_confidence?} → ChatResponse.
 // asr_confidence — точность распознавания фразы из /api/asr (0…1): при плохом распознавании бот переспросит.
 // Фраза, набранная текстом, уходит без asr_confidence.
 // Начало звонка — пустой текст без session_id; дальше session_id из ответа.

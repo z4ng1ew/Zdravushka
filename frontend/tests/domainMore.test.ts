@@ -60,8 +60,8 @@ describe("звонок: остальные состояния", () => {
   const active = callReducer(initialCall, { type: "reset" });
   it("подписи под микрофоном: распознаю, думает, говорит, слушаю", () => {
     expect(statusText(active, { ...quiet, transcribing: true })).toBe("Распознаю речь…");
-    expect(statusText({ ...active, sending: true }, quiet)).toBe("Здравушка думает…");
-    expect(statusText(active, { ...quiet, speaking: true })).toBe("Здравушка говорит…");
+    expect(statusText({ ...active, sending: true }, quiet)).toBe("Помощник думает…");
+    expect(statusText(active, { ...quiet, speaking: true })).toBe("Помощник говорит…");
     const patientLast = callReducer(active, { type: "line", line: { speaker: "patient", text: "да" } });
     expect(statusText(patientLast, quiet)).toBe("Слушаю вас…");
     expect(statusText({ ...active, mode: "operator" }, quiet)).toBe("Регистратор слушает вас…");

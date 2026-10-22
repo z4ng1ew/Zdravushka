@@ -1,6 +1,6 @@
 "use client";
 
-// «Сервер Здравушки»: связь с бэкендом, режим МИС, ИИ-сервисы и ссылка на журнал ошибок.
+// «Сервер»: связь с бэкендом, режим МИС, ИИ-сервисы и ссылка на журнал ошибок.
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -16,7 +16,7 @@ export default function ServerSection() {
   const [errCount, setErrCount] = useState(0);
   useEffect(() => setErrCount(readErrors().length), []);
   return (
-    <Section icon={<ISettings size={24} />} title="Сервер Здравушки">
+    <Section icon={<ISettings size={24} />} title="Сервер">
       <div className="set-row">
         <div><b>Бэкенд</b><small>GET /api/health</small></div>
         {error ? <ErrorCode status={error.status} detail={error.message} />

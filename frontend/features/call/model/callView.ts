@@ -13,7 +13,7 @@ export const canTalk = (s: CallState, v: VoiceFlags) =>
 
 /** Подпись под микрофоном: что сейчас происходит в звонке */
 export function statusText(s: CallState, v: VoiceFlags): string {
-  if (s.phase === "idle") return "Здравушка готов помочь";
+  if (s.phase === "idle") return "Помощник готов помочь";
   if (s.phase === "ended") return "Звонок завершён";
   const last = feedLines(s.feed).at(-1);
   if (s.mode === "waiting") return "Соединяю с регистратором…";
@@ -24,8 +24,8 @@ export function statusText(s: CallState, v: VoiceFlags): string {
 function aiStatus(s: CallState, v: VoiceFlags, lastSpeaker?: string): string {
   if (v.listening) return "Слушаю — говорите";
   if (v.transcribing) return "Распознаю речь…";
-  if (s.sending) return "Здравушка думает…";
-  return v.speaking || !lastSpeaker || lastSpeaker === "bot" ? "Здравушка говорит…" : "Слушаю вас…";
+  if (s.sending) return "Помощник думает…";
+  return v.speaking || !lastSpeaker || lastSpeaker === "bot" ? "Помощник говорит…" : "Слушаю вас…";
 }
 
 export function pillView(s: CallState): { cls: string; text: string } {

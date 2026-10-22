@@ -1,6 +1,6 @@
 "use client";
 
-// «Пациенты»: записанные через Здравушку в этом браузере (маскированное ФИО) и их талоны.
+// «Пациенты»: записанные голосовым помощником в этом браузере (маскированное ФИО) и их талоны.
 
 import { Fragment, useMemo, useState } from "react";
 import { norm } from "@/shared/domain/masking";
@@ -25,7 +25,7 @@ export default function PatientsScreen() {
     <>
       <div className="panel-head">
         <h1 className="panel-title">Пациенты</h1>
-        <span className="panel-sub">Записанные через Здравушку и их талоны</span>
+        <span className="panel-sub">Записанные голосовым помощником и их талоны</span>
       </div>
       <SearchBox value={q} onChange={setQ} placeholder="Фамилия пациента…" />
       <Section icon={<IUsers size={24} />} title="Пациенты" badge={<span className="sec-badge sec-badge-light">{patients.length}</span>}>

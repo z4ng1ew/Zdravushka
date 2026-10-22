@@ -1,4 +1,4 @@
-// Шапка экранов пациента («Позвонить Здравушке», «Мои талоны»).
+// Шапка экранов пациента («Позвонить в регистратуру», «Мои талоны»).
 
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -6,7 +6,7 @@ import AppHeader from "./AppHeader";
 import { patientMenu, type PatientPage } from "./menus";
 import UserChip from "./UserChip";
 
-const ROLE: Record<PatientPage, string> = { call: "Звонок Здравушке", tickets: "Мои талоны" };
+const ROLE: Record<PatientPage, string> = { call: "Звонок в регистратуру", tickets: "Мои талоны" };
 
 export default function PatientHeader({ page, status }: { page: PatientPage; status?: ReactNode }) {
   const links = page === "call" && (

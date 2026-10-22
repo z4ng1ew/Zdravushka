@@ -28,7 +28,7 @@ export default function Reminders({ reminders, actions, onToast }: {
   const runBtn = (
     <button className="sec-btn" disabled={actions.busy("run") || !canRun} data-tip-pos="bottom"
       onClick={() => actions.run("run", runReminders, (r) => onToast(runText(r)))}
-      data-tip={canRun ? "Здравушка позвонит всем, кто ещё ждёт напоминания" : "Всем уже звонили"}>
+      data-tip={canRun ? "ИИ позвонит всем, кто ещё ждёт напоминания" : "Всем уже звонили"}>
       {actions.busy("run") ? <><Spinner /> Запускаю…</> : "📞 Обзвонить всех"}
     </button>
   );

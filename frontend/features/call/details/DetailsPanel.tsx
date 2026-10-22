@@ -1,6 +1,6 @@
 "use client";
 
-// Раскрывающаяся панель внизу экрана пациента: «Что понял Здравушка» и «Запись на приём».
+// Раскрывающаяся панель внизу экрана пациента: «Что понял ИИ» и «Запись на приём».
 // Красная точка — в свёрнутой панели появилось новое.
 
 import { useState } from "react";
@@ -29,8 +29,8 @@ export default function DetailsPanel({ call, onChoose }: { call: CallState; onCh
   return (
     <section className={`panel bottom-wrap ${open ? "open" : ""}`}>
       <button type="button" className="collapse-head" onClick={toggle} aria-expanded={open}
-        aria-label={open ? "Свернуть: что понял Здравушка и запись на приём" : "Раскрыть: что понял Здравушка и запись на приём"}>
-        <span className="ch-item"><DocIcon /> Что понял Здравушка
+        aria-label={open ? "Свернуть: что понял ИИ и запись на приём" : "Раскрыть: что понял ИИ и запись на приём"}>
+        <span className="ch-item"><DocIcon /> Что понял ИИ
           <span className="tag tag-info">{call.intent ? intentLabel(call.intent) : "Пусто"}</span>
           {count > 0 && <span className="ch-count">{countText(count, ["поле", "поля", "полей"])}</span>}
         </span>

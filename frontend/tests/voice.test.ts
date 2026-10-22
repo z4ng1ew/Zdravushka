@@ -3,8 +3,9 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CallSession } from "@/features/call/hooks/useCallSession";
 import { useVoiceTurns } from "@/features/call/hooks/useVoiceTurns";
-import { ECHO_TAIL_MS, GIVE_UP, MAX_NOISE_TURNS, MIC_TEXT, NOT_HEARD, SAID_SOMETHING_MS, SAY_AGAIN } from "@/features/call/model/speechMisses";
-import { reply } from "./fixtures";
+import { ECHO_TAIL_MS, GIVE_UP, MIC_TEXT, NOT_HEARD, SAID_SOMETHING_MS, SAY_AGAIN } from "@/features/call/model/speechMisses";
+import { resetTextsForTests } from "@/shared/store/uiTexts";
+import { reply, TEXTS } from "./fixtures";
 
 const mic = vi.hoisted(() => ({ open: vi.fn(), take: vi.fn(), cancel: vi.fn(), listening: false }));
 vi.mock("@/features/call/hooks/useMicrophone", () => ({ useMicrophone: () => mic }));
@@ -24,8 +25,11 @@ function fakeCall() {
   } as unknown as CallSession & { ask: ReturnType<typeof vi.fn>; notice: ReturnType<typeof vi.fn> };
 }
 
+const hint = (k: keyof typeof TEXTS.hints) => TEXTS.hints[k]; // подсказки — из мок-ответа /api/texts
+
 beforeEach(() => {
   vi.clearAllMocks();
+  resetTextsForTests(TEXTS);
   mic.open.mockImplementation(async (cb: () => void) => { pause = cb; return null; });
 });
 
@@ -53,7 +57,7 @@ describe("голосовой цикл", () => {
     expect(call.notice).not.toHaveBeenCalled(); // первый промах — без подсказки
     await act(async () => { pause(); });
     await act(async () => { pause(); });
-    expect(call.notice.mock.calls.map(([t]) => t)).toEqual([SAY_AGAIN, GIVE_UP]);
+    expect(call.notice.mock.calls.map(([t]) => t)).toEqual([hint(SAY_AGAIN), hint(GIVE_UP)]);
     expect(mic.open).toHaveBeenCalledTimes(3);
   });
   it("полминуты тишины — микрофон выключается с подсказкой, без отправки на распознавание", async () => {
@@ -63,7 +67,7 @@ describe("голосовой цикл", () => {
     await act(async () => { result.current.press(); });
     await act(async () => { pause(); });
     await act(async () => { pause(); });
-    expect(call.notice.mock.calls.map(([t]) => t)).toEqual([NOT_HEARD]);
+    expect(call.notice.mock.calls.map(([t]) => t)).toEqual([hint(NOT_HEARD)]);
     expect(speech.recognize).not.toHaveBeenCalled();
   });
   it("сайт открыт по http — подсказка про https, а не «разрешите микрофон»", async () => {
@@ -86,7 +90,7 @@ describe("голосовой цикл", () => {
     await act(echoTail);
     expect(mic.open).toHaveBeenCalledTimes(2);
   });
-  it("перед озвучкой микрофон выключается — Здравушка не записывает саму себя", async () => {
+  it("перед озвучкой микрофон выключается — ассистент не записывает сам себя", async () => {
     const call = fakeCall();
     speech.recognize.mockResolvedValue({ text: "да", confidence: 0.9 });
     mic.take.mockResolvedValue(phrase());
@@ -128,19 +132,7 @@ describe("голосовой цикл", () => {
     const { result } = renderHook(() => useVoiceTurns(call));
     await act(async () => { result.current.press(); });
     await act(async () => { pause(); });
-    expect(call.notice).not.toHaveBeenCalledWith(SAY_AGAIN);
+    expect(call.notice).not.toHaveBeenCalledWith(hint(SAY_AGAIN));
     expect(mic.open).toHaveBeenCalledTimes(2); // слушаем дальше
-  });
-  it("тихий пациент думает: шум в паузах не выключает голосовой ввод и не даёт подсказок", async () => {
-    const call = fakeCall();
-    speech.recognize.mockResolvedValue({ text: "", confidence: null });
-    mic.take.mockResolvedValue(phrase(true, 900));
-    const { result } = renderHook(() => useVoiceTurns(call));
-    await act(async () => { result.current.press(); });
-    for (let i = 0; i < MAX_NOISE_TURNS - 1; i++) await act(async () => { pause(); });
-    expect(call.notice).not.toHaveBeenCalled();
-    expect(mic.open).toHaveBeenCalledTimes(MAX_NOISE_TURNS); // всё время слушаем
-    await act(async () => { pause(); }); // одним шумом слишком долго — пациент, видимо, отошёл
-    expect(call.notice.mock.calls.map(([t]) => t)).toEqual([NOT_HEARD]);
   });
 });

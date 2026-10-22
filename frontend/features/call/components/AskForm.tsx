@@ -1,7 +1,7 @@
 "use client";
 
-// Поле ввода под лентой: текст Здравушке (или регистратору, если он на линии) и кнопка-микрофон.
-// Пока Здравушка отвечает, поле не блокируется — курсор остаётся в поле, можно печатать дальше;
+// Поле ввода под лентой: текст ассистенту (или регистратору, если он на линии) и кнопка-микрофон.
+// Пока ассистент отвечает, поле не блокируется — курсор остаётся в поле, можно печатать дальше;
 // отправка ждёт ответа (кнопка неактивна, Enter не отправляет).
 
 import { useRef, useState, type FormEvent } from "react";
@@ -27,8 +27,8 @@ export default function AskForm({ toOperator, disabled, canCall, onSend, onMic }
         <img src="/img/mic-button.png" alt="" />
       </button>
       <input ref={input} value={text} onChange={(e) => setText(e.target.value)} maxLength={500}
-        aria-label={toOperator ? "Сообщение регистратору" : "Вопрос Здравушке"} autoComplete="off" enterKeyHint="send"
-        placeholder={toOperator ? "Сообщение регистратору…" : "Спросите Здравушку…"} />
+        aria-label={toOperator ? "Сообщение регистратору" : "Вопрос помощнику"} autoComplete="off" enterKeyHint="send"
+        placeholder={toOperator ? "Сообщение регистратору…" : "Ваш вопрос…"} />
       <button type="submit" disabled={!text.trim() || disabled} aria-label="Отправить" data-tip="Отправить"
         onMouseDown={(e) => e.preventDefault()}><SendIcon /></button>
     </form>

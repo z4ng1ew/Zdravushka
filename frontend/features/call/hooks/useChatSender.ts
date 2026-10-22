@@ -30,7 +30,7 @@ export function useChatSender(dispatch: Dispatch<CallAction>, mis: MisMode) {
       if (my !== gen.current) return null; // звонок уже другой — ответ устарел
       session.current = r.session_id || session.current;
       const booking = r.booking ? toUiBooking(r.booking, r.intent, misRef.current) : null;
-      dispatch({ type: "reply", r, tags: replyTags(r, misRef.current), explain: replyExplain(r), tech: replyTech(r, confidence), booking, ticket });
+      dispatch({ type: "reply", r, tags: replyTags(r), explain: replyExplain(r), tech: replyTech(r, confidence), booking, ticket });
       return r;
     } catch (e) {
       // фразу пациента можно отправить ещё раз кнопкой — сами не повторяем, чтобы не записать дважды

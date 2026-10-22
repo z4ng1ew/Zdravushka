@@ -3,6 +3,7 @@
 // три подряд — перестаём слушать по кругу и предлагаем текст или регистратора. Тишина: 15 с — слушаем дальше, 30 с — выключаем микрофон.
 
 import type { MicProblem } from "@/shared/browser/recorder";
+import type { HintKey } from "@/shared/types/texts";
 
 export const MAX_SPEECH_MISSES = 3; // микрофон выключаем только после 3 промахов подряд
 export const MAX_SILENT_TURNS = 2; // по 15 с записи
@@ -14,18 +15,19 @@ export const MAX_NOISE_TURNS = 8;
 export interface MissCounts { misses: number; silent: number; noise: number }
 export const freshCounts = (): MissCounts => ({ misses: 0, silent: 0, noise: 0 });
 
-export const SAY_AGAIN = "Не расслышал. Повторите, пожалуйста, чуть громче и ближе к микрофону.";
-export const GIVE_UP = "Не получается разобрать речь. Напишите вопрос в поле ниже "
-  + "или нажмите «Регистратор» — соединю с человеком.";
-export const NOT_HEARD = "Не слышу вас. Нажмите на микрофон, когда будете готовы, или напишите вопрос ниже.";
+/** Тексты подсказок — с сервера (GET /api/texts → hints); здесь только какую показать */
+export const SAY_AGAIN: HintKey = "say_again";
+export const GIVE_UP: HintKey = "give_up";
+export const NOT_HEARD: HintKey = "not_heard";
 
+/** Микрофон недоступен — это про браузер пациента, не про разговор: тексты здесь */
 export const MIC_TEXT: Record<MicProblem, string> = {
   insecure: "Голос работает только на защищённом адресе (https) или на этом компьютере (localhost). Пишите текстом в поле ниже.",
   unsupported: "Этот браузер не умеет записывать голос. Пишите текстом в поле ниже или откройте сайт в Chrome, Edge, Firefox или Safari.",
   denied: "Нет доступа к микрофону. Разрешите микрофон в браузере или пишите текстом в поле ниже.",
 };
 
-export type MissReaction = { listen: boolean; notice: string | null };
+export type MissReaction = { listen: boolean; notice: HintKey | null }; // notice — какую подсказку показать
 
 /** «Не расслышал» — только если пациент правда говорил (не меньше этого), а распознать не вышло.
  *  Короче — это щелчок, эхо или вздох: молча слушаем дальше, как при тишине. */

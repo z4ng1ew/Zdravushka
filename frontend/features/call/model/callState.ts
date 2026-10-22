@@ -16,7 +16,7 @@ export interface CallState {
   sending: boolean;
   feed: FeedItem[];
   intent: string | null;
-  fields: Record<string, string>; // что понял Здравушка (collected)
+  fields: Record<string, string>; // что понял ИИ (collected)
   options: ChatBooking[];
   booking: UiBooking | null;
   escalation: ChatEscalation | null;

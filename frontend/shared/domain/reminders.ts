@@ -12,8 +12,8 @@ type Rule = Omit<ReminderView, "text"> & { text: string | ((newTime?: string | n
 
 const RULES: Record<string, Rule> = {
   "ожидает": { text: "Ожидает звонка", cls: "sp-grey", tip: "Звонок ещё не запускали", group: "wait" },
-  "в очереди": { text: "Звоним…", cls: "sp-blue sp-pulse", tip: "Здравушка звонит пациенту", group: "call" },
-  "звоним": { text: "Звоним…", cls: "sp-blue sp-pulse", tip: "Здравушка звонит пациенту", group: "call" },
+  "в очереди": { text: "Звоним…", cls: "sp-blue sp-pulse", tip: "ИИ звонит пациенту", group: "call" },
+  "звоним": { text: "Звоним…", cls: "sp-blue sp-pulse", tip: "ИИ звонит пациенту", group: "call" },
   "подтвердил": { text: "Придёт", cls: "sp-green", tip: "Пациент подтвердил приём", group: "ok" },
   "перенес": {
     text: (t) => (t ? `Перенёс на ${t}` : "Перенёс"), cls: "sp-violet", tip: "Запись перенесена в МИС", group: "moved",

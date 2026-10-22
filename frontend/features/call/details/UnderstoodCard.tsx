@@ -1,4 +1,4 @@
-// «Что понял Здравушка»: намерение и собранные поля (collected).
+// «Что понял ИИ»: намерение и собранные поля (collected).
 
 import { intentLabel } from "@/shared/domain/intents";
 import { CheckCircle } from "@/shared/ui/Icons";

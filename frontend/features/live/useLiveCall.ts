@@ -7,10 +7,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openLive, type LiveChannel } from "@/shared/live/channel";
+import { loadTexts, textsNow } from "@/shared/store/uiTexts";
 import type { LiveCall } from "@/shared/types/live";
 
 const OPERATOR = ""; // имя сотрудника появится, когда будет вход по учётной записи
-export const GREETING = "Здравствуйте, регистратура. Слушаю вас.";
 const STALE_MS = 90_000; // фоновая вкладка может присылать состояние раз в минуту — ждём с запасом
 const DROP_MS = 120_000; // завершённый звонок висит ещё 2 минуты, потом убираем
 
@@ -42,6 +42,7 @@ export function useLiveCall() {
 
   useEffect(() => {
     const timers = greet.current;
+    loadTexts().catch(() => {}); // приветствие регистратора — с сервера (ошибка уже в журнале)
     ch.current = openLive((m) => { if (m.type === "state") setCalls((l) => upsertCall(l, m.from, m.call, Date.now())); });
     ch.current.send({ type: "hello" }); // попросить текущее состояние у всех открытых вкладок пациентов
     const lost = setInterval(() => setCalls((l) => sweepCalls(l, Date.now())), 5000);
@@ -54,7 +55,8 @@ export function useLiveCall() {
   const takeover = useCallback((to: string) => {
     if (greet.current.has(to)) return; // двойной клик — одно приветствие
     ch.current?.send({ type: "takeover", operator: OPERATOR, to });
-    greet.current.set(to, setTimeout(() => { greet.current.delete(to); say(to, GREETING); }, 300));
+    // первая фраза регистратора — operator_greeting с сервера; тексты не пришли — без приветствия
+    greet.current.set(to, setTimeout(() => { greet.current.delete(to); say(to, textsNow()?.operator_greeting ?? ""); }, 300));
   }, [say]);
   const release = useCallback((to: string) => ch.current?.send({ type: "release", to }), []);
 

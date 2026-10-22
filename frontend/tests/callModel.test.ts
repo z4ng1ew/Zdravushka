@@ -3,7 +3,7 @@ import { ApiError } from "@/shared/api/ApiError";
 import { callReducer, initialCall, type CallState } from "@/features/call/model/callState";
 import { canCall, canTalk, pillView, recordTag, statusText } from "@/features/call/model/callView";
 import { lastBotIndex, patientSpoke } from "@/features/call/model/feed";
-import { mood, MOOD_VIEW } from "@/features/call/model/mascot";
+import { mood } from "@/features/call/model/mascot";
 import { GIVE_UP, MIC_TEXT, NOT_HEARD, silenceReaction } from "@/features/call/model/speechMisses";
 import { reply } from "./fixtures";
 
@@ -39,13 +39,13 @@ describe("что показать по звонку", () => {
   it("звонить можно, только когда звонка нет и запрос не идёт", () => {
     expect([canCall(initialCall), canCall(active()), canCall({ ...initialCall, sending: true })]).toEqual([true, false, false]);
   });
-  it("говорить нельзя, пока Здравушка говорит или думает, и когда на линии регистратор", () => {
+  it("говорить нельзя, пока ассистент говорит или думает, и когда на линии регистратор", () => {
     expect(canTalk(active(), quiet)).toBe(true);
     expect(canTalk(active(), { ...quiet, speaking: true })).toBe(false);
     expect(canTalk(active({ mode: "operator" }), quiet)).toBe(false);
   });
   it("подпись под микрофоном", () => {
-    expect(statusText(initialCall, quiet)).toBe("Здравушка готов помочь");
+    expect(statusText(initialCall, quiet)).toBe("Помощник готов помочь");
     expect(statusText(active(), { ...quiet, listening: true })).toBe("Слушаю — говорите");
     expect(statusText(active({ mode: "waiting" }), quiet)).toBe("Соединяю с регистратором…");
   });
@@ -68,23 +68,23 @@ describe("тишина и микрофон", () => {
   it("у каждой причины недоступного микрофона своя подсказка, и все предлагают текст", () => {
     expect(Object.values(MIC_TEXT).every((t) => /текст/i.test(t))).toBe(true);
     expect(MIC_TEXT.insecure).toMatch(/https/);
-    expect(GIVE_UP).toMatch(/Регистратор/);
+    expect(GIVE_UP).toBe("give_up"); // сам текст — с сервера (hints.give_up)
   });
 });
 
-describe("настроение Здравушки над микрофоном", () => {
+describe("настроение ассистента над микрофоном", () => {
   const tk = { number: "93", visitId: 93, patient: "", doctor: "", specialty: "", cabinet: "", scheduledAt: "", status: "Запланирована" as const, createdAt: "", updatedAt: "", history: [] };
   it("ждёт → думает (отправка или распознавание) → готово → сбой", () => {
     expect(mood(active()).mood).toBe("idle");
     expect(mood(active({ sending: true })).mood).toBe("thinking");
     expect(mood(active(), { transcribing: true }).mood).toBe("thinking");
-    expect(mood(active({ ticket: tk, feed: [{ type: "ticket", ticket: tk, at: "" }] }))).toMatchObject({ mood: "done", text: MOOD_VIEW.done.text });
+    expect(mood(active({ ticket: tk, feed: [{ type: "ticket", ticket: tk, at: "" }] }))).toEqual({ mood: "done", key: "done" });
     expect(mood(active({ feed: [{ type: "error", status: 502, detail: "", at: "" }] })).mood).toBe("error");
   });
-  it("передача регистратору и угроза жизни — «важное», с понятным текстом", () => {
+  it("передача регистратору — картинка «важное», фраза escalated (текст с сервера)", () => {
     const esc = { rule: "R-01", reason: "", priority: "", emergency: false, summary: "" };
-    expect(mood(active({ escalation: esc })).text).toMatch(/регистратору/);
-    expect(mood(active({ escalation: { ...esc, emergency: true } })).text).toMatch(/103/);
+    expect(mood(active({ escalation: esc }))).toEqual({ mood: "done", key: "escalated" });
+    expect(mood(active({ escalation: { ...esc, emergency: true } }))).toEqual({ mood: "done", key: "escalated" });
   });
   it("после сбоя пришла новая реплика — снова спокоен", () => {
     const s = active({ feed: [{ type: "error", status: 502, detail: "", at: "" }, { type: "line", line: { speaker: "bot", text: "Да", at: "" } }] });

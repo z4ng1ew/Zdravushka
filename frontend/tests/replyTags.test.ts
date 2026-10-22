@@ -1,32 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { replyExplain, replyTags, replyTech, understoodText } from "@/shared/domain/replyTags";
+import { labelTone, replyExplain, replyTags, replyTech, understoodText } from "@/shared/domain/replyTags";
 import { booking, reply } from "./fixtures";
 
-const text = (r: Parameters<typeof replyTags>[0]) => replyTags(r, "stand").map((t) => t.text);
+const tags = (r: Parameters<typeof replyTags>[0]) => replyTags(r);
 
-describe("replyTags — бейдж под ответом Здравушки", () => {
-  it("in_progress — без бейджа", () => {
-    expect(text(reply({ status: "in_progress" }))).toEqual([]);
+describe("replyTags — подпись под ответом берётся из label сервера", () => {
+  it("подпись — ровно label, фронт ничего не дописывает", () => {
+    const r = reply({ status: "completed", source: "МИС", booking: booking({ visit_id: 837 }), label: "✓ Записано в МИС · № записи 837" });
+    expect(tags(r)).toEqual([{ text: "✓ Записано в МИС · № записи 837", tone: "ok" }]);
   });
-  it("error — сбой и перевод", () => {
-    expect(text(reply({ status: "error" }))).toEqual(["⚠ Сбой, соединяем с регистратором"]);
+  it("label: null или пусто — подписи нет, даже если есть запись или перевод", () => {
+    expect(tags(reply({ status: "completed", booking: booking(), label: null }))).toEqual([]);
+    const esc = { rule: "R-07", reason: "", priority: "", emergency: false, summary: "" };
+    expect(tags(reply({ status: "handoff", escalation: esc, label: "  " }))).toEqual([]);
+    expect(tags(reply({ status: "completed" }))).toEqual([]); // старый бэкенд без label
   });
-  it("handoff с угрозой жизни — 103 и правило", () => {
-    const esc = { rule: "R-01", reason: "", priority: "", emergency: true, summary: "" };
-    expect(text(reply({ status: "handoff", escalation: esc }))).toEqual(["🚑 Срочно: 103 · R-01"]);
-  });
-  it("completed из МИС — что сделано и номер записи", () => {
-    expect(text(reply({ status: "completed", source: "МИС", booking: booking() }))).toEqual(["✓ Записано в МИС · № записи 7"]);
-  });
-  it("отмена всегда «Отменено», даже при intent booking", () => {
-    const r = reply({ status: "completed", source: "МИС", booking: booking({ status: "Отменена" }) });
-    expect(text(r)[0]).toMatch(/^✓ Отменено в МИС/);
-  });
-  it("ответ по регламенту", () => {
-    expect(text(reply({ status: "completed", source: "регламент РГ-ТЕЛ-01" }))).toEqual(["📄 Ответ по регламенту"]);
-  });
-  it("неизвестный статус показывается как прислал сервер", () => {
-    expect(text(reply({ status: "paused" }))).toEqual(["paused"]);
+  it("цвет по status: completed → ok, по регламенту → info, handoff → warn, угроза жизни и error → bad", () => {
+    const tone = (r: Parameters<typeof replyTags>[0]) => labelTone(r);
+    const esc = { rule: "R-01", reason: "", priority: "", emergency: false, summary: "" };
+    expect(tone(reply({ status: "completed", source: "МИС" }))).toBe("ok");
+    expect(tone(reply({ status: "completed", source: "регламент РГ-ТЕЛ-01" }))).toBe("info");
+    expect(tone(reply({ status: "handoff", escalation: esc }))).toBe("warn");
+    expect(tone(reply({ status: "handoff", escalation: { ...esc, emergency: true } }))).toBe("bad");
+    expect(tone(reply({ status: "error" }))).toBe("bad");
+    expect(tone(reply({ status: "in_progress" }))).toBe("muted");
   });
 });
 
@@ -48,16 +45,5 @@ describe("под бейджем: пациенту — пояснение, рег
     expect(replyTech(base)).toBe("");
     expect(understoodText("  ")).toBe("");
     expect(understoodText("hybrid")).toBe("понято: hybrid");
-  });
-});
-
-describe("бейдж МИС без записи в ответе", () => {
-  it("«нет предстоящих записей» при отмене — «Данные из МИС», а не «Отменено в МИС»", () => {
-    const r = reply({ intent: "cancel", status: "completed", source: "МИС", booking: null, reply: "У вас нет предстоящих записей" });
-    expect(text(r)).toEqual(["✓ Данные из МИС"]);
-  });
-  it("с записью — по-прежнему «Отменено в МИС · № записи»", () => {
-    const r = reply({ intent: "cancel", status: "completed", source: "МИС", booking: booking({ status: "Отменена", visit_id: 93 }) });
-    expect(text(r)[0]).toMatch(/^✓ Отменено в МИС · № записи 93/);
   });
 });

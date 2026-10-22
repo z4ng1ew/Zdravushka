@@ -37,6 +37,7 @@ export function parseChat(raw: unknown): ChatResponse {
     explanation: strOrNull(d.explanation),
     understood_by: strOrNull(d.understood_by),
     asr_confidence: toConfidence(d.asr_confidence),
+    label: typeof d.label === "string" && d.label.trim() ? d.label.trim() : null,
   };
 }
 

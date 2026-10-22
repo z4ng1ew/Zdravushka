@@ -33,6 +33,7 @@ export interface ChatResponse {
   explanation?: string | null; // почему ответ такой — мелким текстом под бейджем
   understood_by?: string | null; // кто понял фразу: нейросеть (llm) или правила (rules)
   asr_confidence?: number | null; // 0…1 — с какой точностью распознана фраза пациента
+  label?: string | null; // подпись под ответом от сервера: «✓ Записано в МИС · № записи 837», «👤 Передано регистратору · R-07»…
 }
 
 export interface Health {

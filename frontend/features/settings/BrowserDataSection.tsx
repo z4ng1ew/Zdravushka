@@ -12,7 +12,7 @@ export default function BrowserDataSection() {
   return (
     <Section icon={<ISettings size={24} />} title="Данные этого браузера">
       <p className="muted small" style={{ margin: "0 0 12px" }}>
-        Звонки, переводы и обзвон берутся с сервера Здравушки. В браузере хранятся только талоны пациента
+        Звонки, переводы и обзвон берутся с сервера. В браузере хранятся только талоны пациента
         (их печатают и показывают в регистратуре): сейчас {tickets.length}.
       </p>
       <div className="set-row">

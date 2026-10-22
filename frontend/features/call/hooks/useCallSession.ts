@@ -1,6 +1,6 @@
 "use client";
 
-// Разговор со Здравушкой через POST /api/chat: начать звонок, сказать фразу, выбрать вариант,
+// Разговор с ассистентом через POST /api/chat: начать звонок, сказать фразу, выбрать вариант,
 // позвать регистратора. Состояние — в callReducer, отправка и номер звонка — в useChatSender.
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";

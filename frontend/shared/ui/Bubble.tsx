@@ -1,13 +1,14 @@
 import type { ReplyTag } from "@/shared/domain/replyTags";
+import { useAssistantName } from "@/shared/hooks/useTexts";
 import type { Speaker } from "@/shared/types/staff";
 
 // Одна реплика разговора. У каждого участника свой цвет, подпись и аватарка (таблица SPEAKERS):
-//  ИИ (Здравушка) — синий, «ИИ сказал»;  пациент — серый, «ИИ услышал»;  регистратор — зелёный.
+//  ИИ-ассистент — синий, «ИИ сказал» (имя — с сервера, GET /api/texts);  пациент — серый, «ИИ услышал»;  регистратор — зелёный.
 // Всплывающих подсказок внутри ленты нет: лента прокручивается и обрезала бы их.
 // Служебное (точность распознавания, кем понята фраза) — только при staff (кабинет регистратора).
 
 const SPEAKERS: Record<Speaker, { label: string; name: string; img: string }> = {
-  bot: { label: "Здравушка · ИИ сказал", name: "ИИ Здравушка", img: "/img/mascot-circle.png" },
+  bot: { label: "ИИ сказал", name: "ИИ-помощник", img: "/img/mascot-circle.png" },
   operator: { label: "Регистратор", name: "Регистратор", img: "/img/avatar-staff.png" },
   patient: { label: "Пациент · ИИ услышал", name: "Пациент", img: "/img/avatar-patient.png" },
 };
@@ -18,7 +19,7 @@ interface BubbleProps {
   operator?: string | null; // имя регистратора
   small?: boolean;
   staff?: boolean; // кабинет регистратора: показать служебные поля
-  tags?: ReplyTag[]; // бейджи под ответом Здравушки
+  tags?: ReplyTag[]; // подпись под ответом ассистента (label с сервера)
   explain?: string; // понятное пояснение к ответу — мелко под бейджем
   tech?: string; // «понято нейросетью · распознано на 87 %» — только регистратору
   onReplay?: () => void; // «Повторить» — заново озвучить ответ
@@ -27,7 +28,8 @@ interface BubbleProps {
 export default function Bubble({ speaker: raw, text, at, confidence, operator, small, staff, tags, explain, tech, onReplay }: BubbleProps) {
   const speaker: Speaker = SPEAKERS[raw] ? raw : "patient"; // незнакомый говорящий — как пациент
   const who = SPEAKERS[speaker];
-  const label = speaker === "operator" && operator ? `${who.label} ${operator}` : who.label;
+  const name = useAssistantName();
+  const label = speaker === "bot" ? `${name} · ${who.label}` : speaker === "operator" && operator ? `${who.label} ${operator}` : who.label;
   const avatar = <Avatar speaker={speaker} small={small} />;
   return (
     <div className={`row ${speaker}`}>
@@ -78,9 +80,10 @@ function Recognized({ confidence }: { confidence?: number }) {
 }
 
 export function SpeakerLegend() {
+  const name = useAssistantName();
   return (
     <div className="speaker-legend">
-      <span><i className="dot-bot" />ИИ Здравушка</span>
+      <span><i className="dot-bot" />ИИ {name}</span>
       <span><i className="dot-patient" />Пациент</span>
       <span><i className="dot-op" />Регистратор</span>
     </div>

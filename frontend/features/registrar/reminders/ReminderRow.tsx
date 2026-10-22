@@ -22,7 +22,7 @@ export default function ReminderRow({ r, busy, error, onCall }: {
       <td className="td-act">
         {error && <ErrorInline status={error.status} detail={error.message} />}
         <button className="btn-mini" disabled={busy || v.group === "call"} onClick={onCall}
-          aria-label={`Позвонить: ${r.patient}`} data-tip="Здравушка позвонит этому пациенту сейчас">
+          aria-label={`Позвонить: ${r.patient}`} data-tip="ИИ позвонит этому пациенту сейчас">
           {busy ? <><Spinner /> Звоню…</> : "Позвонить"}
         </button>
       </td>

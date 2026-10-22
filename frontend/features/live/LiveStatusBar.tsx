@@ -24,7 +24,7 @@ export default function LiveStatusBar({ call, onTakeover, onRelease }: {
       </div>
       <div className="btn-row">
         {call.mode === "operator"
-          ? <button className="btn" onClick={onRelease} disabled={!active} data-tip="Здравушка продолжит разговор сам">Вернуть ИИ</button>
+          ? <button className="btn" onClick={onRelease} disabled={!active} data-tip="ИИ продолжит разговор сам">Вернуть ИИ</button>
           : <button className="btn btn-takeover" onClick={onTakeover} disabled={!active} data-tip="ИИ сразу замолчит, пациент услышит вас">
               <HeadsetIcon size={18} /> Перехватить разговор
             </button>}

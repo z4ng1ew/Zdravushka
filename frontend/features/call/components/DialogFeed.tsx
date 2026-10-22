@@ -8,7 +8,7 @@ import { describe } from "@/shared/api/errorLog";
 import ErrorCode from "@/shared/ui/ErrorCode";
 import TicketCard from "@/shared/ui/TicketCard";
 import { lastBotIndex, type FeedItem } from "../model/feed";
-import { GREETING } from "../model/greeting";
+import { useTexts } from "@/shared/hooks/useTexts";
 
 interface RowProps { item: FeedItem; operator: string | null; onReplay?: () => void; onRetry?: () => void }
 
@@ -28,14 +28,16 @@ function FeedRow({ item, operator, onReplay, onRetry }: RowProps) {
   }
 }
 
-/** До звонка: приветствие Здравушки и подсказка, что можно сделать */
+/** До звонка: приветствие с сервера (GET /api/texts → greeting) и подсказка, что можно сделать.
+ *  Запрос к /api/chat заранее не шлём: он заводит звонок в журнале регистратора. */
 function Welcome() {
+  const { texts } = useTexts();
   return (
     <>
-      <Bubble speaker="bot" text={GREETING} at="" />
+      {texts?.greeting && <Bubble speaker="bot" text={texts.greeting} at="" />}
       <div className="dialog-empty">
         Нажмите на микрофон или напишите вопрос ниже
-        <small>Здравушка записывает к врачу, переносит и отменяет приём, подсказывает статус записи,
+        <small>{texts?.assistant_name || "Помощник"} записывает к врачу, переносит и отменяет приём, подсказывает статус записи,
           расписание и кабинет врача, принимает заявку на вызов врача на дом и отвечает по правилам поликлиники.</small>
       </div>
     </>

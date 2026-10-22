@@ -20,7 +20,7 @@ export function EmptyCard() {
   return (
     <div className="record record-empty">
       <img src="/img/mascot-ticket.png" width={88} height={88} alt="Здравушка" />
-      <p>Пусто — запись появится здесь, как только Здравушка оформит её.</p>
+      <p>Пусто — запись появится здесь, как только помощник оформит её.</p>
     </div>
   );
 }

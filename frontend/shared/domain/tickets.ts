@@ -20,7 +20,7 @@ function makeTicket(doc: Doctor, patient: string, at: string, visitId: number): 
   return {
     number: String(visitId), visitId, patient, doctor: doc.fullName, specialty: doc.specialty,
     cabinet: doc.cabinet, scheduledAt: at, status: "Запланирована", createdAt: now, updatedAt: now,
-    history: [{ at: now, text: "Создана через Здравушку" }],
+    history: [{ at: now, text: "Создана голосовым помощником" }],
   };
 }
 
@@ -47,7 +47,7 @@ function cancelTicket(d: TicketsData, vid: number | null, same: (t: Ticket) => b
     ?? d.tickets.find((x) => same(x) && active(x));
   if (!t) return null;
   t.status = "Отменена";
-  return note(t, "Отменена через Здравушку");
+  return note(t, "Отменена голосовым помощником");
 }
 
 /** Перенос: в МИС это новая запись (новый номер), прежняя отменена — талон получает новый номер */

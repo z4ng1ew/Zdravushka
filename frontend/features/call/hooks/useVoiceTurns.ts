@@ -8,7 +8,9 @@
 import { useRef, useState } from "react";
 import { toApiError } from "@/shared/api/ApiError";
 import { recognize } from "@/shared/api/speech";
+import { textsNow } from "@/shared/store/uiTexts";
 import type { ChatResponse } from "@/shared/types/chat";
+import type { HintKey } from "@/shared/types/texts";
 import { ECHO_TAIL_MS, emptyReaction, freshCounts, MIC_TEXT, silenceReaction, type MissReaction } from "../model/speechMisses";
 import type { CallSession } from "./useCallSession";
 import { useMicrophone } from "./useMicrophone";
@@ -17,6 +19,8 @@ import { useSpeaker } from "./useSpeaker";
 const TEMPORARY = [408, 502, 503]; // временный сбой распознавания — как промах, звонок продолжается
 
 const wait = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+/** Текст подсказки с сервера; тексты не загрузились — подсказку не показываем */
+const hintText = (k: HintKey) => textsNow()?.hints[k] ?? "";
 
 type Heard = { kind: "text"; text: string; confidence?: number } | { kind: "miss" } | { kind: "error"; error: unknown };
 
@@ -43,7 +47,7 @@ export function useVoiceTurns(call: CallSession) {
 
   /** Озвучить фразу с выключенным микрофоном и, если ход тот же, снова слушать — после того как стихнет эхо */
   async function sayThenListen(text: string, my: number, again: boolean) {
-    mic.cancel(); // микрофон не должен записать саму Здравушку
+    mic.cancel(); // микрофон не должен записать самого ассистента
     await speaker.speak(text);
     const go = () => again && fresh(my) && voiceOn.current && !speaker.busy();
     if (go()) { await wait(ECHO_TAIL_MS); if (go()) listen(); }
@@ -56,7 +60,7 @@ export function useVoiceTurns(call: CallSession) {
   }
 
   async function listen() {
-    if (speaker.busy()) return; // пока Здравушка говорит, микрофон закрыт
+    if (speaker.busy()) return; // пока ассистент говорит, микрофон закрыт
     const problem = await mic.open(() => finish(false));
     if (problem) { voiceOn.current = false; call.notice(MIC_TEXT[problem]); }
   }
@@ -80,7 +84,7 @@ export function useVoiceTurns(call: CallSession) {
 
   /** Промах или тишина: подсказка и слушать дальше — или выключить микрофон */
   function react(r: MissReaction) {
-    if (r.notice) call.notice(r.notice);
+    const text = r.notice ? hintText(r.notice) : ""; if (text) call.notice(text);
     if (r.listen) listen(); else { voiceOn.current = false; count.current = freshCounts(); }
   }
 

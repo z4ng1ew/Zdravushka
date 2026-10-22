@@ -15,7 +15,7 @@ function NoCall() {
       <img src="/img/mic-flat.png" width={64} height={64} alt="" />
       <div>
         <b>Сейчас нет активных звонков</b>
-        <p className="muted small">Как только пациент позвонит Здравушке, разговор появится здесь.</p>
+        <p className="muted small">Как только пациент позвонит в регистратуру, разговор появится здесь.</p>
       </div>
     </div>
   );

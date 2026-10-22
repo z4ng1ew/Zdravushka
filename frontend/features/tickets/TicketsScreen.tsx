@@ -37,7 +37,7 @@ export default function TicketsScreen() {
         <Section icon={<ITicket size={24} />} title="Предстоящие приёмы" badge={<span className="sec-badge sec-badge-light">{upcoming.length}</span>}>
           {upcoming.length
             ? <TicketList list={upcoming} />
-            : <div className="empty-row">Пусто. <Link href="/" className="link-staff">Записаться через Здравушку →</Link></div>}
+            : <div className="empty-row">Пусто. <Link href="/" className="link-staff">Позвонить и записаться →</Link></div>}
         </Section>
         {rest.length > 0 && (
           <Section icon={<ITicket size={24} />} title="Прошедшие и отменённые"><TicketList list={rest} /></Section>

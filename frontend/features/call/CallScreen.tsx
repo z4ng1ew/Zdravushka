@@ -1,10 +1,11 @@
 "use client";
 
-// Экран пациента «Позвонить Здравушке»: собирает блоки и связывает их с логикой звонка.
+// Экран пациента «Звонок ассистенту»: собирает блоки и связывает их с логикой звонка.
 // Логика — в хуках (сессия /api/chat, голос, связь с регистратором, таймер), правила — в model/.
 
 import { useEffect, useMemo, useRef } from "react";
 import { useHealth } from "@/shared/hooks/useHealth";
+import { useTexts } from "@/shared/hooks/useTexts";
 import MisBadge from "@/shared/ui/MisBadge";
 import PatientHeader from "@/shared/ui/PatientHeader";
 import CallButtons from "./components/CallButtons";
@@ -24,6 +25,7 @@ import { mood } from "./model/mascot";
 
 export default function CallScreen() {
   const health = useHealth();
+  const { texts } = useTexts();
   const call = useCallSession(health.mode);
   const voice = useVoiceTurns(call);
   const s = call.state;
@@ -61,7 +63,7 @@ export default function CallScreen() {
   const toRegistrar = () => { if (s.sending || s.mode !== "ai") return; voice.cancel(); call.toRegistrar(); };
   const end = () => { voice.stop(); call.end(); };
   const m = mood(s, voice.flags);
-  const moodOf = { mood: m.mood, text: m.text };
+  const moodOf = { mood: m.mood, text: texts?.mascot[m.key] ?? "" };
 
   return (
     <div className="page">

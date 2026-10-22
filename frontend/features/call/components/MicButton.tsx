@@ -36,7 +36,7 @@ export default function MicButton(p: MicProps) {
     <div className={`mic-wrap ${idle ? "mic-idle" : ""} ${p.listening ? "mic-listen" : ""}`}>
       <Hint {...p} />
       <button className={cls} onClick={press} aria-disabled={!p.canCall && !p.canTalk}
-        aria-label={p.canCall ? "Позвонить Здравушке" : p.listening ? "Отправить фразу" : "Говорить"}>
+        aria-label={p.canCall ? "Позвонить" : p.listening ? "Отправить фразу" : "Говорить"}>
         <span className="ring r1" /><span className="ring r2" /><span className="ring r3" />
         <img src="/img/mic-glow.png" alt="" className="mic-img" draggable={false} />
         {bursts.map((id) => <span key={id} className="burst" />)}

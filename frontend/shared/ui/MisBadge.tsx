@@ -9,7 +9,7 @@ import { useHealth, type HealthState } from "@/shared/hooks/useHealth";
 export default function MisBadge({ health: { data, error } }: { health: HealthState }) {
   if (error) {
     return (
-      <span className="mis-badge mis-off" tabIndex={0} data-tip="Сервер Здравушки не отвечает — подробности в журнале ошибок" data-tip-pos="bottom">
+      <span className="mis-badge mis-off" tabIndex={0} data-tip="Сервер не отвечает — подробности в журнале ошибок" data-tip-pos="bottom">
         <i />Сервер недоступен
       </span>
     );

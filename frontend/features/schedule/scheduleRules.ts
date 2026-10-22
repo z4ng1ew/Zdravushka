@@ -1,4 +1,4 @@
-// Расписание врача на день (чистые функции): записи через Здравушку и сетка слотов по графику.
+// Расписание врача на день (чистые функции): записи голосового помощника и сетка слотов по графику.
 
 import { daySlots, type Doctor } from "@/shared/domain/doctors";
 import { ticketDate, ticketTime } from "@/shared/domain/tickets";

@@ -1,6 +1,6 @@
 "use client";
 
-// «Расписание»: выбрать врача и день — график, кабинет и кто записан через Здравушку.
+// «Расписание»: выбрать врача и день — график, кабинет и кто записан голосовым помощником.
 // Врачи и графики — справочник сервера (GET /api/doctors).
 
 import { useMemo, useState } from "react";
@@ -52,7 +52,7 @@ function Schedule({ doctors, tickets }: { doctors: Doctor[]; tickets: Ticket[] }
         <DayStrip doctor={doctor} tickets={tickets} value={day} onChange={setDay} />
         <DaySchedule doctor={doctor} dayKey={day} tickets={tickets} />
         <p className="muted small" style={{ marginTop: 10 }}>
-          Сетка — по графику врача. Занятость слотов знает МИС; здесь отмечены записи, сделанные через Здравушку.
+          Сетка — по графику врача. Занятость слотов знает МИС; здесь отмечены записи, сделанные голосовым помощником.
         </p>
       </Section>
     </>

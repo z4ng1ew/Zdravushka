@@ -10,7 +10,7 @@ describe("простые значения из ответа сервера", () 
     expect([num("12"), num("x", 7), num(Infinity, 1)]).toEqual([12, 7, 1]);
     expect([numOrNull("3"), numOrNull(""), numOrNull(null), numOrNull("abc")]).toEqual([3, null, null, null]);
   });
-  it("textRecord: только простые значения — вложенный объект не уронит «Что понял Здравушка»", () => {
+  it("textRecord: только простые значения — вложенный объект не уронит «Что понял ИИ»", () => {
     expect(textRecord({ "врач": "терапевт", "возраст": 40, "срочно": true, "вложено": { a: 1 }, "пусто": null }))
       .toEqual({ "врач": "терапевт", "возраст": "40", "срочно": "да" });
     expect(textRecord("строка")).toEqual({});

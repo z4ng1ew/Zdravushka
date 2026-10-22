@@ -10,7 +10,7 @@ export default function OptionsCard({ options, disabled, onChoose }: {
     <div className="record">
       <div className="record-title">
         <CalendarIcon /> <b>Свободное время</b>
-        <small>Здравушка предлагает не больше трёх вариантов — по регламенту</small>
+        <small>Помощник предлагает не больше трёх вариантов — по регламенту</small>
       </div>
       <ol className="opt-list">
         {options.map((o, i) => (
