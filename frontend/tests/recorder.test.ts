@@ -68,4 +68,14 @@ describe("запись с микрофона: что считать речью",
     level = 0; await vi.advanceTimersByTimeAsync(1000);
     expect(stop).toHaveBeenCalledTimes(1);
   });
+  it("listen_ms: 2200 от сервера — после 1,5 с тишины запись не останавливается, после 2,2 с — да", async () => {
+    const stop = vi.fn();
+    await startRecording(stop, { silenceMs: 2200 });
+    await vi.advanceTimersByTimeAsync(WARMUP_MS + 100);
+    level = 0.3; await vi.advanceTimersByTimeAsync(800); // пациент говорит
+    level = 0; await vi.advanceTimersByTimeAsync(1500); // задумался на 1,5 с
+    expect(stop).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(800);
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
 });

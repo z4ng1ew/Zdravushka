@@ -20,6 +20,12 @@ function parseEscalation(v: unknown): ChatEscalation | null {
   };
 }
 
+/** Пауза до конца фразы от сервера: разумное число мс (0,3…10 с), иначе поля нет — фронт возьмёт своё */
+function listenMs(v: unknown): { listen_ms?: number } {
+  const n = typeof v === "number" ? v : Number.NaN;
+  return Number.isFinite(n) && n >= 300 && n <= 10_000 ? { listen_ms: Math.round(n) } : {};
+}
+
 /** Ответ /api/chat: без объекта — ошибка формата; пустые поля — значения по умолчанию */
 export function parseChat(raw: unknown): ChatResponse {
   const d = obj(raw, "ответ /api/chat");
@@ -38,6 +44,7 @@ export function parseChat(raw: unknown): ChatResponse {
     understood_by: strOrNull(d.understood_by),
     asr_confidence: toConfidence(d.asr_confidence),
     label: typeof d.label === "string" && d.label.trim() ? d.label.trim() : null,
+    ...listenMs(d.listen_ms),
   };
 }
 

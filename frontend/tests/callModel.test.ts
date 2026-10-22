@@ -85,6 +85,7 @@ describe("настроение ассистента над микрофоном"
     const esc = { rule: "R-01", reason: "", priority: "", emergency: false, summary: "" };
     expect(mood(active({ escalation: esc }))).toEqual({ mood: "done", key: "escalated" });
     expect(mood(active({ escalation: { ...esc, emergency: true } }))).toEqual({ mood: "done", key: "escalated" });
+    expect(mood(active({ escalation: esc, phase: "ended" })).key).toBe("idle"); // звонок завершён — не «передаю регистратору»
   });
   it("после сбоя пришла новая реплика — снова спокоен", () => {
     const s = active({ feed: [{ type: "error", status: 502, detail: "", at: "" }, { type: "line", line: { speaker: "bot", text: "Да", at: "" } }] });

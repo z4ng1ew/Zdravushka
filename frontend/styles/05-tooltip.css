@@ -71,3 +71,6 @@
    (чат пациента, расшифровки в кабинете, «Звонок сейчас», талоны). Пояснения там — обычным текстом. */
 .dialog [data-tip]::after, .q-transcript [data-tip]::after, .call-detail [data-tip]::after,
 .ticket2 [data-tip]::after, .ticket2[data-tip]::after, .web-call [data-tip]::after { display: none !important; }
+/* …и курсора-вопроса там тоже нет: он обещал бы подсказку, которой нет */
+.dialog [data-tip], .q-transcript [data-tip], .call-detail [data-tip], .ticket2 [data-tip],
+.dialog .err-code, .q-transcript .err-code { cursor: default; }

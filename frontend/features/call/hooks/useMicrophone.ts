@@ -14,11 +14,11 @@ export function useMicrophone() {
   const [listening, setListening] = useState(false);
   const rec = useRef<Recording | null>(null);
 
-  /** Начать слушать; onPause — пациент замолчал. null — слушаем, иначе причина, почему нельзя */
-  const open = useCallback(async (onPause: () => void): Promise<MicProblem | null> => {
+  /** Начать слушать; onPause — пациент замолчал на silenceMs. null — слушаем, иначе причина, почему нельзя */
+  const open = useCallback(async (onPause: () => void, silenceMs?: number): Promise<MicProblem | null> => {
     if (rec.current) return null;
     try {
-      rec.current = await startRecording(onPause);
+      rec.current = await startRecording(onPause, silenceMs ? { silenceMs } : undefined);
       setListening(true);
       return null;
     } catch (err) {

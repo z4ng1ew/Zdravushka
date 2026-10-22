@@ -20,7 +20,7 @@ export const MOOD_IMG: Record<Mood, string> = {
 export function mood(s: CallState, v?: Pick<VoiceFlags, "transcribing">): { mood: Mood; key: MascotKey } {
   if (s.sending || v?.transcribing) return { mood: "thinking", key: "thinking" };
   if (s.feed.at(-1)?.type === "error") return { mood: "error", key: "error" };
-  if (s.escalation) return { mood: "done", key: "escalated" };
+  if (s.escalation && s.phase === "active") return { mood: "done", key: "escalated" }; // звонок завершён — уже не «передаю»
   if (s.ticket && s.feed.some((f) => f.type === "ticket")) return { mood: "done", key: "done" };
   return { mood: "idle", key: "idle" };
 }

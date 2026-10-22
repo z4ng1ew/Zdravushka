@@ -63,4 +63,11 @@ describe("parseHealth", () => {
     expect(parseHealth({ status: "ok", mode: "mock", llm: "да", pd_trusted_ai_only: true, tts: { x: 1 } }))
       .toMatchObject({ status: "ok", mode: "mock", llm: undefined, pd_trusted_ai_only: true, tts: null });
   });
+  it("listen_ms: разумное число мс берём, мусор и крайние значения — нет поля", () => {
+    expect(parseChat({ listen_ms: 2200 }).listen_ms).toBe(2200);
+    expect(parseChat({ listen_ms: "2200" }).listen_ms).toBeUndefined();
+    expect(parseChat({ listen_ms: 50 }).listen_ms).toBeUndefined();
+    expect(parseChat({ listen_ms: 600_000 }).listen_ms).toBeUndefined();
+    expect(parseChat({}).listen_ms).toBeUndefined();
+  });
 });

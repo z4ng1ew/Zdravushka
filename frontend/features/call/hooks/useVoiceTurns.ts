@@ -4,6 +4,8 @@
 // Ошибки голоса не обрывают звонок: пациенту — понятная подсказка (model/speechMisses.ts).
 // turn — номер «хода»: «Заново», «Завершить», перехват и выбор варианта его меняют, и опоздавшие шаги
 // (распознанная фраза, ответ сервера, озвучка) старого хода молча отбрасываются.
+// Приветствие в начале звонка озвучивается, потом микрофон слушает пациента.
+// Пауза до конца фразы пациента — listen_ms из последнего ответа сервера (нет — LISTEN_MS).
 
 import { useRef, useState } from "react";
 import { toApiError } from "@/shared/api/ApiError";
@@ -11,7 +13,7 @@ import { recognize } from "@/shared/api/speech";
 import { textsNow } from "@/shared/store/uiTexts";
 import type { ChatResponse } from "@/shared/types/chat";
 import type { HintKey } from "@/shared/types/texts";
-import { ECHO_TAIL_MS, emptyReaction, freshCounts, MIC_TEXT, silenceReaction, type MissReaction } from "../model/speechMisses";
+import { ECHO_TAIL_MS, emptyReaction, freshCounts, LISTEN_MS, MIC_TEXT, silenceReaction, type MissReaction } from "../model/speechMisses";
 import type { CallSession } from "./useCallSession";
 import { useMicrophone } from "./useMicrophone";
 import { useSpeaker } from "./useSpeaker";
@@ -43,6 +45,7 @@ export function useVoiceTurns(call: CallSession) {
   const voiceOn = useRef(false); // звонок ведётся голосом (начат с микрофона)
   const turn = useRef(0);
   const count = useRef(freshCounts()); // промахи распознавания, тишина и шум подряд
+  const listenMs = useRef(LISTEN_MS); // пауза до конца фразы — listen_ms из последнего ответа сервера
   const fresh = (my: number) => my === turn.current && call.ref.current.phase === "active" && call.ref.current.mode === "ai";
 
   /** Озвучить фразу с выключенным микрофоном и, если ход тот же, снова слушать — после того как стихнет эхо */
@@ -55,13 +58,14 @@ export function useVoiceTurns(call: CallSession) {
 
   /** После ответа бота в голосовом звонке: озвучить и снова слушать пациента */
   async function afterTurn(r: ChatResponse | null, my = turn.current) {
+    if (r) listenMs.current = r.listen_ms ?? LISTEN_MS;
     if (!r || !voiceOn.current || my !== turn.current) return;
     await sayThenListen(r.reply, my, !r.done && !r.escalation);
   }
 
   async function listen() {
     if (speaker.busy()) return; // пока ассистент говорит, микрофон закрыт
-    const problem = await mic.open(() => finish(false));
+    const problem = await mic.open(() => finish(false), listenMs.current);
     if (problem) { voiceOn.current = false; call.notice(MIC_TEXT[problem]); }
   }
 
@@ -71,8 +75,7 @@ export function useVoiceTurns(call: CallSession) {
     const phrase = await mic.take();
     if (!phrase || !fresh(my)) return;
     if (!phrase.heard && !manual) { react(silenceReaction(++count.current.silent)); return; }
-    count.current.silent = 0;
-    setTranscribing(true);
+    count.current.silent = 0; setTranscribing(true);
     const heard = await hear(phrase.audio);
     setTranscribing(false);
     if (!fresh(my)) return; // звонок завершили, начали заново или перехватили — фраза устарела
@@ -91,11 +94,8 @@ export function useVoiceTurns(call: CallSession) {
   /** Остановить микрофон и озвучку; начатые шаги этого хода больше не выполнятся */
   const cancel = () => { turn.current += 1; mic.cancel(); speaker.silence(); };
   const stop = () => { cancel(); voiceOn.current = false; count.current = freshCounts(); };
-  /** Дождаться ответа бота и, если ход не сменился, озвучить его */
   const follow = async (reply: Promise<ChatResponse | null>) => { const my = turn.current; await afterTurn(await reply, my); };
   const begin = (first?: string) => follow(call.start(first));
-  /** «Повторить»: микрофон выключаем на время озвучки, потом снова слушаем (если звонок голосовой) */
-  const replay = (text: string) => sayThenListen(text, turn.current, true);
   /** «Заново»: прошлый звонок замолкает, новый ведётся так же — голосом или текстом */
   const restart = () => { const voice = voiceOn.current; stop(); voiceOn.current = voice; return begin(); };
 
@@ -110,6 +110,7 @@ export function useVoiceTurns(call: CallSession) {
   return {
     flags: { listening: mic.listening, transcribing, speaking: speaker.speaking },
     canReplay: speaker.canReplay,
-    press, begin, restart, follow, speak: replay, cancel, stop,
+    // «Повторить»: микрофон выключаем на время озвучки, потом снова слушаем (если звонок голосовой)
+    press, begin, restart, follow, speak: (text: string) => sayThenListen(text, turn.current, true), cancel, stop,
   };
 }

@@ -86,7 +86,7 @@
 .ask .ask-mic { background: none; width: 40px; height: 40px; padding: 0; }
 .ask .ask-mic img { width: 40px; height: 40px; display: block; }
 .ask .ask-mic:disabled { background: none; opacity: .5; }
-.who, .recog { cursor: help; }
+.who, .recog { cursor: default; } /* подсказок в ленте нет — и курсора-вопроса тоже */
 /* разгружаем диалог */
 .dialog { height: 520px; }
 .who { font-weight: 600; opacity: .85; }

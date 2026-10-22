@@ -86,11 +86,13 @@
   position: absolute;
   left: 50%;
   bottom: -6px;
-  margin-left: -6px;
-  border: 6px solid transparent;
+  margin-left: -7px;
+  border: 7px solid transparent; /* на 1,5 px заходит внутрь облачка: при подпрыгивании нет щели */
   border-bottom: 0;
   border-top-color: var(--blue);
+  transform: translateY(-1.5px);
 }
+.mic-hint { will-change: transform; } /* облачко с треугольником двигаются одним слоем, без дрожания краёв */
 /* всплеск при нажатии */
 .burst {
   position: absolute;
@@ -147,18 +149,10 @@
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
   opacity: 0; transform: scale(.92); transition: opacity .35s ease, transform .35s ease;
 }
-.mascot-img.on { opacity: 1; transform: none; }
-.mood-idle .mascot-img.on { animation: mascot-float 3.2s ease-in-out infinite; }
-.mood-thinking .mascot-img.on { animation: mascot-think 1.4s ease-in-out infinite; }
-.mood-error .mascot-img.on { animation: mascot-shake .5s ease 1; }
-.mood-done .mascot-img.on { animation: mascot-pop .5s cubic-bezier(.3, 1.6, .5, 1) 1, mascot-float 3.2s ease-in-out .5s infinite; }
+.mascot-img.on { opacity: 1; transform: none; } /* маскот не качается и не трясётся — только плавная смена картинки */
 .mascot-say { animation: say-in .3s ease both; }
 .mood-error .mascot-say { color: var(--bad); }
 .mood-done .mascot-say { color: #157a4a; }
-@keyframes mascot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-@keyframes mascot-think { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
-@keyframes mascot-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
-@keyframes mascot-pop { 0% { transform: scale(.8); } 100% { transform: scale(1); } }
 @keyframes say-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .mascot-img, .mascot-img.on, .mascot-say { animation: none !important; transition: opacity .2s; }
