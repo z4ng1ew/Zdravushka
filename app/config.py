@@ -92,7 +92,9 @@ AUDIOSOCKET_PORT = int(os.getenv("AUDIOSOCKET_PORT", "9092"))
 REMINDER_ENDPOINT = os.getenv("REMINDER_ENDPOINT", "PJSIP/phone-049@gateway")
 # Детектор речи: громкость, выше которой считаем, что человек говорит (подбирается на живом звонке)
 VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "500"))
-END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "800"))   # пауза, после которой фраза закончена
+END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "1200"))
+# На шагах ФИО / дата рождения / адрес пациент вспоминает и делает паузы — ждём дольше
+END_OF_SPEECH_SLOW_MS = int(os.getenv("END_OF_SPEECH_SLOW_MS", "2000"))   # пауза, после которой фраза закончена
 MIN_SPEECH_MS = int(os.getenv("MIN_SPEECH_MS", "250"))         # короче — это шум, а не речь
 BARGE_IN_MS = int(os.getenv("BARGE_IN_MS", "400"))             # столько говорит поверх — перебил
 SILENCE_PROMPT_SEC = float(os.getenv("SILENCE_PROMPT_SEC", "5"))  # «Вы меня слышите?»

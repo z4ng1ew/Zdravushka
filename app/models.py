@@ -45,5 +45,6 @@ class ChatResponse(BaseModel):
     asr_confidence: float | None = None  # уверенность распознавания речи 0..1 (если фраза была голосом)
     explanation: str | None = None       # почему так: правило регламента, источник данных, проверка слота
     status: str = "in_progress"          # in_progress / completed / handoff / error — итог реплики для интерфейса
+    listen_ms: int = 1300                # сколько тишины ждать, прежде чем считать ответ пациента законченным (мс)
     label: str | None = None             # готовая подпись под ответом для экрана («✓ Записано в МИС · № 837»); тексты — app/ui_texts.py
     source: str | None = None            # откуда ответ: МИС / регламент / сотрудник (чтобы было видно, что не выдумано)

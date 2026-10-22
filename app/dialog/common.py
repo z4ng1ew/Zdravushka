@@ -12,6 +12,9 @@ GREETING = ui_texts.GREETING
 GOODBYE = ui_texts.GOODBYE
 ANYTHING_ELSE = ui_texts.ANYTHING_ELSE
 
+# Шаги, где пациент вспоминает (ФИО, дата рождения, адрес) и делает паузы — микрофон ждёт дольше
+SLOW_STEPS = ("identity", "middle_name", "birth_date", "address", "reason")
+
 
 def collected(s: Session) -> dict:
     return {LABELS[k]: v for k, v in s.fields.items() if k in LABELS and v}
@@ -29,6 +32,7 @@ def reply(s: Session, text: str, status: str | None = None, source: str | None =
     intent = s.task or s.last_task
     return ChatResponse(session_id=s.id, reply=text, intent=intent,
                         collected=collected(s), status=status, source=source, explanation=explanation,
+                        listen_ms=2200 if s.step in SLOW_STEPS else 1300,
                         label=ui_texts.label(status, source, intent, kw.get("booking"), kw.get("escalation")),
                         understood_by=s.understood_by, asr_confidence=s.asr_confidence, **kw)
 

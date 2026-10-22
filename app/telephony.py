@@ -170,11 +170,18 @@ class Call:
         elif self.buffer:
             self.buffer += pcm
             self.silence_ms += ms
-            if self.silence_ms >= config.END_OF_SPEECH_MS:
+            if self.silence_ms >= self.end_of_speech_ms():
                 if self.voiced_ms >= config.MIN_SPEECH_MS:
                     self.queue.put_nowait(bytes(self.buffer))
                 self.buffer.clear()
                 self.voiced_ms = self.silence_ms = 0
+
+    def end_of_speech_ms(self) -> int:
+        """Сколько ждать тишины, чтобы считать фразу законченной. Когда называют ФИО, дату рождения
+        или адрес, люди вспоминают и делают паузы — ждём дольше, чтобы не обрывать на полуслове."""
+        s = dialog.SESSIONS.get(self.session_id)
+        slow = s is not None and s.step in ("identity", "middle_name", "birth_date", "address", "reason")
+        return config.END_OF_SPEECH_SLOW_MS if slow else config.END_OF_SPEECH_MS
 
     async def reader_loop(self):
         """Читаем пакеты от Asterisk, пока звонок жив."""

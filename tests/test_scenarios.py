@@ -877,3 +877,15 @@ def test_stt_prompt_echo_is_dropped():
     from app import ai
     assert ai._echo_of_prompt("Запись к врачу: терапевт, педиатр,")
     assert not ai._echo_of_prompt("Запишите меня к терапевту")
+
+
+
+async def test_phone_waits_longer_when_patient_names_identity(mis):
+    """Живой звонок 22.10: пациента обрывало на паузе посреди даты рождения."""
+    from app import telephony
+    r = await talk("запишите к травматологу")
+    call = telephony.Call.__new__(telephony.Call)
+    call.session_id = r.session_id
+    assert call.end_of_speech_ms() == config.END_OF_SPEECH_SLOW_MS > config.END_OF_SPEECH_MS
+
+    assert r.listen_ms > 1300  # и сайт ждёт дольше: фронт берёт паузу из ответа (listen_ms)
