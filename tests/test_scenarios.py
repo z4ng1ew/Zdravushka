@@ -869,3 +869,11 @@ async def test_silero_failure_falls_back_to_piper(monkeypatch):
     monkeypatch.setattr(tts, "piper_available", lambda: True)
     monkeypatch.setattr(tts, "_piper", lambda text: b"WAV-PIPER")
     assert await tts.speak("Здравствуйте") == b"WAV-PIPER"
+
+
+
+def test_stt_prompt_echo_is_dropped():
+    """Подсказка распознаванию не должна «возвращаться» как речь пациента на тишине."""
+    from app import ai
+    assert ai._echo_of_prompt("Запись к врачу: терапевт, педиатр,")
+    assert not ai._echo_of_prompt("Запишите меня к терапевту")

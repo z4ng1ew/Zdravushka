@@ -126,12 +126,20 @@ def asr_confidence(segments) -> float | None:
     return round(sum(scores) / len(scores), 2) if scores else None
 
 
+def _echo_of_prompt(text: str) -> bool:
+    """На тишине Whisper иногда «повторяет» подсказку — такой текст пациент не говорил."""
+    low = text.lower().strip(" .,!?")
+    return bool(config.STT_PROMPT) and len(low) > 15 and low in config.STT_PROMPT.lower()
+
+
 async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, float | None]:
     """Распознавание речи: аудио → (текст, уверенность 0..1 или None, если сервер её не даёт)."""
     if not config.STT_URL:
         raise AIError("распознавание речи не настроено")
     url = config.STT_URL.rstrip("/") + "/audio/transcriptions"
-    data = {"model": config.STT_MODEL, "language": "ru", "response_format": "verbose_json"}
+    data = {"model": config.STT_MODEL, "language": "ru", "response_format": "verbose_json", "temperature": "0"}
+    if config.STT_PROMPT:  # словарь предметной области: Whisper реже путает «офтальмолог», «отоларинголог», даты
+        data["prompt"] = config.STT_PROMPT
     resp = await _post(url, config.STT_TIMEOUT, files={"file": (filename, audio)}, data=data,
                        headers=_headers(config.STT_TOKEN))
     if resp.status_code == 400:  # сервер не умеет verbose_json — обычный ответ, без уверенности
@@ -146,7 +154,7 @@ async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, fl
     except (ValueError, AttributeError) as e:
         raise AIError("STT вернул ответ неожиданного формата") from e
     text = text.strip() if isinstance(text, str) else ""
-    if is_hallucination(text):
+    if is_hallucination(text) or _echo_of_prompt(text):
         return "", None
     return text, asr_confidence(body.get("segments"))
 
