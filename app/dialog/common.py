@@ -1,20 +1,16 @@
 # Ответы Здравушки, завершение задачи и перевод на сотрудника с заявкой в МИС.
 
-from app import config, journal, safety
+from app import config, journal, safety, ui_texts
 from app.dialog import state
 from app.dialog.mis import call_mis, identify
 from app.dialog.state import LABELS, StandDown
 from app.models import ChatResponse, Escalation
 from app.dialog.session import Session
 
-GREETING = (f"Здравствуйте! Я {config.ASSISTANT_NAME}, виртуальный помощник регистратуры "
-            "поликлиники номер семь. Разговор записывается. Чем могу помочь?")
-
-
-GOODBYE = "Всего доброго, будьте здоровы!"
-
-
-ANYTHING_ELSE = "Могу ещё чем-то помочь?"
+# Тексты — из app/ui_texts.py (один источник для бэкенда и фронтенда, см. GET /api/texts)
+GREETING = ui_texts.GREETING
+GOODBYE = ui_texts.GOODBYE
+ANYTHING_ELSE = ui_texts.ANYTHING_ELSE
 
 
 def collected(s: Session) -> dict:
@@ -30,8 +26,10 @@ def reply(s: Session, text: str, status: str | None = None, source: str | None =
     if status is None:  # итог реплики для интерфейса: идёт разговор, задача выполнена, передано человеку
         status = "handoff" if kw.get("escalation") else "completed" if kw.get("done") else "in_progress"
     journal.save()
-    return ChatResponse(session_id=s.id, reply=text, intent=s.task or s.last_task,
+    intent = s.task or s.last_task
+    return ChatResponse(session_id=s.id, reply=text, intent=intent,
                         collected=collected(s), status=status, source=source, explanation=explanation,
+                        label=ui_texts.label(status, source, intent, kw.get("booking"), kw.get("escalation")),
                         understood_by=s.understood_by, asr_confidence=s.asr_confidence, **kw)
 
 

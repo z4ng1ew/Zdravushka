@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import ai, config, dialog, journal, schedule, telephony, tts
+from app import ai, config, dialog, journal, schedule, telephony, tts, ui_texts
 from app import reminders as reminder_service
 from app.models import ChatRequest, ChatResponse
 
@@ -42,6 +42,12 @@ async def health():
             "telephony": f"{config.AUDIOSOCKET_HOST}:{config.AUDIOSOCKET_PORT}" if config.TELEPHONY_ENABLED else None}
 
 
+@app.get("/api/texts")
+async def texts():
+    """Приветствие, имя ассистента и подсказки интерфейса — единственный источник текстов (app/ui_texts.py)."""
+    return ui_texts.public()
+
+
 # ---------- Разговор ----------
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -51,8 +57,8 @@ async def chat(req: ChatRequest):
         return await dialog.handle(req.session_id, req.text, req.asr_confidence)
     except Exception:  # непредвиденный сбой — пациент слышит понятную фразу, а не ошибку 500
         log.exception("Ошибка диалога")
-        return ChatResponse(session_id=req.session_id or "error", reply="Извините, произошёл сбой. "
-                            "Соединяю с регистратором.", status="error", done=True)
+        return ChatResponse(session_id=req.session_id or "error", reply=ui_texts.HINTS["error"],
+                            status="error", label=ui_texts.label("error", None, None, None, None), done=True)
 
 
 MAX_AUDIO = 25 * 1024 * 1024  # ограничение шлюза распознавания

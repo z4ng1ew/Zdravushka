@@ -833,3 +833,29 @@ async def test_cancel_for_another_person_asks_identity_again(mis):
     r = await talk("отмените запись", "Козлов Андрей Петрович 10.10.1990")
     r = await dialog.handle(r.session_id, "я хочу за другого человека отменить запись")
     assert "фамилию" in r.reply.lower() and not dialog.SESSIONS[r.session_id].client
+
+
+
+# ---------- Один источник текстов (замечание прогона 22.10, тикет #207) ----------
+
+def test_ui_texts_single_source():
+    from fastapi.testclient import TestClient
+    from app import ui_texts
+    from app.dialog.common import GREETING
+    from app.main import app
+    body = TestClient(app).get("/api/texts").json()
+    assert body["greeting"] == GREETING == ui_texts.GREETING
+    assert body["assistant_name"] in body["greeting"] and body["assistant_name"] in body["mascot"]["idle"]
+
+
+async def test_reply_label_from_backend(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    assert r.label == f"✓ Записано в МИС · № записи {r.booking.visit_id}"
+    r = await talk("где вы находитесь?")
+    assert r.label == "📄 Ответ по регламенту"
+    r = await talk("позовите оператора")
+    assert r.label.startswith("👤 Передано регистратору")
+    r = await talk("у меня болит сердце")
+    assert r.label.startswith("🚑 Срочно: 103")
+    r = await talk("запишите к терапевту")
+    assert r.label is None  # разговор идёт — подписи нет
