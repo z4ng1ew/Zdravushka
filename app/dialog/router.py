@@ -3,11 +3,12 @@
 #   understanding.py — понимание фразы с учётом текущего вопроса
 #   interceptors.py  — намерения, прерывающие сценарий (103, оператор, жалоба, медвопрос, прощание)
 #   HANDLERS         — сценарии регламента (запись, перенос, отмена, …)
+import asyncio
 import uuid
 
 import httpx
 
-from app import journal
+from app import config, journal
 from app.dialog.booking import task_booking
 from app.dialog.common import GREETING, collected, escalate, reply
 from app.dialog.mis import flush_notes
@@ -60,6 +61,16 @@ async def handle(session_id: str | None, text: str, asr_confidence: float | None
     before = s.last_reply
     resp = await _run_task(s, nl)
     return await _break_loop(s, before, resp)
+
+
+_TASKS: set = set()
+
+
+def _background(coro):
+    """Фоновая задача, которую не соберёт сборщик мусора до завершения."""
+    task = asyncio.create_task(coro)
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
 
 
 async def _break_loop(s: Session, before: str, resp: ChatResponse) -> ChatResponse:
@@ -117,4 +128,9 @@ async def _run_task(s: Session, nl: dict) -> ChatResponse:
     except (StandDown, StandError, httpx.HTTPError) as e:
         return await escalate(s, Escalation(rule="R-06", reason="сбой МИС", priority="P2", summary=f"Сбой МИС: {e}"))
     finally:
-        await flush_notes(s)  # отметки SMS / подтверждения — в комментарий клиента одним PATCH
+        # Отметки SMS / подтверждения — в комментарий клиента (GET + PATCH). В фоне: пациент не ждёт
+        # стенд с лимитом 10 запросов/мин (живой звонок 22.10: «да» → ответ через ~10 с)
+        if config.NOTES_IN_BACKGROUND:
+            _background(flush_notes(s))
+        else:
+            await flush_notes(s)

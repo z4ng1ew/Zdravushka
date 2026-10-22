@@ -16,6 +16,7 @@ def mis(monkeypatch):
     fake = FakeStand()
     monkeypatch.setattr(config, "STAND_RATE_LIMIT", 1000)
     monkeypatch.setattr(config, "LLM_URL", "")      # без нейросети — запасной разбор
+    monkeypatch.setattr(config, "NOTES_IN_BACKGROUND", False)  # отметки в МИС — сразу, чтобы проверить их в тесте
     client = StandClient(base_url="https://stand/api/v1", token="t", transport=httpx.MockTransport(fake))
     monkeypatch.setattr(dialog.state, "stand", client)
     dialog.SESSIONS.clear()
@@ -993,3 +994,32 @@ async def test_word_poka_inside_sentence_is_not_goodbye(mis):
     r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990")
     r = await dialog.handle(r.session_id, "я пока подумаю, давайте второй")
     assert not r.done
+
+
+def test_spoken_years():
+    from app import nlu
+    assert nlu.spoken_year("двухтысячного года рождения") == 2000
+    assert nlu.spoken_year("две тысячи пятого") == 2005
+    assert nlu.spoken_year("тысяча девятьсот восемьдесят пятого года") == 1985
+    assert nlu.spoken_year("две тысячи двадцать второго") == 2022
+
+
+async def test_year_in_words_then_day(mis):
+    """Живой звонок 22.10: «двухтысячного года рождения» + «1 апреля» → не собиралось."""
+    r = await talk("запишите к травматологу", "Иванов Пётр Сергеевич, двухтысячного года рождения", "1 апреля")
+    assert dialog.SESSIONS[r.session_id].fields.get("birth_date") == "01.04.2000" and r.options
+
+
+async def test_misheard_first_option(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "Перу.")
+    assert "Верно?" in r.reply
+
+
+async def test_client_comment_written_in_background(mis, monkeypatch):
+    """Ответ пациенту не ждёт запись отметки в МИС."""
+    import asyncio
+    monkeypatch.setattr(config, "NOTES_IN_BACKGROUND", True)
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    assert "записаны" in r.reply
+    await asyncio.sleep(0.05)
+    assert "SMS Запись создана" in (mis.clients[0]["comment"] or "")

@@ -149,7 +149,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 ## Соответствие кейсу и критериям оценки
 
 <!-- Для проверяющего: каждая строка — требование кейса → где реализовано → каким тестом проверено
-     (tests/test_scenarios.py, 112 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
+     (tests/test_scenarios.py, 116 тестов, `pytest -q tests`). Все сценарии проверены и живым звонком на номер 049. -->
 
 | Требование | Код | Автотесты |
 |---|---|---|
@@ -166,6 +166,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 | Отметки для жюри (ответы организаторов 21–22.10): «SMS <событие> #id ДД.ММ.ГГГГ ЧЧ:ММ» (шаблоны Приложения Б), «Подтверждена запись #id …», «Отказ от обзвона …» — в комментарии клиента, дописываются к прежним; заявка — первая строка «ПЕРЕВОД R-xx Pn» | `dialog/mis.py` (sms, append_comment, flush_notes), `dialog/reminder.py`, `dialog/common.py` | test_sms_lines_written_to_client_comment, test_comment_is_appended_not_replaced, test_escalation_first_line_format, test_reminder_opt_out, test_reminder_confirmed |
 | Правила обзвона С-10: окно будни 10–19 / сб 10–15, 2 попытки с интервалом ≥ 2 ч, затем SMS; не звоним при отказе и подтверждённой записи; демо-режим `REMINDER_DEMO=1` | `reminders.py` | test_reminder_window, test_reminder_skips_opt_out_and_confirmed, test_reminder_campaign_queues_and_marks_no_answer |
 | Живые звонки 22.10: короткое «да» с низкой уверенностью на подтверждении принимается; «к Дорохову» = запись; дата рождения только с числом («апреля 1985» — не дата); «первое сентября» словами; «не надо» / «пока» посреди записи | `dialog/guards.py`, `dialog/router.py`, `nlu.py`, `dialog/interceptors.py` | test_short_yes_with_low_confidence_is_accepted, test_doctor_surname_alone_means_booking, test_month_and_year_without_day_is_not_a_birth_date, test_spoken_day_and_month, test_not_needed_and_bye_during_booking |
+| Живые звонки 22.10, ночь: год словами («двухтысячного», «тысяча девятьсот восемьдесят пятого»); «Перу» → «первый»; отметки в МИС пишутся в фоне — ответ пациенту не ждёт стенд | `nlu.py` (spoken_year), `dialog/router.py` | test_spoken_years, test_year_in_words_then_day, test_misheard_first_option, test_client_comment_written_in_background |
 | Вопрос вне базы знаний («где парковка?») → R-08, без подмены похожей темой | `nlu.py` (OUT_OF_BASE) | test_parking_is_out_of_knowledge_base |
 | Один источник текстов (замечание прогона 22.10, тикет #207): приветствие, имя ассистента, подсказки — `GET /api/texts`; подпись под ответом — поле `label` в `/api/chat` | `ui_texts.py`, `main.py`, `dialog/common.py` | test_ui_texts_single_source, test_reply_label_from_backend |
 | Полное ФИО: отчество спрашивается отдельно, «нет» — без отчества; дата рождения в будущем / несуществующая — ассистент говорит причину | `dialog/steps.py` (_take_middle_name, date_problem) | test_patronymic_asked_when_missing, test_no_patronymic_is_accepted, test_future_birth_date_explained, test_surname_ending_like_patronymic |
@@ -258,11 +259,11 @@ STAND_MODE=mock TELEPHONY_ENABLED=0 ./run.sh      # имитация МИС в �
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q tests/                 # бэкенд: 112 тестов
+python -m pytest -q tests/                 # бэкенд: 116 тестов
 cd frontend && npm ci && npm run check     # интерфейс: типы, линтер, 201 тест
 ```
 
-112 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
+116 тестов на имитации стенда (настоящий МИС и лимит запросов не тратятся):
 - запись, перенос, отмена, статус, отказ на подтверждении;
 - повторный пациент без дубля, запрет двойной записи, «отмените обе»;
 - врач по фамилии, перенос к другому врачу, день вместо номера варианта;

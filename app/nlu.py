@@ -172,6 +172,38 @@ _ORD_DAYS = [("одиннадцат", 11), ("двенадцат", 12), ("три�
              ("седьм", 7), ("восьм", 8), ("девят", 9), ("десят", 10)]
 
 
+_UNITS = {"перв": 1, "втор": 2, "трет": 3, "четв": 4, "пят": 5, "шест": 6, "седьм": 7, "восьм": 8, "девят": 9}
+_TEENS = {"десят": 10, "одиннадцат": 11, "двенадцат": 12, "тринадцат": 13, "четырнадцат": 14, "пятнадцат": 15,
+          "шестнадцат": 16, "семнадцат": 17, "восемнадцат": 18, "девятнадцат": 19}
+_TENS = {"двадцат": 20, "тридцат": 30, "сорок": 40, "пятьдесят": 50, "пятидесят": 50, "шестьдесят": 60,
+         "шестидесят": 60, "семьдесят": 70, "семидесят": 70, "восемьдесят": 80, "восьмидесят": 80,
+         "девяносто": 90, "девяност": 90}
+
+
+def spoken_year(text: str) -> int | None:
+    """Год словами: «двухтысячного» → 2000, «две тысячи пятого» → 2005,
+    «тысяча девятьсот восемьдесят пятого» → 1985 (живой звонок 22.10: год словами не засчитывался)."""
+    low = text.lower().replace("ё", "е")
+    if re.search(r"двухтысячн", low):
+        base, rest = 2000, ""
+    elif m := re.search(r"две тысячи(.*)", low):
+        base, rest = 2000, m.group(1)
+    elif m := re.search(r"тысяча девятьсот(.*)", low):
+        base, rest = 1900, m.group(1)
+    else:
+        return None
+    n = 0
+    for w in rest.split()[:2]:
+        w = w.strip(".,!?")
+        val = next((v for k, v in _TENS.items() if w.startswith(k)), None) \
+            or next((v for k, v in _TEENS.items() if w.startswith(k)), None) \
+            or next((v for k, v in _UNITS.items() if w.startswith(k)), None)
+        if val is None:
+            break
+        n += val
+    return base + n
+
+
 def spoken_day(words: str) -> int | None:
     """«первое» → 1, «двадцать пятого» → 25, «тридцать первое» → 31."""
     total = 0
@@ -218,7 +250,8 @@ def ground(result: dict, text: str) -> dict:
         result["birth_dm"] = result["birth_date"][:5]
         result["birth_date"] = None
     m = re.search(r"\b(19\d\d|20\d\d)\b", low)
-    result["birth_year"] = m.group(1) if m else None
+    year = spoken_year(low)
+    result["birth_year"] = m.group(1) if m else (str(year) if year else None)
     for key in ("last_name", "first_name", "middle_name"):
         v = result.get(key)
         if v and not _name_said(v, text, patronymic_ok=(key == "middle_name")):
@@ -253,7 +286,8 @@ def fallback(text: str, expecting: str) -> dict:
         raw["date"] = (_today() + timedelta(days=1)).strftime("%d.%m.%Y")
     raw["part_of_day"] = next((p for p in ("утро", "вечер") if p[:4] in low), None)
     m = re.search(r"\b([123])\b", low)
-    words = {"перв": 1, "втор": 2, "трет": 3}
+    # «Перу», «пер», «фторой» — так Whisper слышит короткие «первый», «второй» (живой звонок 22.10)
+    words = {"перв": 1, "перу": 1, "втор": 2, "фтор": 2, "трет": 3, "трит": 3}
     raw["choice"] = int(m.group(1)) if m else next((v for k, v in words.items() if k in low), None)
     if re.search(r"\b(да|верно|хорошо|подтверждаю|согласен|согласна|давайте)\b", low):
         raw["answer"] = "yes"
@@ -282,7 +316,8 @@ def fallback(text: str, expecting: str) -> dict:
     day = (int(m.group(1)) if m.group(1).isdigit() else spoken_day(m.group(1))) if m else None
     if day and expecting in ("identity", "birth_date", "middle_name"):  # «13 апреля [2000 года]», «первое сентября»
         mon = next(i for i, k in enumerate(months, 1) if m.group(2).startswith(k))
-        raw["birth_date"] = f"{day:02d}.{mon:02d}.{m.group(3) or 2000}"  # без года — ground() отбросит подставленный год
+        year = m.group(3) or spoken_year(low)
+        raw["birth_date"] = f"{day:02d}.{mon:02d}.{year or 2000}"  # без года — ground() отбросит подставленный год
     if expecting == "address":
         raw["address"] = text
     if expecting == "reason":
