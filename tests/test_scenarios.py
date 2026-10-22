@@ -1048,3 +1048,12 @@ def test_caller_endpoint_only_from_localhost():
     from app.main import app
     resp = TestClient(app).get("/api/telephony/caller", params={"call": "u1", "num": "expert-1"})
     assert resp.status_code == 403  # тестовый клиент — не localhost Asterisk
+
+
+
+async def test_callback_number_without_dash(mis):
+    """Живой звонок 22.10: шлюз прислал CALLERID «phone049» — перезвона не было."""
+    from app import telephony
+    r = await talk("где вы находитесь?")
+    assert await telephony.callback_plan(r.session_id, "phone049") == ("PJSIP/phone-049@gateway", None)
+    assert (await telephony.callback_plan(r.session_id, "expert3"))[0] == "PJSIP/expert-3@gateway"

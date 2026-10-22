@@ -97,7 +97,7 @@ VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "500"))
 NOTES_IN_BACKGROUND = os.getenv("NOTES_IN_BACKGROUND", "1") == "1"
 # Перезвон после звонка (техчекпоинт 23.10): звоним только тем, кто звонил нам, и только с этих номеров
 CALLBACK_ENABLED = os.getenv("CALLBACK_ENABLED", "1") == "1"
-CALLBACK_ALLOWED = os.getenv("CALLBACK_ALLOWED", r"^(expert-\d+|phone-\d+)$")
+CALLBACK_ALLOWED = os.getenv("CALLBACK_ALLOWED", r"^(expert|phone)-?\d+$")
 CALLBACK_DELAY_SEC = float(os.getenv("CALLBACK_DELAY_SEC", "3"))
 REMINDER_DEMO = os.getenv("REMINDER_DEMO", "0") == "1"
 END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "1200"))

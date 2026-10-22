@@ -69,7 +69,8 @@ async def callback_plan(session_id: str, number: str) -> tuple[str, dict | None]
     import re
     if not (config.CALLBACK_ENABLED and number and re.match(config.CALLBACK_ALLOWED, number)):
         return None
-    endpoint = f"PJSIP/{number}@gateway"
+    # Шлюз присылает номер без дефиса («phone049»), а учётка называется «phone-049» (живой звонок 22.10)
+    endpoint = "PJSIP/" + re.sub(r"^([a-z]+)-?(\d+)$", r"\1-\2", number) + "@gateway"
     s = dialog.SESSIONS.get(session_id)
     if s and s.client and dialog.state.stand:
         try:
