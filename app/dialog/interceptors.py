@@ -1,5 +1,7 @@
 # Реакции на намерения, которые прерывают любой сценарий: угроза жизни, оператор, жалоба,
 # медицинский вопрос, прощание. Новое правило = новая функция в INTERCEPTORS.
+import re
+
 from collections.abc import Awaitable, Callable
 
 from app.dialog.common import escalate, finish, reply
@@ -49,6 +51,13 @@ async def goodbye(s: Session, nl: dict, text: str) -> ChatResponse | None:
         return finish(s)
     if intent == "goodbye" and not s.task:
         return finish(s)
+    # «Спасибо, мне ничего не надо. Пока.» посреди записи — прощаемся, а не предлагаем время снова (живой звонок 22.10)
+    if re.search(r"(^|[.,!?]\s*)пока[.!]*$|\b(до свидания|всего доброго)\b", s.text.strip()) or "ничего не надо" in s.text or "ничего не нужно" in s.text:
+        return finish(s)
+    if s.step in ("confirm", "choose_slot") and re.search(r"\b(не надо|не нужно|передумал|передумала|не записывайте)\b", s.text):
+        s.task, s.step = None, "more"
+        s.forget_task_data()
+        return reply(s, "Хорошо, не записываю. Могу ещё чем-то помочь?")
     return None
 
 

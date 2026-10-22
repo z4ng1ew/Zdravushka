@@ -951,3 +951,45 @@ async def test_home_visit_with_address_in_identity_phrase_does_not_crash(mis):
     """Живой звонок 22.10: «Иванов Пётр Сергеевич, адрес: улица Ленина, дом 5» → был сбой."""
     r = await talk("вызовите врача на дом", "Иванов Пётр Сергеевич, адрес: улица Ленина, дом 5, квартира 3")
     assert r.status != "error"
+
+
+
+# ---------- Живые звонки 22.10, вечер ----------
+
+async def test_short_yes_with_low_confidence_is_accepted(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1")
+    r = await dialog.handle(r.session_id, "Да.", asr_confidence=0.3)
+    assert "записаны" in r.reply
+
+
+async def test_doctor_surname_alone_means_booking(mis):
+    r = await talk("к Дорохову")
+    assert "фамилию" in r.reply.lower()
+
+
+async def test_month_and_year_without_day_is_not_a_birth_date(mis):
+    from app import nlu
+    out = nlu.ground(nlu.validate({"birth_date": "01.04.1985"}), "апреля 1985 Магомедов Исраил Магомедович")
+    assert out["birth_date"] is None
+
+
+async def test_spoken_day_and_month(mis):
+    r = await talk("запишите к травматологу", "Сергеев Александр Сергеевич, 2000 года рождения", "первое сентября")
+    assert dialog.SESSIONS[r.session_id].fields.get("birth_date") == "01.09.2000" and r.options
+    from app import nlu
+    assert nlu.spoken_day("двадцать пятого") == 25 and nlu.spoken_day("тридцать первое") == 31
+
+
+async def test_not_needed_and_bye_during_booking(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "2")
+    r = await dialog.handle(r.session_id, "спасибо, не надо")
+    assert "не записываю" in r.reply and not mis.visits
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990")
+    r = await dialog.handle(r.session_id, "спасибо, мне ничего не надо. Пока.")
+    assert r.done
+
+
+async def test_word_poka_inside_sentence_is_not_goodbye(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990")
+    r = await dialog.handle(r.session_id, "я пока подумаю, давайте второй")
+    assert not r.done

@@ -90,7 +90,7 @@ def _select_task(s: Session, nl: dict):
         s.task = intent
         if s.step in ("start", "more"):
             s.step = "start"
-    elif not s.task and nl["specialty"] and intent in (None, "other", "info"):
+    elif not s.task and (nl["specialty"] or nl["doctor_name"]) and intent in (None, "other", "info"):
         s.task = "booking"  # «Меня к хирургу» — без слова «запишите», но смысл ясен
     elif s.step == "choose_slot" and nl["specialty"] and nl["specialty"] != s.fields.get("specialty"):
         forget_task_details(s)  # посреди выбора времени попросили другого врача («хочу к педиатру»)

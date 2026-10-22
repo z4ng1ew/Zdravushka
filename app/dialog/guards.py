@@ -63,11 +63,19 @@ async def prompt_injection(s: Session, text: str) -> ChatResponse | None:
 IMPORTANT_STEPS = ("identity", "middle_name", "birth_date", "confirm", "confirm_all", "address")
 
 
+SHORT_ANSWER = re.compile(r"(да|ага|угу|верно|конечно|согласен|согласна|нет|не надо|первый|второй|третий|\d)(,? (да|верно|конечно))?")
+
+
 async def unsure_hearing(s: Session, text: str) -> ChatResponse | None:
     """Распознавание сомнительное (низкая уверенность), а мы на важном шаге — переспрашиваем,
     а не записываем пациента на чужое ФИО или неверное время."""
     conf = s.asr_confidence
     if conf is None or conf >= config.ASR_MIN_CONFIDENCE or s.step not in IMPORTANT_STEPS:
+        return None
+    # Короткое «да» / «нет» у Whisper всегда с низкой уверенностью (мало звука), хотя распознано верно.
+    # На подтверждении это не опасно: ответ из словаря да/нет, а ошибку пациент поправит («нет»).
+    # Живой звонок 22.10: «Да.» с уверенностью 30 % переспрашивалось.
+    if s.step in ("confirm", "confirm_all") and SHORT_ANSWER.fullmatch(text.lower().strip(" .,!?…")):
         return None
     s.unsure += 1
     if s.unsure >= 3:
