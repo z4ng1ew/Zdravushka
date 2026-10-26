@@ -44,7 +44,7 @@ ASSISTANT_NAME = "Здравушка"
 LLM_URL = os.getenv("LLM_URL") or os.getenv("OPENAI_BASE_URL", "")
 LLM_TOKEN = os.getenv("LLM_TOKEN") or os.getenv("OPENAI_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "ai-sage/GigaChat3-10B-A1.8B")
-LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "8"))   # дольше пациент ждать не будет — уходим в запасной разбор
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "4"))   # дольше пациент ждать не будет — уходим в запасной разбор
 # Шлюз нейросетей хакатона принимает не больше 2 одновременных запросов (третий получает 429)
 AI_MAX_CONCURRENT = int(os.getenv("AI_MAX_CONCURRENT", "2"))
 # Распознавание с уверенностью ниже порога — переспрашиваем на важных шагах (ФИО, подтверждение)
@@ -61,7 +61,7 @@ STT_PROMPT = os.getenv("STT_PROMPT", "Звонок в регистратуру �
                        "офтальмолог, отоларинголог, лор, хирург, травматолог, невролог, кардиолог, гинеколог, "
                        "уролог, эндокринолог. Фамилия, имя, отчество, дата рождения: пятнадцатое марта "
                        "тысяча девятьсот восьмидесятого года. Вариант: первый, второй, третий.")
-STT_TIMEOUT = float(os.getenv("STT_TIMEOUT", "15"))
+STT_TIMEOUT = float(os.getenv("STT_TIMEOUT", "6"))
 
 # Синтез речи
 TTS_URL = os.getenv("TTS_URL", "")
@@ -99,6 +99,8 @@ NOTES_IN_BACKGROUND = os.getenv("NOTES_IN_BACKGROUND", "1") == "1"
 CALLBACK_ENABLED = os.getenv("CALLBACK_ENABLED", "1") == "1"
 CALLBACK_ALLOWED = os.getenv("CALLBACK_ALLOWED", r"^(expert|phone)-?\d+$")
 CALLBACK_DELAY_SEC = float(os.getenv("CALLBACK_DELAY_SEC", "3"))
+# Токен администратора для смены источника нейросетей из кабинета (пусто — только с самой VM)
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 REMINDER_DEMO = os.getenv("REMINDER_DEMO", "0") == "1"
 END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "1200"))
 # На шагах ФИО / дата рождения / адрес пациент вспоминает и делает паузы — ждём дольше

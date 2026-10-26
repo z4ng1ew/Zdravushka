@@ -52,7 +52,7 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
         if nl["answer"] == "yes":
             o = s.chosen
             async with BOOKING_LOCK:  # проверка слота и перенос — атомарно (см. booking.py)
-                taken = (o.doctor_id, o.scheduled_at) in await busy_slots(s)
+                taken = (o.doctor_id, o.scheduled_at) in await busy_slots(s, fresh=True)
                 updated = None if taken else await reschedule_visit(s, visit, o)
             if taken:
                 return await offer_slots(s, [doctor], exclude=(doctor["id"], visit["scheduled_at"]))

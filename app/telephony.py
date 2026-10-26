@@ -304,6 +304,7 @@ class Call:
 
     async def process(self, pcm: bytes):
         """Фраза пациента → текст → мозг → голос."""
+        t0 = time.monotonic()
         try:
             text, confidence = await ai.transcribe(tts.pcm_to_wav(pcm, RATE), "phone.wav")
         except ai.AIError as e:
@@ -312,6 +313,7 @@ class Call:
             return
         if not text.strip():
             return
+        t1 = time.monotonic()
         try:
             answer = await dialog.handle(self.session_id, text, confidence)
         except Exception:  # непредвиденная ошибка логики не должна оставлять пациента в тишине
@@ -319,6 +321,14 @@ class Call:
             await self.say("Извините, произошёл сбой. Соединяю с регистратором.")
             self.done = True
             return
+        t2 = time.monotonic()
+        # Замер по этапам (техчекпоинт 23.10): видно, кто тормозит — распознавание, диалог (LLM + МИС) или синтез
+        timing = {"stt_ms": int((t1 - t0) * 1000), "dialog_ms": int((t2 - t1) * 1000),
+                  "stt": ai.LAST.get("stt", {}).get("provider"), "llm": ai.LAST.get("llm", {}).get("provider")}
+        call = journal.CALLS.get(self.session_id)
+        if call is not None:
+            call.setdefault("timings", []).append(timing)
+        log.info("Фраза: распознавание %s мс, диалог %s мс", timing["stt_ms"], timing["dialog_ms"])
         await self.say(answer.reply)
         if answer.done:
             self.done = True

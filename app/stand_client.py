@@ -51,8 +51,10 @@ class RateLimiter:
         self.lock = asyncio.Lock()  # чтобы два запроса одновременно не сломали подсчёт
 
     async def wait(self):
-        async with self.lock:
-            while True:
+        # Ждём вне блокировки (техчекпоинт 23.10): раньше один ожидающий запрос держал замок,
+        # и все остальные звонки стояли за ним по очереди — «подождать 10 с» превращалось в минуту.
+        while True:
+            async with self.lock:
                 now = time.monotonic()
                 # выкидываем запросы старше 60 секунд — они уже не считаются
                 while self.calls and now - self.calls[0] >= self.period:
@@ -60,8 +62,8 @@ class RateLimiter:
                 if len(self.calls) < self.max_calls:
                     self.calls.append(now)
                     return
-                # лимит исчерпан: ждём, пока самый старый запрос «выйдет» из окна
-                await asyncio.sleep(self.period - (now - self.calls[0]) + 0.05)
+                pause = self.period - (now - self.calls[0]) + 0.05
+            await asyncio.sleep(pause)  # лимит исчерпан: ждём, пока самый старый запрос «выйдет» из окна
 
 
 class StandClient:

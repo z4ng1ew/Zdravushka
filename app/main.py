@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import ai, config, dialog, journal, schedule, telephony, tts, ui_texts
+from app import ai, config, dialog, journal, schedule, telephony, tts, ui_texts, providers
 from app import reminders as reminder_service
 from app.models import ChatRequest, ChatResponse
 
@@ -41,7 +41,8 @@ async def health():
     return {"status": "ok", "assistant": config.ASSISTANT_NAME,
             "mode": config.STAND_MODE if dialog.state.stand else "no-stand",
             "pd_trusted_ai_only": not config.REJECTED_AI_URLS,
-            "llm": bool(config.LLM_URL), "stt": bool(config.STT_URL), "tts": config.TTS_BACKEND,
+            "llm": bool(providers.chain("llm")), "stt": bool(providers.chain("stt")), "tts": config.TTS_BACKEND,
+            "providers": providers.public()["active"], "last_ai": ai.LAST,
             "telephony": f"{config.AUDIOSOCKET_HOST}:{config.AUDIOSOCKET_PORT}" if config.TELEPHONY_ENABLED else None}
 
 
@@ -52,6 +53,32 @@ async def telephony_caller(call: str, num: str, request: Request):
         raise HTTPException(403, "только для Asterisk на этой машине")
     telephony.register_caller(call, num[:40])
     return {"ok": True}
+
+
+@app.get("/api/providers")
+async def get_providers():
+    """Источники распознавания речи и LLM (без токенов и адресов) и какой выбран."""
+    return providers.public()
+
+
+class ProviderChoice(BaseModel):
+    kind: str   # stt / llm
+    name: str   # organizers / имя из data/runtime/providers.json
+
+
+@app.post("/api/providers/active")
+async def set_provider(choice: ProviderChoice, request: Request):
+    """Выбрать источник для распознавания или LLM. Сохраняется в data/runtime/providers.json (не в git).
+    Менять может только администратор: с этой машины (curl на VM) или с заголовком X-Admin-Token = ADMIN_TOKEN."""
+    local = request.client is not None and request.client.host in ("127.0.0.1", "::1")
+    token = config.ADMIN_TOKEN and request.headers.get("X-Admin-Token") == config.ADMIN_TOKEN
+    if not (local or token):
+        raise HTTPException(403, "только для администратора")
+    try:
+        providers.set_active(choice.kind, choice.name)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return providers.public()
 
 
 @app.get("/api/texts")

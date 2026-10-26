@@ -56,7 +56,7 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
             # Стенд не проверяет занятость, поэтому проверка «слот свободен» и создание записи идут
             # под одной блокировкой: два одновременных звонка не займут одно время
             async with BOOKING_LOCK:
-                busy = await busy_slots(s)
+                busy = await busy_slots(s, fresh=True)
                 if (o.doctor_id, o.scheduled_at) in busy or not schedule.is_valid_slot(doc, schedule.from_api(o.scheduled_at)):
                     taken = True
                 else:

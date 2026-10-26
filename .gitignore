@@ -29,4 +29,5 @@ static/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
-
+save_some.sh
+project_speed_dump.txt

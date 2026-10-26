@@ -20,6 +20,8 @@ def mis(monkeypatch):
     client = StandClient(base_url="https://stand/api/v1", token="t", transport=httpx.MockTransport(fake))
     monkeypatch.setattr(dialog.state, "stand", client)
     dialog.SESSIONS.clear()
+    from app.dialog import mis as dialog_mis
+    dialog_mis._busy_cache.update(at=0.0, slots=set())  # кэш занятости — свой у каждого теста
     return fake
 
 
@@ -1068,3 +1070,94 @@ async def test_reminder_i_will_come_is_yes(mis):
     dialog.start_reminder("rem-nocome", v)
     r = await dialog.handle("rem-nocome", "нет, не приду")
     assert "Отменить запись" in r.reply
+
+
+
+# ---------- Скорость и источники нейросетей (техчекпоинт 23.10) ----------
+
+def test_providers_chain_and_fallback(monkeypatch, tmp_path):
+    import json
+    from app import providers
+    f = tmp_path / "providers.json"
+    f.write_text(json.dumps({"active": {"llm": "mac", "stt": "mac"}, "providers": {
+        "mac": {"url": "https://ai.example.ru/v1", "token": "secret", "llm_model": "gemma4", "stt_model": "whisper-1"}}}))
+    monkeypatch.setattr(providers, "FILE", f)
+    monkeypatch.setattr(config, "LLM_URL", "https://hub.gigaschool.ru/v1")
+    chain = providers.chain("llm")
+    assert [e.provider for e in chain] == ["mac", "organizers"] and chain[0].model == "gemma4"
+    providers.set_active("llm", "organizers")
+    assert providers.chain("llm")[0].provider == "organizers"
+
+
+def test_providers_never_expose_tokens(monkeypatch, tmp_path):
+    import json
+    from app import providers
+    f = tmp_path / "providers.json"
+    f.write_text(json.dumps({"providers": {"mac": {"url": "https://ai.example.ru/v1", "token": "secret", "llm_model": "x"}}}))
+    monkeypatch.setattr(providers, "FILE", f)
+    assert "secret" not in json.dumps(providers.public()) and "example.ru" not in json.dumps(providers.public())
+
+
+def test_foreign_provider_rejected(monkeypatch, tmp_path):
+    import json
+    from app import providers
+    f = tmp_path / "providers.json"
+    f.write_text(json.dumps({"active": {"llm": "x"}, "providers": {"x": {"url": "https://api.openai.com/v1", "llm_model": "gpt"}}}))
+    monkeypatch.setattr(providers, "FILE", f)
+    assert all(e.provider != "x" for e in providers.chain("llm"))
+
+
+async def test_llm_falls_back_to_next_provider(monkeypatch, tmp_path):
+    import json
+    import httpx
+    from app import ai, providers
+    f = tmp_path / "providers.json"
+    f.write_text(json.dumps({"active": {"llm": "mac"}, "providers": {"mac": {"url": "https://slow.example.ru/v1", "llm_model": "m"}}}))
+    monkeypatch.setattr(providers, "FILE", f)
+    monkeypatch.setattr(config, "LLM_URL", "https://hub.gigaschool.ru/v1")
+
+    async def fake_post(url, timeout, retries=1, **kw):
+        if "slow" in url:
+            raise ai.AIError("нет ответа")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+    monkeypatch.setattr(ai, "_post", fake_post)
+    assert await ai.llm_chat([{"role": "user", "content": "x"}]) == "ok"
+    assert ai.LAST["llm"]["provider"] == "organizers"
+
+
+async def test_fast_path_skips_llm_on_short_answers(mis, monkeypatch):
+    from app import ai, nlu
+    monkeypatch.setattr(config, "LLM_URL", "https://hub.gigaschool.ru/v1")
+
+    async def boom(*a, **k):
+        raise AssertionError("LLM не должна вызываться на «да»")
+    monkeypatch.setattr(ai, "llm_json", boom)
+    assert (await nlu.understand("Да, верно", "confirm"))["answer"] == "yes"
+    assert (await nlu.understand("второй", "choose_slot"))["choice"] == 2
+
+
+def test_identity_with_extra_words_before_name():
+    """Техчекпоинт 23.10: в фразу попали чужие слова («Ну хорошо, начинали») — ФИО не терялось бы."""
+    from app import nlu
+    out = nlu.ground(nlu.fallback("Ну хорошо, начинали. Дмитриева Людмила Борисовна, 24 ноября 1963 года", "identity"),
+                     "Ну хорошо, начинали. Дмитриева Людмила Борисовна, 24 ноября 1963 года")
+    assert (out["last_name"], out["first_name"], out["middle_name"]) == ("Дмитриева", "Людмила", "Борисовна")
+    assert out["birth_date"] == "24.11.1963"
+
+
+async def test_rate_limiter_does_not_hold_lock_while_waiting():
+    import asyncio
+    from app.stand_client import RateLimiter
+    lim = RateLimiter(1, period=0.3)
+    await lim.wait()
+    waiter = asyncio.create_task(lim.wait())
+    await asyncio.sleep(0.05)
+    assert not lim.lock.locked()  # ожидающий не держит замок
+    await waiter
+
+
+def test_provider_switch_only_for_admin():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    r = TestClient(app).post("/api/providers/active", json={"kind": "llm", "name": "organizers"})
+    assert r.status_code == 403

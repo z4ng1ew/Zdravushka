@@ -7,7 +7,7 @@ import difflib
 import re
 from datetime import date, datetime, timedelta
 
-from app import ai, config, knowledge, schedule
+from app import ai, knowledge, providers, schedule
 
 INTENTS = ["booking", "reschedule", "cancel", "status", "schedule_info", "info",
            "home_visit", "medical", "operator", "complaint", "emergency", "goodbye", "other"]
@@ -220,6 +220,20 @@ _PATRONYMIC = ("ич", "вна", "чна", "ична", "оглы", "кызы")
 OUT_OF_BASE = re.compile(r"парковк|стоянк|припарков|банкомат|кафе|столов|буфет|wi-?fi|вай-?фай|аптек")
 
 
+FAST_STEPS = ("confirm", "confirm_all", "choose_slot", "choose_visit", "remind", "remind_no", "more")
+
+
+def _fast_path(text: str, expecting: str) -> dict | None:
+    if expecting not in FAST_STEPS or len(text.split()) > 4:
+        return None
+    out = ground(fallback(text, expecting), text)
+    if out["intent"] not in (None, "other") and expecting != "more":
+        return None  # «перенесите», «отмените» — смену задачи разбирает модель
+    if out["answer"] or out["choice"]:
+        return out
+    return None
+
+
 def _out_of_base(result: dict, text: str) -> dict:
     if OUT_OF_BASE.search(text.lower()):
         result["topic"], result["intent"] = None, "info"
@@ -309,10 +323,14 @@ def fallback(text: str, expecting: str) -> dict:
                 break
     if expecting == "identity":
         words_ = re.findall(r"[А-Яа-яЁё\-]+", text)
-        if len(words_) >= 2:
+        pat = next((i for i, w in enumerate(words_) if w.lower().endswith(("ович", "евич", "ич", "овна", "евна", "ична", "инична", "оглы", "кызы"))
+                    and len(w) > 4), None)
+        if pat is not None and pat >= 2:  # «…ну хорошо, Дмитриева Людмила Борисовна» — ФИО перед отчеством, лишние слова в начале не берём
+            raw["last_name"], raw["first_name"], raw["middle_name"] = words_[pat - 2], words_[pat - 1], words_[pat]
+        elif pat == 1 and len(words_) >= 3:  # «Александр Сергеевич Пушкин» — имя, отчество, фамилия
+            raw["first_name"], raw["middle_name"], raw["last_name"] = words_[0], words_[1], words_[2]
+        elif len(words_) >= 2:
             raw["last_name"], raw["first_name"] = words_[0], words_[1]
-            if len(words_) >= 3 and words_[2].lower().endswith(("ич", "вна", "чна", "ична", "оглы", "кызы")):
-                raw["middle_name"] = words_[2]
     months = ("январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр")
     m = re.search(r"\b(\d{1,2}|(?:(?:двадцать|тридцать)\s+)?[а-я]+)\s+(январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*(?:\s+(\d{4}))?", low)
     day = (int(m.group(1)) if m.group(1).isdigit() else spoken_day(m.group(1))) if m else None
@@ -330,7 +348,11 @@ def fallback(text: str, expecting: str) -> dict:
 async def understand(text: str, expecting: str) -> dict:
     """Главная функция: фраза пациента → проверенные поля. Сначала нейросеть, при сбое — запасной разбор."""
     text = sanitize(text)
-    if not (config.LLM_URL and config.LLM_MODEL):
+    # Быстрый путь без LLM (техчекпоинт 23.10: каждый вызов модели — 1–3 с): короткий ответ на шаге
+    # подтверждения / выбора варианта («да», «нет», «второй», «приду») надёжно разбирается правилами
+    if (fast := _fast_path(text, expecting)) is not None:
+        return {**fast, "_source": "rules"}
+    if not providers.chain("llm"):
         return {**_out_of_base(ground(fallback(text, expecting), text), text), "_source": "rules"}
     today = _today()
     prompt = SYSTEM_PROMPT.format(today=today.strftime("%d.%m.%Y"), weekday=WEEKDAYS[today.weekday()],

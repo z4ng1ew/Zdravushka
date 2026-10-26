@@ -50,13 +50,32 @@ async def doctors_for(specialty: str) -> list[dict]:
     return [d for d in docs if schedule.excel_doctor(d["full_name"])]
 
 
-async def busy_slots(s: Session) -> set[tuple[int, str]]:
+# Занятые слоты кэшируются на BUSY_TTL секунд и дополняются нашими записями сразу (техчекпоинт 23.10:
+# одна запись делала до 5 GET /visits — при лимите стенда 10 запросов/мин это и давало паузы).
+# Перед созданием записи слот всё равно перепроверяется свежим запросом (fresh=True) под блокировкой.
+BUSY_TTL = 20.0
+_busy_cache: dict = {"at": 0.0, "slots": set()}
+
+
+def busy_changed(doctor_id: int | None = None, slot: str | None = None, freed: str | None = None):
+    """Наша запись/перенос/отмена — обновляем кэш занятости без запроса к стенду."""
+    if doctor_id is not None and slot:
+        _busy_cache["slots"].add((doctor_id, slot))
+    if doctor_id is not None and freed:
+        _busy_cache["slots"].discard((doctor_id, freed))
+
+
+async def busy_slots(s: Session, fresh: bool = False) -> set[tuple[int, str]]:
     """Наши запланированные записи на ближайшие 45 дней — одним запросом (экономим лимит)."""
+    import time
+    if not fresh and time.monotonic() - _busy_cache["at"] < BUSY_TTL:
+        return set(_busy_cache["slots"])
     today = schedule.now().date()
     visits = await call_mis(s, "GET", "/visits", api().list_visits(
         status="Запланирована", date_from=today.strftime("%d.%m.%Y"),
         date_to=(today + timedelta(days=45)).strftime("%d.%m.%Y")))
-    return {(v["doctor"]["id"], v["scheduled_at"]) for v in visits}
+    _busy_cache.update(at=time.monotonic(), slots={(v["doctor"]["id"], v["scheduled_at"]) for v in visits})
+    return set(_busy_cache["slots"])
 
 
 async def identify(s: Session, create: bool = True) -> dict | None:
@@ -86,18 +105,21 @@ async def client_visits(s: Session) -> list[dict]:
 
 async def create_visit(s: Session, o: Booking) -> dict:
     visit = await call_mis(s, "POST", "/visits", api().create_visit(s.client["id"], o.doctor_id, o.scheduled_at))
+    busy_changed(o.doctor_id, o.scheduled_at)
     sms(s, "Перенос" if s.replace_visit else "Запись создана", visit["id"])
     return visit
 
 
 async def reschedule_visit(s: Session, visit: dict, o: Booking) -> dict:
     updated = await call_mis(s, "PATCH", f"/visits/{visit['id']}", api().reschedule_visit(visit["id"], o.scheduled_at))
+    busy_changed(o.doctor_id, o.scheduled_at, freed=visit["scheduled_at"])
     sms(s, "Перенос", visit["id"])
     return updated
 
 
 async def cancel_visit(s: Session, visit: dict, notify: bool = True) -> dict:
     updated = await call_mis(s, "PATCH", f"/visits/{visit['id']}", api().cancel_visit(visit["id"]))
+    busy_changed(visit["doctor"]["id"], freed=visit["scheduled_at"])
     if notify:  # при переносе к другому врачу старую отменяем молча: пациент получает одно SMS «Перенос»
         sms(s, "Отмена", visit["id"])
     return updated

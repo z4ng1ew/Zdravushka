@@ -99,13 +99,21 @@ def status_of(visit_id: int) -> dict:
     return journal.REMINDERS.setdefault(visit_id, {"status": "ожидает"})
 
 
+_rows_cache: dict = {"at": 0.0, "visits": []}
+ROWS_TTL = 60.0
+
+
 async def reminder_rows() -> list[dict]:
-    """Строки экрана «Напоминания»: запись + статус обзвона."""
+    """Строки экрана «Напоминания»: запись + статус обзвона.
+    Список записей кэшируется на минуту: кабинет опрашивает экран каждые несколько секунд, и раньше
+    каждый опрос тратил запрос к стенду из общего лимита — живой звонок ждал (техчекпоинт 23.10)."""
+    if time.time() - _rows_cache["at"] > ROWS_TTL:
+        _rows_cache.update(at=time.time(), visits=await tomorrow_visits())
     return [{"visit_id": v["id"], "patient": f"пациент № {v['client_id']}",
              "doctor": v["doctor"]["full_name"], "specialty": v["doctor"]["specialty"],
              "scheduled_at": v["scheduled_at"], "status": status_of(v["id"])["status"],
              "new_time": status_of(v["id"]).get("new_time")}
-            for v in await tomorrow_visits()]
+            for v in _rows_cache["visits"]]
 
 
 def is_busy() -> bool:

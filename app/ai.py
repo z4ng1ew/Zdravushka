@@ -9,14 +9,27 @@ import re
 
 import httpx
 
-from app import config
+import time
+
+from app import config, providers
 from app.resilience import CircuitBreaker, backoff
 
 # Шлюз хакатона: не больше 2 одновременных запросов на команду — третий получил бы 429.
 _gateway = asyncio.Semaphore(config.AI_MAX_CONCURRENT)
-# Предохранитель LLM: после 3 сбоев подряд минуту не ждём её, а сразу идём в запасной разбор
-llm_breaker = CircuitBreaker("LLM", failures=3, cooldown=60)
+# Предохранитель на каждый источник: после 3 сбоев подряд минуту его не ждём, а сразу берём следующий
+_breakers: dict[str, CircuitBreaker] = {}
+NO_VERBOSE_JSON: set[str] = set()   # серверы, не умеющие verbose_json — второй раз не спрашиваем
+
+
+def breaker(kind: str, provider: str) -> CircuitBreaker:
+    return _breakers.setdefault(f"{kind}:{provider}", CircuitBreaker(f"{kind}:{provider}", failures=3, cooldown=60))
+
+
+llm_breaker = breaker("llm", "organizers")  # совместимость: прежнее имя
 RETRY_STATUSES = (429, 500, 502, 503, 504)
+
+
+LAST: dict[str, dict] = {}   # последний удачный вызов: кто ответил и за сколько мс (для журнала и /api/health)
 
 
 class AIError(Exception):
@@ -53,28 +66,33 @@ async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: i
     messages — список вида [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}].
     temperature низкая: нам нужны точные и одинаковые ответы, а не творчество.
     """
-    url = config.LLM_URL.rstrip("/") + "/chat/completions"
-    body = {"model": config.LLM_MODEL, "messages": messages,
-            "temperature": temperature, "max_tokens": max_tokens}
-    if not config.LLM_URL:
+    endpoints = providers.chain("llm")
+    if not endpoints:
         raise AIError("LLM не настроена")
-    if llm_breaker.is_open:
-        raise AIError("LLM временно отключена после серии сбоев")
-    try:
-        resp = await _post(url, config.LLM_TIMEOUT, json=body, headers=_headers(config.LLM_TOKEN))
-    except AIError:
-        llm_breaker.failure()
-        raise
-    if resp.status_code != 200:
-        raise AIError(f"LLM ответила {resp.status_code}: {resp.text[:300]}")
-    try:  # проверяем формат ответа, а не верим ему: любое отклонение → AIError → запасной разбор
-        content = resp.json()["choices"][0]["message"]["content"]
-    except (ValueError, KeyError, IndexError, TypeError) as e:
-        raise AIError(f"LLM вернула ответ неожиданного формата: {resp.text[:200]}") from e
-    if not isinstance(content, str) or not content.strip():
-        raise AIError("LLM вернула пустой ответ")
-    llm_breaker.success()
-    return content.strip()
+    errors = []
+    for i, ep in enumerate(endpoints):  # выбранный источник, при сбое — следующий; повторов нет: пациент ждёт
+        br = breaker("llm", ep.provider)
+        if br.is_open:
+            errors.append(f"{ep.provider}: отключён после серии сбоев")
+            continue
+        body = {"model": ep.model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+        t0 = time.monotonic()
+        try:
+            resp = await _post(ep.url + "/chat/completions", config.LLM_TIMEOUT, retries=0,
+                               json=body, headers=_headers(ep.token))
+            if resp.status_code != 200:
+                raise AIError(f"ответила {resp.status_code}: {resp.text[:200]}")
+            content = resp.json()["choices"][0]["message"]["content"]
+            if not isinstance(content, str) or not content.strip():
+                raise AIError("пустой ответ")
+        except (AIError, ValueError, KeyError, IndexError, TypeError) as e:
+            br.failure()
+            errors.append(f"{ep.provider}: {e}")
+            continue
+        br.success()
+        LAST["llm"] = {"provider": ep.provider, "model": ep.model, "ms": int((time.monotonic() - t0) * 1000)}
+        return content.strip()
+    raise AIError("LLM: " + "; ".join(errors))
 
 
 def parse_json(text: str) -> dict:
@@ -92,14 +110,9 @@ def parse_json(text: str) -> dict:
 
 
 async def llm_json(messages: list[dict]) -> dict:
-    """LLM, которая обязана вернуть JSON. Одна повторная попытка, если ответ не разобрался."""
-    text = await llm_chat(messages)
-    try:
-        return parse_json(text)
-    except AIError:
-        retry = messages + [{"role": "assistant", "content": text},
-                            {"role": "user", "content": "Ответь только JSON-объектом, без пояснений."}]
-        return parse_json(await llm_chat(retry))
+    """LLM, которая обязана вернуть JSON. Битый JSON — без второго вызова: сразу запасной разбор правилами
+    (второй вызов удваивал задержку как раз тогда, когда шлюз и так медленный — техчекпоинт 23.10)."""
+    return parse_json(await llm_chat(messages, max_tokens=200))
 
 
 # Whisper «слышит» в тишине и шуме фразы из субтитров к видео. Это не слова пациента — выбрасываем
@@ -134,25 +147,42 @@ def _echo_of_prompt(text: str) -> bool:
 
 async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, float | None]:
     """Распознавание речи: аудио → (текст, уверенность 0..1 или None, если сервер её не даёт)."""
-    if not config.STT_URL:
+    endpoints = providers.chain("stt")
+    if not endpoints:
         raise AIError("распознавание речи не настроено")
-    url = config.STT_URL.rstrip("/") + "/audio/transcriptions"
-    data = {"model": config.STT_MODEL, "language": "ru", "response_format": "verbose_json", "temperature": "0"}
-    if config.STT_PROMPT:  # словарь предметной области: Whisper реже путает «офтальмолог», «отоларинголог», даты
-        data["prompt"] = config.STT_PROMPT
-    resp = await _post(url, config.STT_TIMEOUT, files={"file": (filename, audio)}, data=data,
-                       headers=_headers(config.STT_TOKEN))
-    if resp.status_code == 400:  # сервер не умеет verbose_json — обычный ответ, без уверенности
-        data.pop("response_format")
-        resp = await _post(url, config.STT_TIMEOUT, files={"file": (filename, audio)}, data=data,
-                           headers=_headers(config.STT_TOKEN))
-    if resp.status_code != 200:
-        raise AIError(f"STT ответил {resp.status_code}: {resp.text[:300]}")
-    try:
-        body = resp.json()
-        text = body.get("text", "")
-    except (ValueError, AttributeError) as e:
-        raise AIError("STT вернул ответ неожиданного формата") from e
+    errors, body = [], None
+    for ep in endpoints:  # выбранный источник, при сбое — следующий
+        br = breaker("stt", ep.provider)
+        if br.is_open:
+            errors.append(f"{ep.provider}: отключён после серии сбоев")
+            continue
+        data = {"model": ep.model, "language": "ru", "temperature": "0"}
+        if ep.url not in NO_VERBOSE_JSON:
+            data["response_format"] = "verbose_json"
+        if config.STT_PROMPT:  # словарь предметной области: Whisper реже путает «офтальмолог», «отоларинголог», даты
+            data["prompt"] = config.STT_PROMPT
+        t0 = time.monotonic()
+        try:
+            resp = await _post(ep.url + "/audio/transcriptions", config.STT_TIMEOUT, retries=0,
+                               files={"file": (filename, audio)}, data=data, headers=_headers(ep.token))
+            if resp.status_code == 400 and "response_format" in data:  # не умеет verbose_json — запомним
+                NO_VERBOSE_JSON.add(ep.url)
+                data.pop("response_format")
+                resp = await _post(ep.url + "/audio/transcriptions", config.STT_TIMEOUT, retries=0,
+                                   files={"file": (filename, audio)}, data=data, headers=_headers(ep.token))
+            if resp.status_code != 200:
+                raise AIError(f"ответил {resp.status_code}: {resp.text[:200]}")
+            body = resp.json()
+            text = body.get("text", "") if isinstance(body, dict) else ""
+        except (AIError, ValueError) as e:
+            br.failure()
+            errors.append(f"{ep.provider}: {e}")
+            continue
+        br.success()
+        LAST["stt"] = {"provider": ep.provider, "model": ep.model, "ms": int((time.monotonic() - t0) * 1000)}
+        break
+    else:
+        raise AIError("STT: " + "; ".join(errors))
     text = text.strip() if isinstance(text, str) else ""
     if is_hallucination(text) or _echo_of_prompt(text):
         return "", None

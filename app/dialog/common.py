@@ -75,6 +75,16 @@ async def escalation_client(s: Session) -> dict | None:
 ESCALATION_MAX = 1000  # ограничение стенда на длину описания заявки
 
 
+_TASKS: set = set()
+
+
+def _background(coro):
+    import asyncio
+    task = asyncio.create_task(coro)
+    _TASKS.add(task)
+    task.add_done_callback(_TASKS.discard)
+
+
 def clean_text(text: str, limit: int = ESCALATION_MAX) -> str:
     """Текст для МИС: без управляющих символов и не длиннее лимита стенда."""
     text = "".join(ch if ch.isprintable() or ch == "\n" else " " for ch in text)
@@ -101,8 +111,13 @@ async def escalate(s: Session, esc: Escalation) -> ChatResponse:
     esc.summary = f"{esc.summary}. Пациент: {who or 'не назван'}. Задача: {s.task or '—'}."
     details = "; ".join(f"{k}: {v}" for k, v in collected(s).items())
     # Первая строка — «ПЕРЕВОД R-xx Pn» (формат организаторов для проверки жюри), дальше — карточка перевода
-    await send_escalation(s, clean_text(f"ПЕРЕВОД {esc.rule} {esc.priority}\n{esc.reason}. {esc.summary}"
-                                        + (f" Собрано: {details}." if details else "")))
+    description = clean_text(f"ПЕРЕВОД {esc.rule} {esc.priority}\n{esc.reason}. {esc.summary}"
+                             + (f" Собрано: {details}." if details else ""))
+    # Фраза «звоните 103» не должна ждать стенд: заявка в МИС уходит в фоне (до 3 запросов при общем лимите)
+    if config.NOTES_IN_BACKGROUND:
+        _background(send_escalation(s, description))
+    else:
+        await send_escalation(s, description)
     journal.handoff(s.call, esc.reason, esc.priority == "P1", esc.summary, collected(s))
     s.call["result"] = "переведён"
     s.call["intent"] = s.call["intent"] or "перевод на регистратора"
