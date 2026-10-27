@@ -1240,7 +1240,7 @@ def test_relative_dates_and_parts_of_day():
     assert nlu.relative_date("после выходных").weekday() == 0
     assert nlu.relative_date("лучше не в пятницу") is None
     assert nlu.relative_date("средний палец") is None
-    assert nlu.part_of_day("а после обеда есть?") == "день" and nlu.part_of_day("с утра") == "утро"
+    assert nlu.part_of_day("а после обеда есть?") == "после обеда" and nlu.part_of_day("с утра") == "утро"
 
 
 def test_two_digit_birth_year():
@@ -1294,3 +1294,23 @@ async def test_two_word_spoken_birth_year(mis):
     assert nlu.spoken_year("первое мая пятого года") == 2005
     r = await talk("мне бы записаться к терапевту", "Смирнова Ольга Викторовна, двенадцатое марта семьдесят восьмого")
     assert dialog.SESSIONS[r.session_id].fields.get("birth_date") == "12.03.1978" and r.options
+
+
+
+# ---------- Живые звонки 28.10 ----------
+
+async def test_repeat_options_does_not_pick_second(mis):
+    r = await talk("запишите к травматологу", "Козлов Андрей Петрович 10.10.1990")
+    r2 = await dialog.handle(r.session_id, "Повтори еще раз варианты, я не расслышал.")
+    assert r2.reply.startswith("Повторяю.") and "Верно?" not in r2.reply and not dialog.SESSIONS[r.session_id].chosen
+
+
+def test_tts_reads_initials_and_zeros():
+    from app import tts
+    out = tts.normalize("врач Дорохов С. А., в семнадцать ноль-ноль")
+    assert "эс а" in out and "н+оль н+оль" in out and "С." not in out
+
+
+async def test_after_lunch_starts_at_13(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "а после обеда есть что-нибудь?")
+    assert r.options and all(13 <= schedule.from_api(o.scheduled_at).hour < 16 for o in r.options)

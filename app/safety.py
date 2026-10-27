@@ -110,4 +110,6 @@ def is_injection(text: str) -> bool:
 
 def asks_repeat(text: str) -> bool:
     low = text.lower()
-    return any(w in low for w in HARD_OF_HEARING) and len(low.split()) <= 6
+    # «Повтори ещё раз варианты, я не расслышал» — 7 слов; раньше длинная просьба не узнавалась,
+    # и «повтори» разбиралось как «второй» вариант (живой звонок 28.10)
+    return any(w in low for w in HARD_OF_HEARING) and len(low.split()) <= 10

@@ -196,7 +196,9 @@ async def offer_slots(s: Session, doctors: list[dict], exclude: str | None = Non
     s.options = [make_booking(d, t) for d, t in found]
     s.step = "choose_slot"
     words = ["первый", "второй", "третий"]
-    variants = "; ".join(f"{words[i]} — {o.spoken}, врач {short_name(o.doctor_name)}"
+    # В перечне — только фамилия врача: инициалы «С. А.» синтез проглатывает (звонок 28.10);
+    # полное ФИО звучит при подтверждении «Записываю: … Верно?»
+    variants = "; ".join(f"{words[i]} — {o.spoken}, врач {o.doctor_name.split()[0]}"
                          for i, o in enumerate(s.options))
     return reply(s, f"{note}Есть свободное время: {variants.rstrip('.')}. Какой вариант удобен?",
                  options=s.options, source="расписание + МИС",

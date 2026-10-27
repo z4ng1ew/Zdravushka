@@ -215,7 +215,9 @@ def part_of_day(low: str) -> str | None:
     """«С утра» 7:30–12:00, «днём / после обеда» 12:00–16:00, «вечером» после 16:00."""
     if "утр" in low:
         return "утро"
-    if "после обеда" in low or "днём" in low or "днем" in low or "в обед" in low:
+    if "после обеда" in low:
+        return "после обеда"
+    if "днём" in low or "днем" in low or "в обед" in low:
         return "день"
     if "вечер" in low:
         return "вечер"
@@ -369,7 +371,8 @@ def fallback(text: str, expecting: str) -> dict:
     m = re.search(r"\b([123])\b", low)
     # «Перу», «пер», «фторой» — так Whisper слышит короткие «первый», «второй» (живой звонок 22.10)
     words = {"перв": 1, "перу": 1, "втор": 2, "фтор": 2, "трет": 3, "трит": 3}
-    raw["choice"] = int(m.group(1)) if m else next((v for k, v in words.items() if k in low), None)
+    # Слово должно начинаться с основы: «повтори» содержит «втор», но это не «второй» (звонок 28.10)
+    raw["choice"] = int(m.group(1)) if m else next((v for k, v in words.items() if re.search(rf"\b{k}", low)), None)
     question = text.strip().endswith("?") or re.match(r"\s*(а\s+)?(куда|когда|где|зачем|почему|какой|какая|что|кто|сколько)\b", low)
     if question:
         pass  # «Куда я приду?» — это вопрос, а не согласие (живой звонок 27.10)
