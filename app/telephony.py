@@ -326,14 +326,15 @@ class Call:
             # Регламент (раздел 3): «Одну секунду, проверяю расписание» — если МИС отвечает дольше 1,5 с.
             # Пациент не сидит в тишине, пока идёт поиск.
             work = asyncio.create_task(dialog.handle(self.session_id, text, confidence))
-            done, _ = await asyncio.wait({work}, timeout=config.FILLER_AFTER_SEC)
-            s = dialog.SESSIONS.get(self.session_id)
-            mis_step = s is not None and (s.client or s.fields.get("birth_date"))  # пациент назван — идёт поиск в МИС
-            if not done and mis_step:
-                call = journal.CALLS.get(self.session_id)
-                if call is not None:
+            said = False
+            while not work.done():
+                await asyncio.wait({work}, timeout=0.2)
+                call = journal.CALLS.get(self.session_id) or {}
+                since = call.get("_mis_since")
+                if not said and since and time.monotonic() - since > config.FILLER_AFTER_SEC:
+                    said = True  # МИС отвечает дольше 1,5 с — «Одну секунду…» (не на ожидание нейросети)
                     journal.say(call, "bot", FILLER)
-                await self.say(FILLER)
+                    await self.say(FILLER)
             answer = await work
         except Exception:  # непредвиденная ошибка логики не должна оставлять пациента в тишине
             log.exception("Ошибка диалога в звонке %s", self.session_id)

@@ -29,7 +29,11 @@ def api() -> MisPort:
 
 
 async def call_mis(s: Session, method: str, path: str, coro):
-    """Вызов стенда с записью в журнал звонка. Любой сбой → StandDown → перевод (R-06)."""
+    """Вызов стенда с записью в журнал звонка. Любой сбой → StandDown → перевод (R-06).
+    Пока запрос идёт, в звонке отмечено время его начала — по нему телефония говорит «Одну секунду, проверяю
+    расписание», только если ждём именно МИС дольше 1,5 с (регламент), а не нейросеть."""
+    import time
+    s.call["_mis_since"] = time.monotonic()
     try:
         result = await coro
     except StandError as e:
@@ -40,6 +44,8 @@ async def call_mis(s: Session, method: str, path: str, coro):
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:  # нет ответа или ответ не того формата
         journal.stand_request(s.call, method, path, 0, "нет ответа или неверный ответ")
         raise StandDown(str(e)) from e
+    finally:
+        s.call.pop("_mis_since", None)
     journal.stand_request(s.call, method, path, 201 if method == "POST" else 200)
     return result
 
