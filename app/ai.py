@@ -194,6 +194,7 @@ async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, fl
     else:
         raise AIError("STT: " + "; ".join(errors))
     text = text.strip() if isinstance(text, str) else ""
+    text = re.sub(r"^(фамилия|имя|отчество)[,.]\s*(?=\S)", "", text, flags=re.I)  # хвост подсказки в начале ответа
     if is_hallucination(text) or _echo_of_prompt(text):
         return "", None
     return text, asr_confidence(body.get("segments"))

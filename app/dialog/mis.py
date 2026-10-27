@@ -145,8 +145,23 @@ def sms(s: Session, event: str, visit_id: int | None = None):
 async def append_comment(client_id: int, lines: list[str]):
     """Дописать строки в комментарий клиента, не стирая прежние отметки."""
     current = ((await api().get_client(client_id)) or {}).get("comment") or ""
-    text = "\n".join([current.rstrip()] + lines) if current.strip() else "\n".join(lines)
-    await api().update_client_comment(client_id, text[-2000:])
+    await api().update_client_comment(client_id, fit_comment(current.splitlines() + lines))
+
+
+COMMENT_MAX = 1000  # лимит стенда на поле comment (ответ 400, живой звонок 27.10)
+
+
+def fit_comment(lines: list[str]) -> str:
+    """Комментарий не длиннее лимита стенда: убираем самые старые отметки, но отказ от обзвона
+    и уведомлений сохраняем всегда — по ним решается, звонить ли пациенту."""
+    lines = [ln for ln in lines if ln.strip()]
+    keep = lambda ln: ln.startswith(("Отказ от обзвона", "Отказ от уведомлений"))  # noqa: E731
+    while len("\n".join(lines)) > COMMENT_MAX:
+        idx = next((i for i, ln in enumerate(lines) if not keep(ln)), None)
+        if idx is None or len(lines) == 1:
+            return "\n".join(lines)[-COMMENT_MAX:]
+        lines.pop(idx)
+    return "\n".join(lines)
 
 
 async def flush_notes(s: Session):

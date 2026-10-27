@@ -880,7 +880,7 @@ async def test_silero_failure_falls_back_to_piper(monkeypatch):
 def test_stt_prompt_echo_is_dropped():
     """Подсказка распознаванию не должна «возвращаться» как речь пациента на тишине."""
     from app import ai
-    assert ai._echo_of_prompt("Запись к врачу: терапевт, педиатр,")
+    assert ai._echo_of_prompt("Регистратура поликлиники: терапевт, педиатр,")
     assert not ai._echo_of_prompt("Запишите меня к терапевту")
 
 
@@ -1179,3 +1179,12 @@ async def test_question_is_not_confirmation(mis):
     dialog.start_reminder("rem-q", v)
     r = await dialog.handle("rem-q", "Куда я приду?")
     assert not r.done and dialog.journal.REMINDERS[v["id"]].get("status") != "подтвердил"
+
+
+
+def test_client_comment_fits_stand_limit():
+    """Стенд: comment ≤ 1000 символов (живой звонок 27.10 — отметки перестали записываться)."""
+    from app.dialog.mis import fit_comment
+    lines = ["Отказ от обзвона 01.10.2026"] + [f"SMS Запись создана #{i} 27.10.2026 15:49" for i in range(100)]
+    out = fit_comment(lines)
+    assert len(out) <= 1000 and out.startswith("Отказ от обзвона") and out.endswith("#99 27.10.2026 15:49")
