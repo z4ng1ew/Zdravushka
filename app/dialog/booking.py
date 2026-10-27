@@ -72,13 +72,18 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
                 await cancel_visit(s, old, notify=False)
                 extra = " Прежняя запись отменена."
             return task_done(s, f"Готово, вы записаны {o.spoken}{room(o.doctor_name)}.{extra} "
-                                 "Возьмите паспорт и полис ОМС.", "записан", booking=done)
+                                 "SMS с деталями придёт на этот номер. Возьмите паспорт и полис ОМС. "
+                                 "Накануне придёт напоминание.", "записан", booking=done)
         if nl["answer"] == "no" or nl["date"] or nl["part_of_day"]:
             return await offer_slots(s, doctors)
         return reply(s, "Подтвердите, пожалуйста: записываю? Скажите «да» или «нет».", booking=s.chosen)
     else:
         resp = await offer_slots(s, doctors)
-        resp.reply = note + resp.reply
+        # Пример диалога С-01: «Спасибо, Ольга Викторовна. … Ближайшее время: …»
+        first, middle = s.fields.get("first_name"), s.fields.get("middle_name")
+        thanks = f"Спасибо, {first} {middle}. " if first and middle and not note and not s.options_shown else ""
+        s.options_shown = True
+        resp.reply = thanks + note + resp.reply
         return resp
 
     o = s.chosen

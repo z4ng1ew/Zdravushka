@@ -141,7 +141,9 @@ def find_free_slots(doctors: list[dict], busy: set[tuple[int, str]],
                 candidates.append((slot, doc))
                 break  # у одного врача берём только ближайший слот за день
         for slot, doc in sorted(candidates, key=lambda x: x[0]):
-            if len(found) < limit:
+            # Разное время, а не «три раза в двенадцать ноль-ноль у разных врачей» (пример диалога С-01:
+            # «завтра в восемь сорок пять или в пятницу в десять тридцать»)
+            if len(found) < limit and all(s != slot for _, s in found):
                 found.append((doc, slot))
         day += timedelta(days=1)
     return found

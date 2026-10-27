@@ -57,7 +57,8 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
             if taken:
                 return await offer_slots(s, [doctor], exclude=(doctor["id"], visit["scheduled_at"]))
             reminder_status(s, "перенёс", o.scheduled_at, visit_id=visit["id"])
-            return task_done(s, f"Готово, запись перенесена. Новое время: {o.spoken}{room(o.doctor_name)}.", "перенесён",
+            return task_done(s, f"Готово, запись перенесена. Новое время: {o.spoken}{room(o.doctor_name)}. "
+                                "SMS придёт на этот номер.", "перенесён",
                               booking=visit_booking(updated))
         if nl["answer"] == "no" or nl["date"] or nl["part_of_day"]:
             return await offer_slots(s, [doctor], exclude=(doctor["id"], visit["scheduled_at"]))

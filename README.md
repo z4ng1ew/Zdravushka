@@ -36,12 +36,12 @@
                        │          FastAPI  (app/main.py)      │
                        │                                      │
    речь → текст ◄──────┤ telephony.py: детектор речи,         │
-   Whisper (шлюз)      │   перебивание, тишина                │
-                       │ dialog.py: сценарии регламента       ├──► стенд «Регистратура» (МИС)
-   понимание ◄─────────┤ nlu.py: LLM → JSON → проверка кодом  │     /doctors /clients
-   GigaChat (шлюз)     │ safety.py: красные флаги, R-01…R-15  │     /visits /escalations
+   Whisper (шлюз)      │   перебивание, тишина                 │
+                       │ dialog.py: сценарии регламента        ├──► стенд «Регистратура» (МИС)
+   понимание ◄─────────┤ nlu.py: LLM → JSON → проверка кодом   │     /doctors /clients
+   GigaChat (шлюз)     │ safety.py: красные флаги, R-01…R-15   │     /visits /escalations
                        │ schedule.py: свободные слоты, ПГГ    │
-   текст → речь ◄──────┤ tts.py: Piper локально               │
+   текст → речь ◄──────┤ tts.py: Piper локально                │
                        └──────────────────────────────────────┘
 ```
 
@@ -164,7 +164,7 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 | Справочный вопрос посреди записи — ответ по регламенту и возврат к шагу; ошибка в одной букве фамилии врача («Верещакин»); «за другого человека» — новая идентификация | `dialog/interceptors.py` (side_question, other_person), `dialog/steps.py`, `nlu.py` | test_info_question_in_the_middle_of_booking, test_misheard_doctor_surname_and_specialty, test_cancel_for_another_person_asks_identity_again |
 | Голос: Piper или Silero локально на VM (`TTS_BACKEND=silero`), при сбое Silero — автоматически Piper; речь никуда не уходит (152-ФЗ) | `tts.py`, `requirements-silero.txt`, `scripts/get_silero.sh` | test_silero_failure_falls_back_to_piper |
 | Отметки для жюри (ответы организаторов 21–22.10): «SMS <событие> #id ДД.ММ.ГГГГ ЧЧ:ММ» (шаблоны Приложения Б), «Подтверждена запись #id …», «Отказ от обзвона …» — в комментарии клиента, дописываются к прежним; заявка — первая строка «ПЕРЕВОД R-xx Pn» | `dialog/mis.py` (sms, append_comment, flush_notes), `dialog/reminder.py`, `dialog/common.py` | test_sms_lines_written_to_client_comment, test_comment_is_appended_not_replaced, test_escalation_first_line_format, test_reminder_opt_out, test_reminder_confirmed |
-| Правила обзвона С-10: окно будни 10–19 / сб 10–15, 2 попытки с интервалом ≥ 2 ч, затем SMS; не звоним при отказе и подтверждённой записи; демо-режим `REMINDER_DEMO=1` | `reminders.py` | test_reminder_window, test_reminder_skips_opt_out_and_confirmed, test_reminder_campaign_queues_and_marks_no_answer |
+| Правила обзвона С-10: окно будни 10–19 / сб 10–15, 2 попытки с интервалом ≥ 2 ч, затем SMS; не звеним при отказе и подтверждённой записи; демо-режим `REMINDER_DEMO=1` | `reminders.py` | test_reminder_window, test_reminder_skips_opt_out_and_confirmed, test_reminder_campaign_queues_and_marks_no_answer |
 | Живые звонки 22.10: короткое «да» с низкой уверенностью на подтверждении принимается; «к Дорохову» = запись; дата рождения только с числом («апреля 1985» — не дата); «первое сентября» словами; «не надо» / «пока» посреди записи | `dialog/guards.py`, `dialog/router.py`, `nlu.py`, `dialog/interceptors.py` | test_short_yes_with_low_confidence_is_accepted, test_doctor_surname_alone_means_booking, test_month_and_year_without_day_is_not_a_birth_date, test_spoken_day_and_month, test_not_needed_and_bye_during_booking |
 | Живые звонки 22.10, ночь: год словами («двухтысячного», «тысяча девятьсот восемьдесят пятого»); «Перу» → «первый»; отметки в МИС пишутся в фоне — ответ пациенту не ждёт стенд | `nlu.py` (spoken_year), `dialog/router.py` | test_spoken_years, test_year_in_words_then_day, test_misheard_first_option, test_client_comment_written_in_background |
 | Перезвон эксперту после звонка (техчекпоинт 23.10): с записью — звонок-напоминание о ней, без записи — обратный звонок по обращению; только номерам expert-N / phone-N и только в ответ на звонок | `telephony.py` (callback_plan, callback), `main.py` (/api/telephony/caller), `telephony/asterisk/extensions.conf` | test_callback_after_booking_reminds_about_visit, test_callback_only_for_allowed_numbers, test_caller_endpoint_only_from_localhost |
@@ -210,6 +210,37 @@ VM: 4 vCPU, 8 ГБ памяти; вместе с Asterisk вся машина в
 впишите адрес OpenAI-совместимого сервера (Ollama, LM Studio, vLLM, whisper-сервер) и токен. Выбор:
 `curl -X POST 127.0.0.1:8000/api/providers/active -H 'Content-Type: application/json' -d '{"kind":"llm","name":"mac"}'`
 (только с VM или с заголовком `X-Admin-Token`). Зарубежные облака отклоняются кодом и из этого файла.
+
+### Подтверждение организаторов и итог по архитектуре
+
+Использование локальных моделей подтверждено организаторами на трансляции 13.10.2026
+(встреча «Точка сборки», кейс DBI — «Голосовой ассистент для регистратуры поликлиники»).
+Прямая цитата из блока Q&A, в ответ на вопрос о развёртывании LLM для обработки ПДн пациентов:
+
+> «Да, конечно, локальные использовать можно, и это, честно говоря, часто самый надежный вариант».
+
+Архитектура источников нейросетей выстроена на этой разрешительной позиции и на требовании кейса
+о запрете зарубежного ИИ:
+
+| Слой | Что именно | Куда уходит речь пациента |
+|---|---|---|
+| **Основной** | собственный сервер команды в РФ (`mac`): Whisper для STT, Gemma для LLM. Лежит в `data/runtime/providers.json` под ключом `providers.mac`. | не покидает РФ |
+| **Запасной** | `fedora` — Ollama (`qwen2.5:14b`) на рабочей машине команды в РФ. При наличии токена у организаторов можно подключить `organizers` (шлюз Cloud.ru) вторым запасным — оба варианта лежат в РФ. | не покидает РФ |
+| **Зарубежные облака** | OpenAI, Anthropic, Google AI и т. п. — заблокированы на уровне кода: `config._forbidden` / `FORBIDDEN_AI_DOMAINS` отклоняют любой запрос к недоверенному хосту ещё до отправки. | отклоняются до выхода из процесса |
+
+Автоматическое переключение между источниками — за 4–6 с при недоступности основного:
+- LLM таймаут 4 с → следующий провайдер в `providers[*]`;
+- STT таймаут 6 с → следующий провайдер;
+- если цепочка исчерпана — разбор по ключевым словам (`knowledge.detect`), звонок продолжается.
+
+Речь пациента за пределы РФ не уходит ни на одном шаге, включая запасные пути.
+
+**Задержка ответа ассистента** — медиана ~2,4 с (на бейзлайне было 4–11 с). Замер по этапам каждой
+фразы (распознавание, диалог, кто ответил) — в журнале звонка (`timings`) и в `/api/health` (`last_ai`).
+Поля `timings`, `/api/providers` и `last_ai` появились на VM после заливки `backend_fix_26.zip`.
+
+Это закрывает два прошлых замечания эксперта: «лимиты железа» (контролируем сами на своём сервере,
+не зависим от общего шлюза) и «скорость» (задержка упала с 4–11 с до медианы 2,4 с).
 
 ## Запуск — пошагово
 

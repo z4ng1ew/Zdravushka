@@ -1272,3 +1272,15 @@ def test_concurrency_limit_only_for_organizers_gateway(monkeypatch):
     monkeypatch.setattr(config, "STT_URL", "https://hub.gigaschool.ru/api/v1")
     assert ai._limit_for("https://hub.gigaschool.ru/api/v1/chat/completions") is ai._gateway
     assert ai._limit_for("https://ai.example.ru/v1/chat/completions") is ai._NO_LIMIT
+
+
+
+async def test_booking_dialog_like_regulation_example(mis):
+    """Пример диалога С-01 регламента: обращение по имени-отчеству, разное время, SMS и напоминание в итоге."""
+    r = await talk("мне бы записаться к терапевту", "Смирнова Ольга Викторовна, 12.03.78")
+    assert r.reply.startswith("Спасибо, Ольга Викторовна.")
+    times = [o.scheduled_at for o in r.options]
+    assert len(times) == len(set(times))
+    r = await dialog.handle(r.session_id, "1")
+    r = await dialog.handle(r.session_id, "да")
+    assert "SMS с деталями придёт на этот номер" in r.reply and "Накануне придёт напоминание" in r.reply

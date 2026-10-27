@@ -15,6 +15,7 @@ class Session:
     fields: dict = field(default_factory=dict)   # что пациент уже назвал: специальность, ФИО, дата...
     text: str = ""                               # последняя фраза пациента (нижний регистр)
     last_reply: str | None = None                # последняя фраза ассистента (для «повторите»)
+    options_shown: bool = False                 # варианты времени уже называли (благодарим по имени один раз)
     loop: int = 0                                # сколько раз подряд ассистент повторил тот же вопрос
     miss: int = 0                                # сколько раз подряд не поняли пациента
     repeats: int = 0                             # сколько раз пациент просил повторить
@@ -36,6 +37,7 @@ class Session:
     def forget_task_data(self):
         """Забыть промежуточные данные сценария (варианты, выбранную запись) — задача закончена или сменилась."""
         self.options, self.visits, self.visit, self.chosen = [], None, None, None
+        self.options_shown = False
 
     def take(self, name: str):
         """Забрать значение поля и сбросить его к значению по умолчанию."""

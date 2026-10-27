@@ -93,7 +93,7 @@ async def callback(session_id: str, number: str):
     await call_reminder(visit, endpoint=endpoint)
 
 
-FILLER = "Одну секунду, проверяю."
+FILLER = "Одну секунду, проверяю расписание."  # регламент, раздел 3: при ответе МИС дольше 1,5 с
 
 # Идущие сейчас телефонные звонки (id сессии) — для экрана «Звонок сейчас» в кабинете
 ACTIVE: set[str] = set()
@@ -327,7 +327,9 @@ class Call:
             # Пациент не сидит в тишине, пока идёт поиск.
             work = asyncio.create_task(dialog.handle(self.session_id, text, confidence))
             done, _ = await asyncio.wait({work}, timeout=config.FILLER_AFTER_SEC)
-            if not done:
+            s = dialog.SESSIONS.get(self.session_id)
+            mis_step = s is not None and (s.client or s.fields.get("birth_date"))  # пациент назван — идёт поиск в МИС
+            if not done and mis_step:
                 call = journal.CALLS.get(self.session_id)
                 if call is not None:
                     journal.say(call, "bot", FILLER)
