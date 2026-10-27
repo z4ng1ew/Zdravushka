@@ -1,6 +1,8 @@
 // Контракт разговора: POST /api/chat и GET /api/health (app/models.py бэкенда).
 // Поля меняем только вместе с Мовсаром.
 
+import type { LastAi } from "./providers";
+
 export interface ChatBooking {
   visit_id: number | null;
   doctor_id: number | null;
@@ -46,6 +48,7 @@ export interface Health {
   tts?: string | boolean | null;
   telephony?: string | null;
   pd_trusted_ai_only?: boolean; // ИИ-сервисы только из доверенного контура (152-ФЗ)
+  last_ai?: LastAi | null; // кто последним ответил и за сколько мс (распознавание, LLM)
 }
 
 /** Карточка записи внизу экрана пациента */

@@ -2,6 +2,7 @@
 
 import type { ChatBooking, ChatEscalation, ChatResponse, Health } from "../types/chat";
 import { isObj, numOrNull, obj, softList, str, strOrNull, textRecord } from "./parse";
+import { parseLastAi } from "./providers";
 
 export function parseBooking(v: unknown): ChatBooking | null {
   if (!isObj(v)) return null;
@@ -59,6 +60,7 @@ export function parseHealth(raw: unknown): Health {
     tts: typeof d.tts === "string" || typeof d.tts === "boolean" ? d.tts : null,
     telephony: strOrNull(d.telephony),
     pd_trusted_ai_only: typeof d.pd_trusted_ai_only === "boolean" ? d.pd_trusted_ai_only : undefined,
+    last_ai: parseLastAi(d.last_ai),
   };
 }
 

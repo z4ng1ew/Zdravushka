@@ -1,7 +1,8 @@
 "use client";
 
-// Панель регистратора — только данные сервера, обновляются каждые 5 секунд:
-//   показатели и журнал ← GET /api/calls;  очередь ← /api/handoffs;  обзвон ← /api/reminders.
+// Панель регистратора — только данные сервера:
+//   показатели и журнал ← GET /api/calls, очередь ← /api/handoffs — каждые 5 с;
+//   обзвон ← /api/reminders — раз в 30 с (ходит в МИС, лимит стенда) и сразу после «Позвонить» / «Обзвонить всех».
 
 import { getCalls, getHandoffs, getReminders } from "@/shared/api/staff";
 import { POLL } from "@/shared/config";
@@ -21,7 +22,7 @@ const POLL_MS = POLL.registrar;
 export default function RegistrarPanel() {
   const calls = usePolling(getCalls, POLL_MS);
   const handoffs = usePolling(getHandoffs, POLL_MS);
-  const reminders = usePolling(getReminders, POLL_MS);
+  const reminders = usePolling(getReminders, POLL.reminders);
   const queueActions = useAction(handoffs.refresh);
   const callActions = useAction(reminders.refresh);
   const { toast, show } = useToast();

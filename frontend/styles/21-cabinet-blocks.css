@@ -224,3 +224,18 @@
 .pager-prev svg { transform: rotate(90deg); }
 .pager-next svg { transform: rotate(-90deg); }
 .q-status { margin-top: 6px; }
+
+/* пятая плитка «Ответ ассистента» — только когда есть данные о скорости */
+.kpi-grid-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px 30px; }
+@media (max-width: 1450px) { .kpi-grid-5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* журнал: скорость ответа под расшифровкой */
+.call-speed { margin-top: 10px; padding: 8px 12px; border-radius: 10px; background: #f1f7ff; color: #2d5aa8; font-size: 12.5px; font-weight: 600; }
+
+/* «Настройки» → источники нейросетей: таблица во всю ширину под заголовком строки */
+.set-row-col { flex-direction: column; align-items: stretch; }
+.set-providers { display: grid; gap: 8px; }
+.t-providers td, .t-providers th { padding: 9px 12px; }
+.t-providers td .sp { margin-left: 8px; font-size: 11px; }
+/* журнал: код правила перевода рядом с итогом */
+.call-rule { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; border: 1px solid #f3b27a; background: #fff6ee; color: #b35a12; font-size: 11px; font-weight: 700; }
+.kpi2-value { white-space: nowrap; } /* «2,2 с» не разрывается */

@@ -31,6 +31,16 @@ export interface Call {
   stand_requests: StandRequest[];
   active?: boolean; // /api/live: звонок идёт прямо сейчас
   flags?: string[]; // отметки бэкенда, например prompt_injection — попытка промпт-инъекции
+  timings?: PhraseTiming[]; // скорость ответа по фразам (только телефонные звонки); нет — не показываем
+  rule?: string; // правило регламента перевода на регистратора (R-07) — рядом с итогом в журнале
+}
+
+/** Время ответа на одну фразу пациента: распознавание и диалог (понимание + МИС), без синтеза голоса */
+export interface PhraseTiming {
+  stt_ms: number;
+  dialog_ms: number;
+  stt?: string | null; // кто распознал: organizers — шлюз организаторов, mac — наш сервер
+  llm?: string | null; // кто понял фразу; null — LLM не понадобилась (разбор правилами)
 }
 
 export type HandoffStatus = "новая" | "в работе" | "перезвонили" | "закрыта";

@@ -2,7 +2,7 @@
 // Обязательное поле нет — элемент пропускаем; необязательное — подставляем пустое значение.
 
 import type { Doctor } from "../types/doctor";
-import type { Call, CallResult, Handoff, HandoffStatus, Reminder, StandRequest, Utterance } from "../types/staff";
+import type { Call, CallResult, Handoff, HandoffStatus, PhraseTiming, Reminder, StandRequest, Utterance } from "../types/staff";
 import { isObj, num, numOrNull, oneOf, softList, str, strOrNull, textRecord } from "./parse";
 
 const SPEAKERS = ["patient", "bot", "operator"] as const;
@@ -23,6 +23,24 @@ export function parseStandRequest(v: unknown): StandRequest | null {
   return { method: oneOf(v.method, METHODS, "GET"), path: str(v.path, "?"), status: num(v.status), note: str(v.note) };
 }
 
+const msOrNull = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+const nameOrNull = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+/** Время ответа на фразу: оба числа ≥ 0, иначе элемент пропускаем */
+export function parseTiming(v: unknown): PhraseTiming | null {
+  if (!isObj(v)) return null;
+  const stt = msOrNull(v.stt_ms);
+  const dialog = msOrNull(v.dialog_ms);
+  if (stt === null || dialog === null) return null;
+  return { stt_ms: stt, dialog_ms: dialog, stt: nameOrNull(v.stt), llm: nameOrNull(v.llm) };
+}
+
+/** Код правила перевода: поле rule звонка или escalation.rule; «R-07» — иначе нет */
+function ruleOf(v: Record<string, unknown>): { rule?: string } {
+  const raw = v.rule ?? (isObj(v.escalation) ? v.escalation.rule : undefined);
+  return typeof raw === "string" && /^R-\d{1,3}$/.test(raw.trim()) ? { rule: raw.trim() } : {};
+}
+
 export function parseCall(v: unknown): Call | null {
   if (!isObj(v) || !str(v.id)) return null;
   return {
@@ -37,6 +55,8 @@ export function parseCall(v: unknown): Call | null {
     stand_requests: softList(v.stand_requests, parseStandRequest),
     ...(typeof v.active === "boolean" ? { active: v.active } : {}),
     flags: softList(v.flags, (f) => (typeof f === "string" && f.trim() ? f.trim() : null)),
+    ...(Array.isArray(v.timings) ? { timings: softList(v.timings, parseTiming) } : {}),
+    ...ruleOf(v),
   };
 }
 

@@ -1,6 +1,8 @@
 "use client";
 
-// Опрос сервера: загрузить сразу, потом каждые everyMs (только когда вкладка видна).
+// Опрос сервера: загрузить сразу, потом каждые everyMs — только пока вкладка видна.
+// Вкладка скрыта → опрос на паузе (таймер остановлен, запросов нет: не тратим лимит стенда 10 запросов/мин);
+// вернулись → сразу один запрос и дальше по расписанию. Вкладку открыли в фоне — первый запрос, когда её покажут.
 // Один хук для всех экранов: панель регистратора, плашка МИС, страница ошибок.
 // Запросы не наслаиваются: пока прошлый не ответил, новый не уходит (иначе при медленном сервере
 // браузер копит очередь и запросы чата ждут); refresh() во время запроса — повторим сразу после него.
@@ -39,12 +41,14 @@ export function usePolling<T>(load: () => Promise<T>, everyMs: number): Polled<T
 
   useEffect(() => {
     alive.current = true;
-    run(false);
-    const visible = () => document.visibilityState === "visible";
-    const t = setInterval(() => { if (visible()) run(false); }, everyMs);
-    const onShow = () => { if (visible()) run(false); }; // вернулись на вкладку — сразу свежие данные
-    document.addEventListener("visibilitychange", onShow);
-    return () => { alive.current = false; clearInterval(t); document.removeEventListener("visibilitychange", onShow); };
+    let t: ReturnType<typeof setInterval> | undefined;
+    const hidden = () => document.visibilityState === "hidden";
+    const pause = () => { clearInterval(t); t = undefined; };
+    const resume = () => { run(false); pause(); t = setInterval(() => run(false), everyMs); };
+    const onVisibility = () => (hidden() ? pause() : resume());
+    if (!hidden()) resume();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { alive.current = false; pause(); document.removeEventListener("visibilitychange", onVisibility); };
   }, [run, everyMs]);
 
   return { data, error, refresh };

@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { durationText, splitDT, todayKey } from "@/shared/domain/dates";
 import { intentLabel } from "@/shared/domain/intents";
+import { speedSummary } from "@/shared/domain/speed";
 import { failedRequests } from "@/shared/domain/standRequests";
 import type { Call } from "@/shared/types/staff";
 import StandLog from "@/shared/ui/StandLog";
@@ -26,6 +27,12 @@ function MisCount({ c }: { c: Call }) {
   return <span className={`sp ${bad ? "sp-red" : "sp-green"}`}>{c.stand_requests.length}{bad ? `, ошибок ${bad}` : ""}</span>;
 }
 
+/** «Скорость: в среднем 2,1 с на фразу · …» — только у звонков с timings (телефон) */
+function CallSpeed({ c }: { c: Call }) {
+  const s = speedSummary(c.timings);
+  return s ? <div className="call-speed">{s.text}</div> : null;
+}
+
 export default function CallRow({ c }: { c: Call }) {
   const [open, setOpen] = useState(false);
   const at = splitDT(c.started_at);
@@ -38,6 +45,7 @@ export default function CallRow({ c }: { c: Call }) {
         <td><Direction out={c.direction === "исходящий"} /></td>
         <td>{c.patient || <span className="muted">не назвался</span>}</td>
         <td><span className={res.cls}>{res.text}</span>
+          {c.rule && <span className="call-rule">{c.rule}</span>}
           {flags.map((f) => <span key={f} className="call-flag" data-tip="Отметка сервера: фраза пациента похожа на попытку изменить поведение ИИ.">{f}</span>)}
         </td>
         <td>{intentLabel(c.intent)}</td>
@@ -47,7 +55,10 @@ export default function CallRow({ c }: { c: Call }) {
       {open && (
         <tr className="tr-detail"><td colSpan={COLS}>
           <div className="call-detail">
-            <Transcript items={c.transcript} />
+            <div>
+              <Transcript items={c.transcript} />
+              <CallSpeed c={c} />
+            </div>
             <StandLog requests={c.stand_requests} />
           </div>
         </td></tr>

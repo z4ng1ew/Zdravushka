@@ -133,8 +133,10 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 | Плашка «имитация МИС» / «МИС не подключена» | `GET /api/health` → `mode` (`demo`/`mock` → имитация, `no-stand` → не подключена, `stand` → без плашки) |
 | Подпись под ответом бота | поле `label` ответа `/api/chat` — как есть; `null` — без подписи. Цвет — по `status` (`shared/domain/replyTags.ts`) |
 | Панель регистратора: показатели, журнал звонков | `GET /api/calls` (опрос каждые 5 с) |
+| Скорость ответа: строка «Скорость: …» у звонка, плитка «Ответ ассистента» (медиана за сегодня) | `timings` из `/api/calls` (только телефонные звонки; нет поля — не показываем), `shared/domain/speed.ts` |
+| «Настройки» → источники нейросетей, последний ответ ИИ | `GET /api/providers` (только чтение), `last_ai` из `/api/health` |
 | Очередь переводов | `GET /api/handoffs`, `PATCH /api/handoffs/{id}`; кнопка «Регистратор» у пациента просит перевод через `/api/chat` |
-| Исходящий обзвон | `GET /api/reminders`, `POST /api/reminders/run`, `POST /api/reminders/{visit_id}/call` |
+| Исходящий обзвон | `GET /api/reminders` (раз в 30 с — ходит в МИС, лимит стенда 10 запросов/мин; сразу после «Позвонить» / «Обзвонить всех»), `POST /api/reminders/run`, `POST /api/reminders/{visit_id}/call` |
 | Врачи, кабинеты, графики | `GET /api/doctors` (загружается один раз за открытие страницы, `shared/store/doctorDirectory.ts`) |
 | Звонок сейчас | `GET /api/live` (опрос раз в 2 с) + демо-звонок с сайта через BroadcastChannel |
 | Талоны пациента | браузер (`shared/store/ticketStorage.ts`), собираются из подтверждённых записей `/api/chat` |
@@ -215,11 +217,12 @@ npm run check          # типы + линтер + тесты — перед с�
 
 | Метод | Путь | Что использует фронт |
 |---|---|---|
-| GET | `/api/health` | `mode`: `stand` / `mock` / `no-stand` → плашка; `pd_trusted_ai_only` → «Настройки» |
+| GET | `/api/health` | `mode`: `stand` / `mock` / `no-stand` → плашка; `pd_trusted_ai_only`, `last_ai` (`{stt|llm: {provider, model, ms}}`) → «Настройки» |
+| GET | `/api/providers` | `active` (`stt`, `llm`), `providers[]` (`name`, `title`, `stt`, `llm`, `stt_model`, `llm_model`) → таблица в «Настройках»; 404 — блок скрыт |
 | POST | `/api/chat` | `reply`, `intent`, `collected`, `options`, `booking`, `escalation`, `done`, `status` (`in_progress` / `completed` / `handoff` / `error`), `source` («МИС», «регламент РГ-ТЕЛ-01»), `label` (подпись под ответом), `listen_ms`, `explanation`, `understood_by`, `asr_confidence` |
 | GET | `/api/texts` | `assistant_name`, `greeting`, `goodbye`, `operator_greeting`, `hints` (`say_again`, `give_up`, `not_heard`, `error`), `mascot` (`idle`, `thinking`, `error`, `done`, `escalated`) |
 | POST | `/api/asr`, `/api/tts` | голос |
-| GET | `/api/calls` | показатели дня, журнал звонков |
+| GET | `/api/calls` | показатели дня, журнал звонков; `flags`, `timings[]` (`stt_ms`, `dialog_ms`, `stt`, `llm`), `rule` или `escalation.rule` (код правила перевода) |
 | GET | `/api/live` | идущие телефонные звонки (поля как у `/api/calls` + `active`); `[]` — звонков нет |
 | GET | `/api/doctors` | справочник врачей: `id, fullName, specialty, department, patients, cabinet, slotMin, weekly` |
 | GET | `/api/handoffs` | очередь переводов |
@@ -252,6 +255,7 @@ npm run check          # типы + линтер + тесты — перед с�
   Здравушка просто отвечает без звука. `POST /api/chat` сам не повторяется — повтор мог бы записать пациента дважды;
   вместо этого у ошибки в чате кнопка «Отправить ещё раз».
 - Опрос сервера не наслаивает запросы: пока прошлый не ответил, новый не уходит (медленный сервер не забивает браузер).
+- Вкладка скрыта — опрос на паузе (таймер остановлен, запросов нет); вернулись — сразу один запрос и дальше по расписанию (`shared/hooks/usePolling.ts`).
 - Звонок: «Заново», «Завершить» и перехват регистратором сразу останавливают микрофон и озвучку; ответ сервера или
   распознанная фраза, пришедшие позже, к новому звонку не прилипают. «Регистратор» при недоступном сервере не обещает
   «соединяю» — показывает ошибку и что делать.

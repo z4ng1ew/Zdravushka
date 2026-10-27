@@ -41,6 +41,38 @@ describe("usePolling — опрос сервера", () => {
   });
 });
 
+describe("usePolling — вкладка скрыта: опрос на паузе", () => {
+  const setVisibility = (v: "visible" | "hidden") => {
+    Object.defineProperty(document, "visibilityState", { value: v, configurable: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  };
+  afterEach(() => { setVisibility("visible"); });
+  it("скрыта — запросов нет; вернулись — один запрос сразу, дальше по расписанию", async () => {
+    const load = vi.fn(async () => 1);
+    renderHook(() => usePolling(load, 30_000));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(load).toHaveBeenCalledTimes(1);
+    act(() => { setVisibility("hidden"); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5 * 60_000); }); // 5 минут в фоне
+    expect(load).toHaveBeenCalledTimes(1);
+    await act(async () => { setVisibility("visible"); await vi.advanceTimersByTimeAsync(0); });
+    expect(load).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(29_000); });
+    expect(load).toHaveBeenCalledTimes(2); // расписание пошло заново от возврата
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(load).toHaveBeenCalledTimes(3);
+  });
+  it("вкладку открыли в фоне — первый запрос, только когда её покажут", async () => {
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    const load = vi.fn(async () => 1);
+    renderHook(() => usePolling(load, 30_000));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(load).not.toHaveBeenCalled();
+    await act(async () => { setVisibility("visible"); await vi.advanceTimersByTimeAsync(0); });
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("useChatSender — ответ старого звонка", () => {
   it("ответ, пришедший после «Заново», не попадает в новый звонок и не меняет сессию", async () => {
     const old = later<ChatResponse>();
