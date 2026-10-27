@@ -303,7 +303,10 @@ def fallback(text: str, expecting: str) -> dict:
     # «Перу», «пер», «фторой» — так Whisper слышит короткие «первый», «второй» (живой звонок 22.10)
     words = {"перв": 1, "перу": 1, "втор": 2, "фтор": 2, "трет": 3, "трит": 3}
     raw["choice"] = int(m.group(1)) if m else next((v for k, v in words.items() if k in low), None)
-    if re.search(r"\bне (приду|смогу|получится|буду)\b", low):
+    question = text.strip().endswith("?") or re.match(r"\s*(а\s+)?(куда|когда|где|зачем|почему|какой|какая|что|кто|сколько)\b", low)
+    if question:
+        pass  # «Куда я приду?» — это вопрос, а не согласие (живой звонок 27.10)
+    elif re.search(r"\bне (приду|смогу|получится|буду)\b", low):
         raw["answer"] = "no"
     elif re.search(r"\b(да|верно|хорошо|подтверждаю|согласен|согласна|давайте|приду|буду|окей|ок|конечно|обязательно)\b", low):
         raw["answer"] = "yes"  # «А я приду», «буду обязательно» — тоже «да» (живой звонок-напоминание 22.10)
@@ -376,5 +379,7 @@ async def understand(text: str, expecting: str) -> dict:
     if result["topic"] and result["intent"] in (None, "other"):
         result["intent"] = "info"  # «Где вы находитесь?» — справка по регламенту, а не «не поняла»
     result = ground(result, text)
+    if text.strip().endswith("?"):
+        result["answer"] = None  # вопрос пациента — не «да» и не «нет», даже если модель решила иначе
     result["_source"] = "llm"
     return result

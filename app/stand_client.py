@@ -78,6 +78,7 @@ class StandClient:
         )
         self.limiter = RateLimiter(config.STAND_RATE_LIMIT)
         self._doctors: list[dict] | None = None  # кэш справочника врачей
+        self._doctors_lock = asyncio.Lock()
         self._doctors_at = 0.0                   # когда кэш загружен (для срока жизни)
         self.breaker = CircuitBreaker("МИС", failures=3, cooldown=30)
 
@@ -152,11 +153,12 @@ class StandClient:
 
     async def doctors(self, refresh: bool = False) -> list[dict]:
         """Справочник врачей. Загружаем один раз и держим в памяти (экономим лимит)."""
-        stale = time.monotonic() - self._doctors_at > config.DOCTORS_CACHE_TTL
-        if self._doctors is None or refresh or stale:
-            self._doctors = await self._get_all("/doctors")
-            self._doctors_at = time.monotonic()
-        return self._doctors
+        async with self._doctors_lock:  # два звонка одновременно не грузят справочник дважды
+            stale = time.monotonic() - self._doctors_at > config.DOCTORS_CACHE_TTL
+            if self._doctors is None or refresh or stale:
+                self._doctors = await self._get_all("/doctors")
+                self._doctors_at = time.monotonic()
+            return self._doctors
 
     def invalidate_doctors(self):
         """Сбросить кэш справочника (например, стенд сообщил, что врач деактивирован)."""

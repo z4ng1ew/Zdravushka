@@ -26,8 +26,8 @@ STAND_RATE_LIMIT = int(os.getenv("STAND_RATE_LIMIT", "9"))
 STAND_TIMEOUT = float(os.getenv("STAND_TIMEOUT", "5"))
 
 # Повторы и предохранитель для МИС
-STAND_RETRIES = int(os.getenv("STAND_RETRIES", "2"))                 # повторы GET при таймауте и 5xx
-STAND_MAX_RETRY_AFTER = float(os.getenv("STAND_MAX_RETRY_AFTER", "8"))  # дольше ждать 429 на звонке нельзя
+STAND_RETRIES = int(os.getenv("STAND_RETRIES", "1"))                 # повторы GET при таймауте и 5xx
+STAND_MAX_RETRY_AFTER = float(os.getenv("STAND_MAX_RETRY_AFTER", "3"))  # дольше ждать 429 на звонке нельзя
 DOCTORS_CACHE_TTL = float(os.getenv("DOCTORS_CACHE_TTL", "600"))     # справочник врачей обновляем раз в 10 минут
 
 # Часовой пояс стенда: GMT+4 (все даты в API — в этом поясе)

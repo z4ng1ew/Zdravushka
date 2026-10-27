@@ -140,9 +140,19 @@ def asr_confidence(segments) -> float | None:
 
 
 def _echo_of_prompt(text: str) -> bool:
-    """На тишине Whisper иногда «повторяет» подсказку — такой текст пациент не говорил."""
+    """На шуме и тишине Whisper «повторяет» подсказку или зацикливается на одной фразе — такой текст
+    пациент не говорил (живой звонок 27.10: «Фамилия, имя, отчество, дата рождения.» ×11 на помехах)."""
     low = text.lower().strip(" .,!?")
-    return bool(config.STT_PROMPT) and len(low) > 15 and low in config.STT_PROMPT.lower()
+    if not low:
+        return False
+    if config.STT_PROMPT and len(low) > 15 and low in config.STT_PROMPT.lower():
+        return True
+    parts = [p.strip(" ,") for p in re.split(r"[.!?…]+", low) if p.strip(" ,")]
+    if len(parts) >= 3 and len(set(parts)) == 1:  # одна и та же фраза 3+ раза подряд — зацикливание модели
+        return True
+    if config.STT_PROMPT and len(parts) >= 2 and all(p in config.STT_PROMPT.lower() for p in parts):
+        return True  # из кусков подсказки
+    return False
 
 
 async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, float | None]:

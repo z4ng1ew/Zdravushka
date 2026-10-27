@@ -1161,3 +1161,21 @@ def test_provider_switch_only_for_admin():
     from app.main import app
     r = TestClient(app).post("/api/providers/active", json={"kind": "llm", "name": "organizers"})
     assert r.status_code == 403
+
+
+
+# ---------- Живые звонки 27.10 ----------
+
+def test_whisper_loop_on_noise_is_dropped():
+    """Помехи: Whisper выдал «Фамилия, имя, отчество, дата рождения.» 11 раз — это не речь пациента."""
+    from app import ai
+    assert ai._echo_of_prompt("Фамилия, имя, отчество, дата рождения. " * 11)
+    assert ai._echo_of_prompt("Спасибо. Спасибо. Спасибо.")
+    assert not ai._echo_of_prompt("Да, я приду. Спасибо.")
+
+
+async def test_question_is_not_confirmation(mis):
+    v = await _booked(mis)
+    dialog.start_reminder("rem-q", v)
+    r = await dialog.handle("rem-q", "Куда я приду?")
+    assert not r.done and dialog.journal.REMINDERS[v["id"]].get("status") != "подтвердил"
