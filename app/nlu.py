@@ -232,6 +232,11 @@ def spoken_year(text: str) -> int | None:
         base, rest = 2000, m.group(1)
     elif m := re.search(r"тысяча девятьсот(.*)", low):
         base, rest = 1900, m.group(1)
+    elif m := re.search(r"(январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*\s+(.*)", low):
+        # «двенадцатое марта семьдесят восьмого» — год двумя словами без «тысяча девятьсот»
+        # (регламент, прил. А.3: год из двух цифр восстанавливается, пациенту не больше 110 лет)
+        n = _number_words(m.group(2))
+        return two_digit_year(n) if n is not None and 0 <= n <= 99 else None
     else:
         return None
     n = 0
@@ -244,6 +249,20 @@ def spoken_year(text: str) -> int | None:
             break
         n += val
     return base + n
+
+
+def _number_words(rest: str) -> int | None:
+    """«семьдесят восьмого» → 78, «пятого» → 5 (первые одно-два слова). Не число — None."""
+    n, seen = 0, False
+    for w in rest.split()[:2]:
+        w = w.strip(".,!?")
+        val = next((v for k, v in _TENS.items() if w.startswith(k)), None) \
+            or next((v for k, v in _TEENS.items() if w.startswith(k)), None) \
+            or next((v for k, v in _UNITS.items() if w.startswith(k)), None)
+        if val is None:
+            break
+        n, seen = n + val, True
+    return n if seen else None
 
 
 def spoken_day(words: str) -> int | None:
@@ -307,7 +326,7 @@ def ground(result: dict, text: str) -> dict:
     low = text.lower().replace("ё", "е")
     if result.get("birth_date") and not _MONTH.search(low):
         result["birth_date"] = None  # «2006 год» — это не дата рождения: нет числа и месяца
-    elif result.get("birth_date") and not _YEAR.search(low):
+    elif result.get("birth_date") and not (_YEAR.search(low) or spoken_year(low)):
         # «13 апреля» без года — модель подставила бы год сама. Запоминаем число и месяц,
         # год пациент назовёт отдельно (dialog/understanding.py соберёт дату из двух фраз)
         result["birth_dm"] = result["birth_date"][:5]

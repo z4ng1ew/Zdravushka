@@ -1284,3 +1284,13 @@ async def test_booking_dialog_like_regulation_example(mis):
     r = await dialog.handle(r.session_id, "1")
     r = await dialog.handle(r.session_id, "да")
     assert "SMS с деталями придёт на этот номер" in r.reply and "Накануне придёт напоминание" in r.reply
+
+
+
+async def test_two_word_spoken_birth_year(mis):
+    """Пример регламента: «двенадцатое марта семьдесят восьмого» — без «тысяча девятьсот» (прогон 27.10)."""
+    from app import nlu
+    assert nlu.spoken_year("двенадцатое марта семьдесят восьмого") == 1978
+    assert nlu.spoken_year("первое мая пятого года") == 2005
+    r = await talk("мне бы записаться к терапевту", "Смирнова Ольга Викторовна, двенадцатое марта семьдесят восьмого")
+    assert dialog.SESSIONS[r.session_id].fields.get("birth_date") == "12.03.1978" and r.options
