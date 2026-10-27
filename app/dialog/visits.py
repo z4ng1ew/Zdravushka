@@ -96,15 +96,24 @@ async def task_cancel(s: Session, nl: dict) -> ChatResponse:
         return r
     b = visit_booking(s.visit)
     if s.step == "confirm":
-        if nl["answer"] == "yes":
+        # Регламент С-04: «Перед отменой ГА один раз предлагает перенос. Если пациент отказывается — отменяет без уговоров»
+        if nl["intent"] == "reschedule" or "перен" in s.text:
+            visit = s.visit
+            s.task, s.step = "reschedule", "start"
+            s.visit = visit
+            return await task_reschedule(s, nl)
+        if nl["answer"] == "yes" or "отмен" in s.text:
             updated = await cancel_visit(s, s.visit)
             reminder_status(s, "отменил", visit_id=s.visit["id"])
-            return task_done(s, "Запись отменена. Спасибо, что предупредили.", "отменён",
-                              booking=visit_booking(updated))
+            return task_done(s, "Готово, запись отменена. Спасибо, что предупредили — это время достанется "
+                                "другому пациенту.", "отменён", booking=visit_booking(updated))
         if nl["answer"] == "no":
             return task_done(s, "Хорошо, запись остаётся.", "справка")
+        return reply(s, "Скажите, пожалуйста: перенести запись или отменить?", booking=b)
     s.step = "confirm"
-    return reply(s, f"Отменяю запись: {b.specialty.lower()}, врач {b.doctor_name}, {b.spoken}. Верно?", booking=b)
+    return reply(s, f"У вас запись: {b.specialty.lower()}, врач {b.doctor_name}, {b.spoken}. "
+                    "Могу перенести её на другой день вместо отмены. Перенести или отменить?", booking=b,
+                 explanation="Регламент С-04: перед отменой ассистент один раз предлагает перенос.")
 
 
 async def task_status(s: Session, nl: dict) -> ChatResponse:

@@ -93,6 +93,8 @@ async def callback(session_id: str, number: str):
     await call_reminder(visit, endpoint=endpoint)
 
 
+FILLER = "Одну секунду, проверяю."
+
 # Идущие сейчас телефонные звонки (id сессии) — для экрана «Звонок сейчас» в кабинете
 ACTIVE: set[str] = set()
 
@@ -224,7 +226,12 @@ class Call:
         или адрес, люди вспоминают и делают паузы — ждём дольше, чтобы не обрывать на полуслове."""
         s = dialog.SESSIONS.get(self.session_id)
         slow = s is not None and s.step in ("identity", "middle_name", "birth_date", "address", "reason")
-        return config.END_OF_SPEECH_SLOW_MS if slow else config.END_OF_SPEECH_MS
+        if slow:
+            return config.END_OF_SPEECH_SLOW_MS
+        # Ответ — короткое слово («да», «третий»): долго ждать тишины незачем
+        if s is not None and s.step in ("confirm", "confirm_all", "choose_slot", "choose_visit", "remind", "remind_no"):
+            return config.END_OF_SPEECH_FAST_MS
+        return config.END_OF_SPEECH_MS
 
     async def reader_loop(self):
         """Читаем пакеты от Asterisk, пока звонок жив."""
@@ -316,7 +323,16 @@ class Call:
             return
         t1 = time.monotonic()
         try:
-            answer = await dialog.handle(self.session_id, text, confidence)
+            # Регламент (раздел 3): «Одну секунду, проверяю расписание» — если МИС отвечает дольше 1,5 с.
+            # Пациент не сидит в тишине, пока идёт поиск.
+            work = asyncio.create_task(dialog.handle(self.session_id, text, confidence))
+            done, _ = await asyncio.wait({work}, timeout=config.FILLER_AFTER_SEC)
+            if not done:
+                call = journal.CALLS.get(self.session_id)
+                if call is not None:
+                    journal.say(call, "bot", FILLER)
+                await self.say(FILLER)
+            answer = await work
         except Exception:  # непредвиденная ошибка логики не должна оставлять пациента в тишине
             log.exception("Ошибка диалога в звонке %s", self.session_id)
             await self.say("Извините, произошёл сбой. Соединяю с регистратором.")
@@ -349,9 +365,7 @@ class Call:
         elif quiet >= config.SILENCE_PROMPT_SEC and not self.silence_prompted:
             self.silence_prompted = True
             # Посреди сценария — напоминаем вопрос: после длинного перечня вариантов пациент мог растеряться
-            s = dialog.SESSIONS.get(self.session_id)
-            again = s.last_reply if s and s.task and s.last_reply and len(s.last_reply) < 400 else ""
-            text = f"Вы меня слышите? Повторю: {again}" if again else "Вы меня слышите?"
+            text = "Вы меня слышите?"  # дословно по регламенту (раздел 3, «Тишина»)
             if call is not None:
                 journal.say(call, "bot", text)
             await self.say(text)

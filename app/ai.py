@@ -40,13 +40,29 @@ def _headers(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
+class _NoLimit:
+    async def __aenter__(self): return self
+    async def __aexit__(self, *exc): return False
+
+
+_NO_LIMIT = _NoLimit()
+
+
+def _limit_for(url: str):
+    """Ограничение «не больше 2 одновременных запросов» — только у шлюза организаторов.
+    У своего сервера команды лимита нет: параллельные звонки не ждут друг друга (27.10)."""
+    from urllib.parse import urlparse
+    org = {urlparse(config.LLM_URL).hostname, urlparse(config.STT_URL).hostname} - {None, ""}
+    return _gateway if urlparse(url).hostname in org else _NO_LIMIT
+
+
 async def _post(url: str, timeout: float, retries: int = 1, **kw) -> httpx.Response:
     """POST в шлюз нейросетей с единым поведением при сбоях.
     Таймаут, обрыв, 429 и 5xx — один повтор с паузой; потом AIError (звонок не падает, работает запасной путь)."""
     last = ""
     for attempt in range(retries + 1):
         try:
-            async with _gateway:
+            async with _limit_for(url):
                 async with httpx.AsyncClient(timeout=timeout) as http:
                     resp = await http.post(url, **kw)
         except httpx.HTTPError as e:

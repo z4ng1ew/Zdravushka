@@ -104,11 +104,13 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 REMINDER_DEMO = os.getenv("REMINDER_DEMO", "0") == "1"
 END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "1200"))
 # На шагах ФИО / дата рождения / адрес пациент вспоминает и делает паузы — ждём дольше
+END_OF_SPEECH_FAST_MS = int(os.getenv("END_OF_SPEECH_FAST_MS", "800"))   # «да», «второй» — короткие ответы
+FILLER_AFTER_SEC = float(os.getenv("FILLER_AFTER_SEC", "1.5"))   # регламент: «Одну секунду…», если ответ дольше
 END_OF_SPEECH_SLOW_MS = int(os.getenv("END_OF_SPEECH_SLOW_MS", "2000"))   # пауза, после которой фраза закончена
 MIN_SPEECH_MS = int(os.getenv("MIN_SPEECH_MS", "250"))         # короче — это шум, а не речь
 BARGE_IN_MS = int(os.getenv("BARGE_IN_MS", "400"))             # столько говорит поверх — перебил
-SILENCE_PROMPT_SEC = float(os.getenv("SILENCE_PROMPT_SEC", "7"))  # «Вы меня слышите?»
-SILENCE_HANGUP_SEC = float(os.getenv("SILENCE_HANGUP_SEC", "8"))  # ещё столько тишины — прощаемся
+SILENCE_PROMPT_SEC = float(os.getenv("SILENCE_PROMPT_SEC", "5"))   # регламент, раздел 3: 5 с  # «Вы меня слышите?»
+SILENCE_HANGUP_SEC = float(os.getenv("SILENCE_HANGUP_SEC", "5"))   # ещё 5 с — «Вас не слышно»  # ещё столько тишины — прощаемся
 
 # ---------- 152-ФЗ: куда можно отправлять речь и текст пациента ----------
 # Голос и фразы пациента — персональные данные. Их можно передавать только в доверенный контур:

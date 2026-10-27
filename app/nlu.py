@@ -180,6 +180,48 @@ _TENS = {"двадцат": 20, "тридцат": 30, "сорок": 40, "пять
          "девяносто": 90, "девяност": 90}
 
 
+# ---------- Даты и время словами (регламент, приложение А.3) ----------
+_WEEKDAY_STEMS = [r"понедельник\w*", r"вторник\w*", r"сред[ауые]\b", r"четверг\w*", r"пятниц[ауые]\b",
+                  r"суббот[ауые]\b", r"воскресень[ея]\b"]
+
+
+def two_digit_year(yy: int) -> int:
+    """«78» → 1978, «05» → 2005: ближайший прошедший год (пациенту не больше 110 лет)."""
+    this = _today().year
+    year = 2000 + yy
+    return year if year <= this else 1900 + yy
+
+
+def relative_date(low: str):
+    """«завтра», «послезавтра», «в пятницу» (ближайшая будущая), «на следующей неделе», «через неделю»,
+    «после выходных» → конкретная дата. None — даты нет."""
+    today = _today()
+    if "послезавтра" in low:
+        return today + timedelta(days=2)
+    if "завтра" in low:
+        return today + timedelta(days=1)
+    if "через неделю" in low:
+        return today + timedelta(days=7)
+    if "следующей неделе" in low or "после выходных" in low:
+        return today + timedelta(days=7 - today.weekday())  # ближайший понедельник
+    for i, stem in enumerate(_WEEKDAY_STEMS):
+        if re.search(rf"\b{stem}", low) and not re.search(rf"не\s+(в|во|на)\s+{stem}", low):
+            ahead = (i - today.weekday()) % 7 or 7  # «в пятницу» сегодня в пятницу — следующая
+            return today + timedelta(days=ahead)
+    return None
+
+
+def part_of_day(low: str) -> str | None:
+    """«С утра» 7:30–12:00, «днём / после обеда» 12:00–16:00, «вечером» после 16:00."""
+    if "утр" in low:
+        return "утро"
+    if "после обеда" in low or "днём" in low or "днем" in low or "в обед" in low:
+        return "день"
+    if "вечер" in low:
+        return "вечер"
+    return None
+
+
 def spoken_year(text: str) -> int | None:
     """Год словами: «двухтысячного» → 2000, «две тысячи пятого» → 2005,
     «тысяча девятьсот восемьдесят пятого» → 1985 (живой звонок 22.10: год словами не засчитывался)."""
@@ -213,7 +255,7 @@ def spoken_day(words: str) -> int | None:
             return None
         total += n
     return total if 1 <= total <= 31 else None
-_YEAR = re.compile(r"\b(19\d\d|20\d\d)\b|тысяч|двухтысяч")
+_YEAR = re.compile(r"\b(19\d\d|20\d\d)\b|тысяч|двухтысяч|\b\d{1,2}[./-]\d{1,2}[./-]\d{2}\b")
 _PATRONYMIC = ("ич", "вна", "чна", "ична", "оглы", "кызы")
 
 
@@ -229,6 +271,8 @@ def _fast_path(text: str, expecting: str) -> dict | None:
     out = ground(fallback(text, expecting), text)
     if out["intent"] not in (None, "other") and expecting != "more":
         return None  # «перенесите», «отмените» — смену задачи разбирает модель
+    if out["date"] or out["part_of_day"]:
+        return out  # «давайте в пятницу» — новый поиск, а не «да»
     if out["answer"] or out["choice"]:
         return out
     return None
@@ -295,15 +339,14 @@ def fallback(text: str, expecting: str) -> dict:
     if raw["intent"] == "other" and raw["topic"]:
         raw["intent"] = "info"
     raw["specialty"] = text
-    m = re.search(r"\b(\d{1,2})[.\-/ ](\d{1,2})[.\-/ ](\d{4})\b", low)
-    if m:
-        d = f"{int(m.group(1)):02d}.{int(m.group(2)):02d}.{m.group(3)}"
+    m = re.search(r"\b(\d{1,2})[.\-/ ](\d{1,2})[.\-/ ](\d{4}|\d{2})\b", low)
+    if m:  # «12.03.78» — год из двух цифр восстанавливаем (регламент, прил. А.3)
+        year = m.group(3) if len(m.group(3)) == 4 else str(two_digit_year(int(m.group(3))))
+        d = f"{int(m.group(1)):02d}.{int(m.group(2)):02d}.{year}"
         raw["birth_date" if expecting in ("identity", "birth_date") else "date"] = d
-    if "послезавтра" in low:
-        raw["date"] = (_today() + timedelta(days=2)).strftime("%d.%m.%Y")
-    elif "завтра" in low:
-        raw["date"] = (_today() + timedelta(days=1)).strftime("%d.%m.%Y")
-    raw["part_of_day"] = next((p for p in ("утро", "вечер") if p[:4] in low), None)
+    if (rel := relative_date(low)) and expecting not in ("identity", "birth_date"):
+        raw["date"] = rel.strftime("%d.%m.%Y")
+    raw["part_of_day"] = part_of_day(low)
     m = re.search(r"\b([123])\b", low)
     # «Перу», «пер», «фторой» — так Whisper слышит короткие «первый», «второй» (живой звонок 22.10)
     words = {"перв": 1, "перу": 1, "втор": 2, "фтор": 2, "трет": 3, "трит": 3}
@@ -386,6 +429,13 @@ async def understand(text: str, expecting: str) -> dict:
         result["intent"], result["topic"] = "info", "test_results"
     if result["topic"] and result["intent"] in (None, "other"):
         result["intent"] = "info"  # «Где вы находитесь?» — справка по регламенту, а не «не поняла»
+    rel = relative_date(text.lower().replace("ё", "е"))
+    if rel and expecting not in ("identity", "birth_date", "middle_name"):
+        # «в пятницу» — ближайшая пятница по календарю, а не дата, которую придумала модель (звонок 27.10: 20 ноября)
+        result["date"] = rel.strftime("%d.%m.%Y")
+    pod = part_of_day(text.lower())
+    if pod:
+        result["part_of_day"] = pod
     result = ground(result, text)
     if text.strip().endswith("?"):
         result["answer"] = None  # вопрос пациента — не «да» и не «нет», даже если модель решила иначе

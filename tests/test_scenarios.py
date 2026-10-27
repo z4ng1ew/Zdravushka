@@ -1226,3 +1226,49 @@ async def test_parking_when_llm_down_is_r08(mis, monkeypatch):
     monkeypatch.setattr(ai, "llm_json", down)
     out = await nlu.understand("Где у вас парковка?", "more")
     assert out["intent"] == "info" and out["topic"] is None
+
+
+# ---------- Регламент, прил. А.3 и С-04 (прогон 27.10) ----------
+
+def test_relative_dates_and_parts_of_day():
+    from datetime import timedelta
+    from app import nlu
+    today = nlu._today()
+    fri = nlu.relative_date("давайте в пятницу")
+    assert fri.weekday() == 4 and 0 < (fri - today).days <= 7
+    assert nlu.relative_date("через неделю") == today + timedelta(days=7)
+    assert nlu.relative_date("после выходных").weekday() == 0
+    assert nlu.relative_date("лучше не в пятницу") is None
+    assert nlu.relative_date("средний палец") is None
+    assert nlu.part_of_day("а после обеда есть?") == "день" and nlu.part_of_day("с утра") == "утро"
+
+
+def test_two_digit_birth_year():
+    from app import nlu
+    assert nlu.two_digit_year(78) == 1978 and nlu.two_digit_year(5) == 2005
+    out = nlu.ground(nlu.fallback("Петров Пётр Петрович 12.03.78", "identity"), "Петров Пётр Петрович 12.03.78")
+    assert out["birth_date"] == "12.03.1978"
+
+
+async def test_friday_during_slot_choice_searches_that_day(mis):
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "давайте в пятницу")
+    assert r.options and all(schedule.from_api(o.scheduled_at).weekday() == 4 for o in r.options)
+
+
+async def test_cancel_offers_reschedule_first(mis):
+    await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    r = await talk("отмените запись", "Козлов Андрей Петрович 10.10.1990")
+    assert "Перенести или отменить" in r.reply
+    r2 = await dialog.handle(r.session_id, "перенести")
+    assert r2.options  # перешли к переносу
+    r = await talk("отмените запись", "Козлов Андрей Петрович 10.10.1990", "отменить")
+    assert "отменена" in r.reply and mis.visits[0]["status"] == "Отменена"
+
+
+
+def test_concurrency_limit_only_for_organizers_gateway(monkeypatch):
+    from app import ai
+    monkeypatch.setattr(config, "LLM_URL", "https://hub.gigaschool.ru/api/v1")
+    monkeypatch.setattr(config, "STT_URL", "https://hub.gigaschool.ru/api/v1")
+    assert ai._limit_for("https://hub.gigaschool.ru/api/v1/chat/completions") is ai._gateway
+    assert ai._limit_for("https://ai.example.ru/v1/chat/completions") is ai._NO_LIMIT

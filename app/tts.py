@@ -110,20 +110,46 @@ def _silero(text: str) -> bytes:
 
 
 async def warm_up():
-    """Загрузить Silero в фоне при старте сервера, чтобы первый звонок не ждал 10–20 секунд."""
+    """Загрузить Silero в фоне при старте сервера и заранее озвучить частые фразы (приветствие, вопросы
+    сценариев), чтобы они звучали без задержки на синтез."""
+    from app import ui_texts
     if config.TTS_BACKEND == "silero":
         try:
             await asyncio.to_thread(_silero, "Здравствуйте.")
+            for phrase in split_sentences(ui_texts.GREETING) + WARM_PHRASES:
+                await speak(phrase)
         except Exception as e:  # noqa: BLE001 — нет torch или модели: работаем на Piper
             import logging
             logging.getLogger("tts").warning("Silero не загрузился, говорим голосом Piper: %s", e)
+
+
+WARM_PHRASES = ["Назовите, пожалуйста, фамилию, имя, отчество и дату рождения пациента.",
+                 "Какой вариант удобен?", "Верно?", "Могу ещё чем-то помочь?", "Всего доброго, будьте здоровы!",
+                 "Одну секунду, проверяю.", "Вы меня слышите?", "Назовите дату рождения пациента."]
 
 
 def piper_available() -> bool:
     return Path(config.PIPER_MODEL).exists()
 
 
+_CACHE: dict[str, bytes] = {}   # частые фразы («Назовите, пожалуйста…», «Верно?») синтезируем один раз
+CACHE_MAX = 300
+
+
 async def speak(text: str) -> bytes:
+    """Текст → WAV. Частые фразы — из кэша (мгновенно), остальные — синтез."""
+    key = f"{config.TTS_BACKEND}|{config.SILERO_VOICE}|{text}"
+    if key in _CACHE:
+        return _CACHE[key]
+    wav = await _speak(text)
+    if len(text) <= 200:
+        if len(_CACHE) >= CACHE_MAX:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = wav
+    return wav
+
+
+async def _speak(text: str) -> bytes:
     """Текст → WAV. Удалённый голос с запасным локальным."""
     text = normalize(text)
     if config.TTS_BACKEND == "silero":
