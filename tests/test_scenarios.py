@@ -1170,7 +1170,6 @@ def test_whisper_loop_on_noise_is_dropped():
     """Помехи: Whisper выдал «Фамилия, имя, отчество, дата рождения.» 11 раз — это не речь пациента."""
     from app import ai
     assert ai._echo_of_prompt("Фамилия, имя, отчество, дата рождения. " * 11)
-    assert ai._echo_of_prompt("Спасибо. Спасибо. Спасибо.")
     assert not ai._echo_of_prompt("Да, я приду. Спасибо.")
 
 
@@ -1188,3 +1187,12 @@ def test_client_comment_fits_stand_limit():
     lines = ["Отказ от обзвона 01.10.2026"] + [f"SMS Запись создана #{i} 27.10.2026 15:49" for i in range(100)]
     out = fit_comment(lines)
     assert len(out) <= 1000 and out.startswith("Отказ от обзвона") and out.endswith("#99 27.10.2026 15:49")
+
+
+
+def test_short_repeated_answer_is_not_noise():
+    """Живой звонок 27.10: «Третий. Третий. Третий.» считалось зацикливанием — звонок обрывался."""
+    from app import ai
+    assert not ai._echo_of_prompt("Третий. Третий. Третий.")
+    assert not ai._echo_of_prompt("Да. Да. Да. Да.")
+    assert ai._echo_of_prompt("Фамилия, имя, отчество, дата рождения. " * 3)

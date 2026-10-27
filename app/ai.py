@@ -148,7 +148,9 @@ def _echo_of_prompt(text: str) -> bool:
     if config.STT_PROMPT and len(low) > 15 and low in config.STT_PROMPT.lower():
         return True
     parts = [p.strip(" ,") for p in re.split(r"[.!?…]+", low) if p.strip(" ,")]
-    if len(parts) >= 3 and len(set(parts)) == 1:  # одна и та же фраза 3+ раза подряд — зацикливание модели
+    # Одна и та же фраза много раз — зацикливание модели. Но короткое «третий, третий», «да, да, да» —
+    # нормальная речь (живой звонок 27.10: «третий. третий. третий.» отбрасывалось, звонок обрывался по тишине)
+    if len(set(parts)) == 1 and (len(parts) >= 6 or (len(parts) >= 3 and len(parts[0].split()) >= 3)):
         return True
     if config.STT_PROMPT and len(parts) >= 2 and all(p in config.STT_PROMPT.lower() for p in parts):
         return True  # из кусков подсказки

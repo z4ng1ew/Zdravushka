@@ -312,6 +312,7 @@ class Call:
             await self.say("Простите, не расслышала. Повторите, пожалуйста.")
             return
         if not text.strip():
+            log.info("Фраза отброшена как шум (пусто после распознавания)")
             return
         t1 = time.monotonic()
         try:
@@ -338,11 +339,17 @@ class Call:
         if self.speaking or self.buffer:
             return
         quiet = time.monotonic() - self.last_voice
+        call = journal.CALLS.get(self.session_id)
         if quiet >= config.SILENCE_HANGUP_SEC and self.silence_prompted:
+            if call is not None:  # видно в журнале, почему звонок закончился
+                journal.say(call, "bot", "Вас не слышно. Перезвоните, пожалуйста.")
+                call["result"] = "тишина — завершён"
             await self.say("Вас не слышно. Перезвоните, пожалуйста.")
             self.done = True
         elif quiet >= config.SILENCE_PROMPT_SEC and not self.silence_prompted:
             self.silence_prompted = True
+            if call is not None:
+                journal.say(call, "bot", "Вы меня слышите?")
             await self.say("Вы меня слышите?")
 
 
