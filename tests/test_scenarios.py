@@ -1314,3 +1314,10 @@ def test_tts_reads_initials_and_zeros():
 async def test_after_lunch_starts_at_13(mis):
     r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "а после обеда есть что-нибудь?")
     assert r.options and all(13 <= schedule.from_api(o.scheduled_at).hour < 16 for o in r.options)
+
+
+
+async def test_aga_is_yes(mis):
+    """Живой звонок 28.10: «Ага.» на «Верно?» — переспрашивал."""
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "Ага.")
+    assert "записаны" in r.reply
