@@ -7,14 +7,14 @@
       "title": "Свой сервер команды (Mac, Россия)",
       "url": "https://ваш-сервер.example.ru/v1",
       "token": "впишите-токен",
-      "stt_model": "openai/whisper-1",
-      "llm_model": "gemma4"
+      "stt_model": "whisper-1",
+      "llm_model": "gigachad"
     },
     "fedora": {
-      "title": "Ollama на рабочей машине (Россия)",
+      "title": "На рабочей машине (Россия)",
       "url_llm": "http://адрес-машины:11434/v1",
       "token": "",
-      "llm_model": "qwen2.5:14b"
+      "llm_model": "gigachad2.5:14b"
     }
   }
 }
