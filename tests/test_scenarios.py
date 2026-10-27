@@ -1196,3 +1196,33 @@ def test_short_repeated_answer_is_not_noise():
     assert not ai._echo_of_prompt("Третий. Третий. Третий.")
     assert not ai._echo_of_prompt("Да. Да. Да. Да.")
     assert ai._echo_of_prompt("Фамилия, имя, отчество, дата рождения. " * 3)
+
+
+
+async def test_choice_needs_number_word():
+    from app import nlu
+    out = nlu.ground(nlu.validate({"choice": 1}), "Прежде вариант удобен.")
+    assert out["choice"] is None
+    assert nlu.ground(nlu.validate({"choice": 3}), "Третий вариант")["choice"] == 3
+
+
+async def test_test_results_not_status(mis, monkeypatch):
+    from app import ai, nlu
+    monkeypatch.setattr(config, "LLM_URL", "https://hub.gigaschool.ru/v1")
+
+    async def fake(*a, **k):
+        return {"intent": "status"}
+    monkeypatch.setattr(ai, "llm_json", fake)
+    out = await nlu.understand("Готовы ли мои анализы?", "more")
+    assert out["intent"] == "info" and out["topic"] == "test_results"
+
+
+async def test_parking_when_llm_down_is_r08(mis, monkeypatch):
+    from app import ai, nlu
+    monkeypatch.setattr(config, "LLM_URL", "https://hub.gigaschool.ru/v1")
+
+    async def down(*a, **k):
+        raise ai.AIError("нет ответа")
+    monkeypatch.setattr(ai, "llm_json", down)
+    out = await nlu.understand("Где у вас парковка?", "more")
+    assert out["intent"] == "info" and out["topic"] is None

@@ -253,8 +253,13 @@ def _name_said(name: str, text: str, patronymic_ok: bool) -> bool:
                for i, w in enumerate(words))
 
 
+_NUMBER_WORD = re.compile(r"перв|перу|втор|фтор|трет|трит|последн|\b[123]\b|\bодин\b|\bдва\b|\bтри\b")
+
+
 def ground(result: dict, text: str) -> dict:
-    """Оставляет ФИО и дату рождения, только если пациент их произнёс в этой фразе."""
+    """Оставляет ФИО, дату рождения и номер варианта, только если пациент их произнёс в этой фразе."""
+    if result.get("choice") and not _NUMBER_WORD.search(text.lower()):
+        result["choice"] = None  # «Прежде вариант удобен» — номера нет, модель угадала «первый» (звонок 27.10)
     low = text.lower().replace("ё", "е")
     if result.get("birth_date") and not _MONTH.search(low):
         result["birth_date"] = None  # «2006 год» — это не дата рождения: нет числа и месяца
@@ -364,8 +369,8 @@ async def understand(text: str, expecting: str) -> dict:
     try:
         raw = await ai.llm_json([{"role": "system", "content": prompt},
                                  {"role": "user", "content": f"<phrase>{text}</phrase>"}])
-    except ai.AIError:
-        return {**ground(fallback(text, expecting), text), "_source": "rules"}
+    except ai.AIError:  # модель не ответила — правила, с теми же проверками (вопрос вне базы → R-08)
+        return {**_out_of_base(ground(fallback(text, expecting), text), text), "_source": "rules"}
     result = validate(raw)
     # Если модель не поняла простое «да/нет/второй» — подстрахуемся ключевыми словами
     backup = fallback(text, expecting)
@@ -376,6 +381,9 @@ async def understand(text: str, expecting: str) -> dict:
         # «Где у вас парковка?» — в базе знаний ответа нет: не подставляем похожую тему (адрес),
         # а переводим на регистратора по R-08 (контрольный диалог регламента)
         result["topic"], result["intent"] = None, "info"
+    if backup["topic"] == "test_results" and result["intent"] in ("status", "other", None, "info"):
+        # «Готовы ли мои анализы?» модель иногда принимала за «статус записи» (сайт, 27.10)
+        result["intent"], result["topic"] = "info", "test_results"
     if result["topic"] and result["intent"] in (None, "other"):
         result["intent"] = "info"  # «Где вы находитесь?» — справка по регламенту, а не «не поняла»
     result = ground(result, text)

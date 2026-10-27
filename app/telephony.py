@@ -348,9 +348,13 @@ class Call:
             self.done = True
         elif quiet >= config.SILENCE_PROMPT_SEC and not self.silence_prompted:
             self.silence_prompted = True
+            # Посреди сценария — напоминаем вопрос: после длинного перечня вариантов пациент мог растеряться
+            s = dialog.SESSIONS.get(self.session_id)
+            again = s.last_reply if s and s.task and s.last_reply and len(s.last_reply) < 400 else ""
+            text = f"Вы меня слышите? Повторю: {again}" if again else "Вы меня слышите?"
             if call is not None:
-                journal.say(call, "bot", "Вы меня слышите?")
-            await self.say("Вы меня слышите?")
+                journal.say(call, "bot", text)
+            await self.say(text)
 
 
 # ---------- Исходящие звонки (напоминания) ----------
