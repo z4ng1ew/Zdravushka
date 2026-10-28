@@ -127,7 +127,7 @@ async def test_stand_down_goes_to_operator(mis):
 
 async def test_home_visit_creates_request_with_address(mis):
     r = await talk("вызвать врача на дом", "Сидоров Семён Ильич 05.05.1950", "улица Лесная 12 кв 40",
-                   "с утра болит голова и температура")
+                   "с утра болит голова и температура", "нет, тяжело")
     if schedule.now().weekday() == 6:
         pytest.skip("в воскресенье заявки на дом не принимаются")
     assert mis.escalations and "Лесная 12" in mis.escalations[-1]["description"]
@@ -137,7 +137,7 @@ async def test_home_visit_creates_request_with_address(mis):
 async def test_home_visit_child_goes_to_pediatrician(mis):
     if schedule.now().weekday() == 6:
         pytest.skip("воскресенье")
-    await talk("врача на дом ребёнку", "Сидорова Аня Олеговна 05.05.2020", "Лесная 12", "температура")
+    await talk("врача на дом ребёнку", "Сидорова Аня Олеговна 05.05.2020", "Лесная 12", "температура", "нет")
     assert "педиатр" in mis.escalations[-1]["description"]
 
 
@@ -1332,3 +1332,28 @@ async def test_choose_option_by_time_and_doctor(mis):
     surname = o.doctor_name.split()[0][:-1]
     r2 = await dialog.handle(r.session_id, f"Давайте в {hhmm}, врач {surname}")
     assert "Записываю" in r2.reply and dialog.SESSIONS[r.session_id].chosen.scheduled_at == o.scheduled_at
+
+
+
+async def test_home_visit_dialog_like_regulation(mis):
+    """Пример диалога С-06 регламента: «Вы можете сами прийти?», «Телефон для связи — этот?», «Выздоравливайте!»."""
+    if schedule.now().weekday() == 6:
+        pytest.skip("воскресенье")
+    r = await talk("мне нужно вызвать врача на дом")
+    assert "положите трубку и звоните сто три" in r.reply
+    r = await dialog.handle(r.session_id, "Соколов Андрей Викторович, 09.02.1985")
+    assert r.reply.startswith("Андрей Викторович, назовите адрес")
+    r = await dialog.handle(r.session_id, "улица Лесная, дом 12, квартира 40")
+    r = await dialog.handle(r.session_id, "температура со вчерашнего дня, слабость, кашель")
+    assert r.reply == "Передам врачу. Вы можете сами прийти в поликлинику?" and not mis.escalations
+    r = await dialog.handle(r.session_id, "нет, тяжело")
+    assert "Телефон для связи — этот?" in r.reply and mis.escalations
+    r = await dialog.handle(r.session_id, "да")
+    assert r.done and "Выздоравливайте" in r.reply
+
+
+async def test_home_visit_can_come_goes_to_booking(mis):
+    if schedule.now().weekday() == 6:
+        pytest.skip("воскресенье")
+    r = await talk("вызовите врача на дом", "Соколов Андрей Викторович, 09.02.1985", "Лесная 12", "кашель", "да, могу прийти")
+    assert r.options and not mis.escalations

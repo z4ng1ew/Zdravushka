@@ -13,7 +13,7 @@ GOODBYE = ui_texts.GOODBYE
 ANYTHING_ELSE = ui_texts.ANYTHING_ELSE
 
 # Шаги, где пациент вспоминает (ФИО, дата рождения, адрес) и делает паузы — микрофон ждёт дольше
-SLOW_STEPS = ("identity", "middle_name", "birth_date", "address", "reason")
+SLOW_STEPS = ("identity", "middle_name", "birth_date", "address", "reason", "phone")
 
 
 def collected(s: Session) -> dict:

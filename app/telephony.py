@@ -225,7 +225,7 @@ class Call:
         """Сколько ждать тишины, чтобы считать фразу законченной. Когда называют ФИО, дату рождения
         или адрес, люди вспоминают и делают паузы — ждём дольше, чтобы не обрывать на полуслове."""
         s = dialog.SESSIONS.get(self.session_id)
-        slow = s is not None and s.step in ("identity", "middle_name", "birth_date", "address", "reason")
+        slow = s is not None and s.step in ("identity", "middle_name", "birth_date", "address", "reason", "phone")
         if slow:
             return config.END_OF_SPEECH_SLOW_MS
         # Ответ — короткое слово («да», «третий»): долго ждать тишины незачем

@@ -28,7 +28,7 @@ HANDLERS = {"reminder": task_reminder, "booking": task_booking, "reschedule": ta
             "status": task_status, "schedule_info": task_schedule_info, "info": task_info,
             "home_visit": task_home_visit}
 
-HIDDEN_STEPS = ("identity", "middle_name", "birth_date", "address")  # на этих шагах пациент называет ФИО и дату рождения
+HIDDEN_STEPS = ("identity", "middle_name", "birth_date", "address", "phone")  # на этих шагах пациент называет ФИО и дату рождения
 
 
 async def handle(session_id: str | None, text: str, asr_confidence: float | None = None) -> ChatResponse:
@@ -88,7 +88,7 @@ async def _break_loop(s: Session, before: str, resp: ChatResponse) -> ChatRespon
 
 def _log_patient(s: Session, text: str):
     """Реплика в расшифровку. 152-ФЗ: ФИО и дату рождения храним только в МИС, не в журнале."""
-    journal.say(s.call, "patient", ("[адрес — скрыто]" if s.step == "address" else "[ФИО и дата рождения — скрыто]") if s.step in HIDDEN_STEPS else text)
+    journal.say(s.call, "patient", ({"address": "[адрес — скрыто]", "phone": "[телефон — скрыто]"}.get(s.step, "[ФИО и дата рождения — скрыто]")) if s.step in HIDDEN_STEPS else text)
     s.text = text.lower()
 
 
