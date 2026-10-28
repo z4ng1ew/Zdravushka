@@ -283,7 +283,7 @@ _PATRONYMIC = ("ич", "вна", "чна", "ична", "оглы", "кызы")
 OUT_OF_BASE = re.compile(r"парковк|стоянк|припарков|банкомат|кафе|столов|буфет|wi-?fi|вай-?фай|аптек")
 
 
-FAST_STEPS = ("parent", "confirm", "confirm_all", "choose_slot", "choose_visit", "remind", "remind_no", "more")
+FAST_STEPS = ("parent", "paid_offer", "paid_transfer", "paid_free", "confirm", "confirm_all", "choose_slot", "choose_visit", "remind", "remind_no", "more")
 
 
 def _fast_path(text: str, expecting: str) -> dict | None:

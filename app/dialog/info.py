@@ -2,7 +2,7 @@
 import re
 from datetime import datetime, timedelta
 
-from app import journal, knowledge, schedule
+from app import journal, knowledge, prices, schedule
 from app.dialog.common import collected, escalate, reply, send_escalation, task_done
 from app.dialog.mis import add_comment, sms
 from app.dialog.steps import is_same_doctor, need_identity
@@ -31,12 +31,68 @@ async def task_schedule_info(s: Session, nl: dict) -> ChatResponse:
 async def task_info(s: Session, nl: dict) -> ChatResponse:
     """Справочные вопросы — ответ дословно из регламента."""
     s.call["intent"] = "Справка"
+    if s.step in ("paid_offer", "paid_transfer", "paid_free") or nl["topic"] == "prices" or prices.asks_paid(s.text):
+        return await task_paid(s, nl)
     text = knowledge.answer(nl["topic"])
     if not text:
         return await escalate(s, Escalation(rule="R-08", reason="не распознано", priority="P3",
                                        summary="Справочный вопрос вне базы знаний"))
     return task_done(s, text, "справка", source="регламент РГ-ТЕЛ-01",
                      explanation=f"Ответ дословно из базы знаний регламента, тема: {nl['topic']}.")
+
+
+# ---------- С-09. Платные услуги (регламент РГ-ТЕЛ-01, пример диалога и ветвления) ----------
+# «Сколько стоит УЗИ щитовидки?» → «УЗИ щитовидной железы стоит тысячу триста рублей. Записать вас?» →
+# «Да, можно на субботу?» → время → ФИО и дата рождения → как С-01 → «Оплата — в кассе…». Цены — app/prices.py.
+
+async def task_paid(s: Session, nl: dict) -> ChatResponse:
+    from app.dialog.booking import task_booking
+    s.call["intent"] = "Платные услуги"
+    low = s.text.lower()
+    if s.step == "paid_offer":
+        if nl["answer"] == "yes" or nl["date"] or nl["part_of_day"]:
+            s.task, s.step = "booking", "start"
+            s.fields["specialty"] = s.fields["_paid"]["specialty"]
+            return await task_booking(s, nl)
+        if nl["answer"] == "no":
+            return task_done(s, "Хорошо.", "справка")
+    if s.step == "paid_transfer":  # «Записаться можно в платном отделении. Соединить?»
+        if nl["answer"] == "yes":
+            return await escalate(s, Escalation(rule="R-10", reason="запись на платную услугу", priority="P3",
+                                                summary=f"Записать: {s.fields['_paid']['name']} — платное отделение"))
+        if nl["answer"] == "no":
+            return task_done(s, "Хорошо.", "справка")
+    if s.step == "paid_free":  # «…Записать вас к участковому терапевту?»
+        if nl["answer"] == "yes":
+            s.fields.pop("_paid", None)
+            s.task, s.step = "booking", "start"
+            s.fields["specialty"] = "Терапевт"
+            return await task_booking(s, nl)
+        if nl["answer"] == "no":
+            return task_done(s, "Хорошо.", "справка")
+    if prices.TAX.search(low):
+        return task_done(s, prices.TAX_ANSWER, "справка", source="регламент РГ-ТЕЛ-01")
+    if prices.TRANSFER.search(low):
+        return await escalate(s, Escalation(rule="R-10", reason="платные услуги: ДМС, договор или медкомиссия",
+                                            priority="P3", summary="Вопрос в платное отделение (доб. 3)"))
+    if prices.FREE.search(low) and s.step in ("paid_offer", "paid_transfer"):
+        s.step = "paid_free"  # «А бесплатно можно?» — честно про ОМС
+        return reply(s, prices.FREE_ANSWER, source="регламент РГ-ТЕЛ-01")
+    svc = prices.find(s.text, nl.get("specialty"))
+    if not svc:
+        if not prices.names_service(s.text):  # «Какие у вас цены?» — общий ответ из базы знаний
+            return task_done(s, knowledge.answer("prices"), "справка", source="регламент РГ-ТЕЛ-01")
+        return await escalate(s, Escalation(rule="R-10", reason="платной услуги нет в прайс-листе", priority="P3",
+                                            summary="Цена услуги вне прайс-листа — в платное отделение (доб. 3)"))
+    s.fields["_paid"] = {"name": svc.name, "price": svc.price, "specialty": svc.specialty}
+    s.call["result"] = "справка"  # регламент: INFO_GIVEN — цена сообщена
+    if not svc.specialty:  # ЭКГ, анализы — не по расписанию врачей: записывает платное отделение
+        s.step = "paid_transfer"
+        return reply(s, f"{prices.price_phrase(svc)} Записаться можно в платном отделении. Соединить?",
+                     source="прайс-лист, регламент РГ-ТЕЛ-01, раздел 2.6")
+    s.step = "paid_offer"
+    return reply(s, f"{prices.price_phrase(svc)} Записать вас?", source="прайс-лист, регламент РГ-ТЕЛ-01, раздел 2.6",
+                 explanation=f"Цена из прайс-листа регламента (раздел 2.6): {svc.name} — {svc.price} ₽.")
 
 
 async def task_home_visit(s: Session, nl: dict) -> ChatResponse:

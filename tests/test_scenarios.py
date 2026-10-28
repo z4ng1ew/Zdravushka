@@ -1395,3 +1395,49 @@ async def test_journal_keeps_recognition_confidence(mis):
     r = await dialog.handle(r.session_id, "запишите к терапевту", asr_confidence=0.82)
     line = [x for x in dialog.journal.CALLS[r.session_id]["transcript"] if x["speaker"] == "patient"][-1]
     assert line["confidence"] == 0.82
+
+
+# ---------- С-09. Платные услуги (регламент: пример диалога и ветвления; живой звонок 28.10) ----------
+
+async def test_paid_price_and_booking_follow_regulation(mis):
+    r = await talk("Сколько стоит у вас УЗИ щитовидки?")
+    assert r.reply == "УЗИ щитовидной железы стоит тысячу триста рублей. Записать вас?"
+    r = await talk("Сколько стоит у вас УЗИ щитовидки?", "Да, можно на субботу?")
+    assert r.options and all(o.specialty.startswith("Врач УЗИ") for o in r.options)
+    assert r.reply.endswith("фамилию, имя, отчество и дату рождения.")
+    r = await talk("Сколько стоит у вас УЗИ щитовидки?", "Да, можно на субботу?", "Козлов Андрей Петрович 10.10.1990")
+    assert r.reply == "Спасибо, Андрей Петрович. Какой вариант удобен: первый, второй или третий?"
+    r = await talk("Сколько стоит у вас УЗИ щитовидки?", "Да, можно на субботу?", "Козлов Андрей Петрович 10.10.1990",
+                   "первый", "да")
+    assert "записаны" in r.reply and "Оплата — в кассе платного отделения перед приёмом, можно картой" in r.reply
+    assert len(mis.visits) == 1 and "Платно: УЗИ щитовидной железы, 1300 руб." in mis.clients[0]["comment"]
+
+
+async def test_paid_unknown_service_r10(mis):
+    r = await talk("Сколько стоит МРТ колена?")
+    assert r.reply == "Эту услугу уточнит платное отделение. Соединяю." and r.escalation.rule == "R-10"
+
+
+async def test_paid_dms_and_commission_r10(mis):
+    for text in ("У меня ДМС, сколько стоит приём?", "Сколько стоит медкомиссия на права?"):
+        r = await talk(text)
+        assert r.escalation and r.escalation.rule == "R-10", text
+
+
+async def test_paid_free_and_tax_answers(mis):
+    r = await talk("Сколько стоит УЗИ брюшной полости?", "А бесплатно можно?")
+    assert r.reply == "По ОМС эта услуга доступна по направлению лечащего врача. Записать вас к участковому терапевту?"
+    r = await talk("Сколько стоит УЗИ брюшной полости?", "А бесплатно можно?", "да")
+    assert r.options and all(o.specialty == "Терапевт" for o in r.options) or "фамилию" in r.reply
+    r = await talk("Как получить налоговый вычет за платные услуги?")
+    assert "Справку об оплате медицинских услуг для налоговой" in r.reply
+
+
+async def test_paid_specialist_price(mis):
+    r = await talk("Сколько стоит платный приём кардиолога?")
+    assert r.reply.startswith("Приём врача-специалиста стоит тысячу восемьсот рублей.")
+
+
+async def test_paid_booking_intent_goes_to_price_first(mis):
+    r = await talk("Можно платно записаться к кардиологу?")
+    assert r.reply == "Приём врача-специалиста стоит тысячу восемьсот рублей. Записать вас?"

@@ -1,6 +1,6 @@
 # Сценарий С-01: запись на приём.
 
-from app import schedule
+from app import prices, schedule
 from app.dialog.mis import BOOKING_LOCK
 from app.dialog.common import reply, task_done
 from app.dialog.mis import busy_slots, cancel_visit, create_visit, doctors_for
@@ -14,6 +14,10 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
     """С-01. Запись на приём."""
     c = s.fields
     s.call["intent"] = "Запись к врачу"
+    if not c.get("_paid") and s.step in ("start", "specialty") and prices.asks_paid(s.text):
+        from app.dialog.info import task_paid  # «можно платно к кардиологу?» — сначала цена (С-09)
+        s.task = "info"
+        return await task_paid(s, nl)
     if c.get("doctor_name") and not c.get("specialty"):
         c["specialty"] = wanted_specialty(c["doctor_name"])
         if not c["specialty"]:
@@ -31,6 +35,17 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         if chosen_docs:
             doctors = chosen_docs
     for_child(s)  # «записать дочку» — запоминаем до вопроса о ФИО
+    paid = c.get("_paid")
+    # С-09 (пример диалога): сначала время, потом «Для записи назовите фамилию, имя, отчество и дату рождения»
+    if paid and not s.client and not s.options:
+        resp = await offer_slots(s, doctors)
+        if s.step != "choose_slot":
+            return resp  # времени нет — лист ожидания
+        s.options_shown = True
+        s.step = "identity"
+        resp.reply = (resp.reply.replace(" Какой вариант удобен?", "")
+                      + " Для записи назовите, пожалуйста, фамилию, имя, отчество и дату рождения.")
+        return resp
     if (r := await need_identity(s)):
         return r
     age = patient_age(s)
@@ -62,6 +77,19 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         s.step = "specialty"
         return reply(s, "К этому специалисту по возрасту пациента записать не могу. Назовите другого врача.")
 
+    if paid and s.options and s.step not in ("choose_slot", "confirm"):
+        # ФИО и дату назвали после списка времени — теперь выбор варианта (дальше как С-01)
+        if any(not fits_age(d, age) for d in doctors if d["id"] in {o.doctor_id for o in s.options}):
+            s.options = []
+            return await offer_slots(s, doctors)
+        s.step = "choose_slot"
+        if not (nl["choice"] or nl["date"] or nl["part_of_day"]):
+            first, middle = c.get("first_name"), c.get("middle_name")
+            return reply(s, f"Спасибо{', ' + first + ' ' + middle if first and middle else ''}. "
+                            "Какой вариант удобен: " + ("первый или второй?" if len(s.options) == 2
+                                                       else "первый, второй или третий?" if len(s.options) == 3
+                                                       else "этот?"),
+                         options=s.options)
     if s.step == "choose_slot":
         if (r := await choose_slot(s, nl, lambda: doctors_for(c["specialty"]))):
             return r
@@ -82,6 +110,8 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
                 resp = await offer_slots(s, doctors)  # время успели занять — предлагаем заново
                 resp.reply = "Это время только что заняли. " + resp.reply
                 return resp
+            if paid:  # у стенда нет типа оплаты — отметка «платно» в карточке пациента (BOOKED_PAID)
+                s.notes.append(f"Платно: {paid['name']}, {paid['price']} руб. #{visit['id']}")
             done = o.model_copy(update={"visit_id": visit["id"], "status": "Запланирована"})
             extra = ""
             if (old := s.take("replace_visit")):  # «перенос» к другому врачу: старую запись отменяем
@@ -89,7 +119,8 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
                 extra = " Прежняя запись отменена."
             return task_done(s, f"Готово, вы записаны {o.spoken}{room(o.doctor_name)}.{extra} "
                                  "SMS с деталями придёт на этот номер. "
-                                 + ("На приём возьмите полис ребёнка и свой паспорт. " if c.get("_parent_ok")
+                                 + (prices.PAYMENT + " " if paid
+                                    else "На приём возьмите полис ребёнка и свой паспорт. " if c.get("_parent_ok")
                                     else "Возьмите паспорт и полис ОМС. ") +
                                  "Накануне придёт напоминание.", "записан", booking=done)
         if nl["answer"] == "no" or nl["date"] or nl["part_of_day"]:
@@ -106,5 +137,6 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         return resp
 
     o = s.chosen
-    return reply(s, f"Записываю: {o.specialty.lower()}, врач {o.doctor_name}, {o.spoken}{room(o.doctor_name)}. Верно?",
+    spec = "" if o.specialty.startswith("Врач") else f"{o.specialty.lower()}, "  # без «врач …, врач …»
+    return reply(s, f"Записываю: {spec}врач {o.doctor_name}, {o.spoken}{room(o.doctor_name)}. Верно?",
                   booking=o)
