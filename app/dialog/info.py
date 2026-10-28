@@ -63,8 +63,10 @@ async def schedule_offer(s: Session, nl: dict) -> ChatResponse | None:
             s.fields["doctor_name"] = doc
         s.task, s.step = "booking", "start"
         return await task_booking(s, nl)
-    if nl["answer"] == "no":
-        return task_done(s, "Хорошо.", "справка")
+    from app.dialog.interceptors import starts_no
+    if nl["answer"] == "no" or starts_no(s.text):  # регламент С-07: «Нет, спасибо, я сам на Госуслугах.» → «Хорошо. Всего доброго!»
+        s.call["result"] = "справка"
+        return reply(s, "Хорошо. Всего доброго!", done=True)
     return None
 
 
@@ -95,7 +97,8 @@ async def task_paid(s: Session, nl: dict) -> ChatResponse:
             s.fields["specialty"] = s.fields["_paid"]["specialty"]
             return await task_booking(s, nl)
         if nl["answer"] == "no":
-            return task_done(s, "Хорошо.", "справка")
+            s.call["result"] = "справка"
+            return reply(s, "Хорошо. Всего доброго!", done=True)
     if s.step == "paid_transfer":  # «Записаться можно в платном отделении. Соединить?»
         if nl["answer"] == "yes":
             return await escalate(s, Escalation(rule="R-10", reason="запись на платную услугу", priority="P3",

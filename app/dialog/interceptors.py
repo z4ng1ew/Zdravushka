@@ -61,11 +61,24 @@ async def goodbye(s: Session, nl: dict, text: str) -> ChatResponse | None:
     return None
 
 
+def starts_no(text: str) -> bool:
+    """«Нет, спасибо…», «Не надо…» в начале фразы — отказ, даже если модель не поставила answer=no."""
+    import re
+    return bool(re.match(r"\s*(нет|не надо|не нужно|не стоит|спасибо, не)\b", (text or "").lower()))
+
+
+OFFER_STEPS = ("schedule_offer", "paid_offer", "paid_transfer", "paid_free", "confirm_visit")
+
+
 async def side_question(s: Session, nl: dict, text: str) -> ChatResponse | None:
     """Справочный вопрос посреди сценария («где вы находитесь?» при выборе времени):
     отвечаем по регламенту и возвращаемся к прерванному вопросу, не теряя записи."""
     from app import knowledge
     if not (s.task and s.task != "info" and nl["intent"] == "info" and nl["topic"]):
+        return None
+    # «Нет, спасибо, я сам на Госуслугах» в ответ на «Записать вас?» — это отказ, а не вопрос про Госуслуги
+    # (живой звонок 28.10: ассистент рассказал про Госуслуги и повторил весь график)
+    if s.step in OFFER_STEPS and (nl["answer"] in ("yes", "no") or starts_no(s.text)):
         return None
     if s.step in ("identity", "middle_name", "birth_date", "address", "reason") or nl["address"] or nl["last_name"]:
         return None  # пациент отвечает на вопрос («…адрес: улица Ленина»), а не спрашивает справку

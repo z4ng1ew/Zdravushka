@@ -1503,3 +1503,10 @@ def test_schedule_words():
     from app import schedule
     assert schedule.cabinet_words("112") == "сто двенадцать" and schedule.cabinet_words("203") == "двести три"
     assert schedule._hours_words("09:00–13:00, 14:00–18:00") == "с девяти до восемнадцати"
+
+
+
+async def test_schedule_no_thanks_says_goodbye(mis):
+    """Регламент С-07: «Нет, спасибо, я сам на Госуслугах.» → «Хорошо. Всего доброго!» (живой звонок 28.10)."""
+    r = await talk("Когда принимает хирург?", "Нет, спасибо, я сам на госуслугах.")
+    assert r.reply == "Хорошо. Всего доброго!" and r.done
