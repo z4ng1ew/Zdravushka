@@ -57,7 +57,7 @@ async def test_no_double_booking_same_slot(mis):
 async def test_reschedule_and_cancel(mis):
     await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
     old = mis.visits[0]["scheduled_at"]
-    await talk("перенести запись", "Козлов Андрей Петрович 10.10.1990", "2", "да")
+    await talk("перенести запись", "Козлов Андрей Петрович 10.10.1990", "да", "2", "да")
     assert mis.visits[0]["scheduled_at"] != old
     r = await talk("отменить запись", "Козлов Андрей Петрович 10.10.1990", "да")
     assert mis.visits[0]["status"] == "Отменена" and "отменена" in r.reply
@@ -1460,3 +1460,29 @@ async def test_before_lunch_replaces_after_lunch(mis):
     r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "А после обеда есть что-нибудь?",
                    "А есть вариант до обеда в субботу?")
     assert r.options and all(int(o.scheduled_at[-5:-3]) < 13 for o in r.options)
+
+
+
+async def test_reschedule_follows_regulation(mis):
+    """Регламент С-03 и живой звонок 28.10: «записана на четверг» — день СТАРОЙ записи; одна запись —
+    «…у вас запись к терапевту …. Переносим её?»; «на следующую неделю» — варианты на разные дни недели."""
+    await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "да")
+    r = await talk("Я записан на четверг, хочу перенести.", "Козлов Андрей Петрович 10.10.1990")
+    assert r.reply.startswith("Андрей Петрович, у вас запись к терапевту ") and r.reply.endswith("Переносим её?")
+    r = await talk("Я записан на четверг, хочу перенести.", "Козлов Андрей Петрович 10.10.1990",
+                   "Да, на следующую неделю.")
+    days = [o.scheduled_at[:10] for o in r.options]
+    assert len(r.options) >= 2 and len(set(days)) == len(days)
+    from app import nlu
+    assert nlu.relative_date("перенести на следующую неделю").weekday() == 0
+    r = await talk("Я записан на четверг, хочу перенести.", "Козлов Андрей Петрович 10.10.1990",
+                   "Да, на следующую неделю.", day_word(r.options[1]))
+    assert r.reply.startswith("Переношу: ") and "Прежнюю запись" in r.reply and r.reply.endswith("Верно?")
+
+
+
+def day_word(option) -> str:
+    """Название дня недели варианта: «вторник» — пациент выбирает вариант по дню."""
+    from datetime import datetime
+    names = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
+    return names[datetime.strptime(option.scheduled_at[:10], "%d.%m.%Y").weekday()]

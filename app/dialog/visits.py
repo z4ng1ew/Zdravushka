@@ -11,6 +11,7 @@ from app.dialog.steps import (
     choose_visit,
     is_same_doctor,
     need_identity,
+    old_visit_day,
     offer_slots,
     room,
     visit_booking,
@@ -25,10 +26,26 @@ ALL_OF_THEM = re.compile(r"\b(обе|оба|все|всё|обеих|кажду�
 async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
     """С-03. Перенос записи: та же запись, новое время у того же врача."""
     s.call["intent"] = "Перенос записи"
+    old_visit_day(s)
     if (r := await need_identity(s, create=False)):
         return r
-    if not s.visit and (r := await choose_visit(s, nl, "перенести")):
-        return r
+    if not s.visit:
+        single = len(s.visits or await _load(s)) == 1
+        if (r := await choose_visit(s, nl, "перенести")):
+            return r
+        if single and not (nl["date"] or nl["part_of_day"] or s.fields.get("doctor_name")):
+            # Регламент С-03: «Ольга Викторовна, у вас запись к терапевту Кузнецовой в четверг в восемь сорок пять.
+            # Переносим её?»
+            b = visit_booking(s.visit)
+            first, middle = s.fields.get("first_name"), s.fields.get("middle_name")
+            s.step = "confirm_visit"
+            return reply(s, f"{first + ' ' + middle + ', у' if first and middle else 'У'} вас запись к "
+                            f"{_dative(b.specialty)} {_dative_name(b.doctor_name.split()[0])} {b.spoken}. Переносим её?",
+                         booking=b)
+    if s.step == "confirm_visit":
+        if nl["answer"] == "no" and not (nl["date"] or nl["part_of_day"]):
+            return task_done(s, "Хорошо, запись остаётся.", "справка")
+        s.step = "start"
     visit = s.visit
     doctor = visit["doctor"]
     wanted = s.fields.get("doctor_name")
@@ -67,9 +84,34 @@ async def task_reschedule(s: Session, nl: dict) -> ChatResponse:
         return await offer_slots(s, [doctor], exclude=(doctor["id"], visit["scheduled_at"]))
 
     o = s.chosen
-    old = schedule.say_slot(schedule.from_api(visit["scheduled_at"]))
-    return reply(s, f"Переношу запись, врач {o.doctor_name}. Было: {old}. Станет: {o.spoken}. Верно?",
-                  booking=o)
+    old = schedule.from_api(visit["scheduled_at"])
+    # Регламент С-03: «Переношу на вторник, шестое октября, двенадцать ноль-ноль, кабинет … Запись на четверг отменяю. Верно?»
+    return reply(s, f"Переношу: {o.spoken}{room(o.doctor_name)}. Прежнюю запись — {schedule.say_date(old.date())} — "
+                    "отменяю. Верно?", booking=o)
+
+
+async def _load(s: Session) -> list:
+    s.visits = await client_visits(s)
+    return s.visits
+
+
+def _dative(specialty: str) -> str:
+    """терапевт → терапевту, офтальмолог → офтальмологу, врач УЗИ-диагностики → врачу УЗИ-диагностики."""
+    low = specialty.lower()
+    if low.startswith("врач "):
+        return "врачу " + specialty[5:]
+    first, _, rest = low.partition(" ")
+    first = first + "у" if first[-1] not in "аяйь" else first
+    return (first + (" " + rest if rest else ""))
+
+
+def _dative_name(surname: str) -> str:
+    """Кузнецова → Кузнецовой, Петров → Петрову, Ковалёва → Ковалёвой."""
+    if surname.endswith(("ова", "ева", "ёва", "ина", "ына")):
+        return surname[:-1] + "ой"
+    if surname.endswith(("ов", "ев", "ёв", "ин", "ын")):
+        return surname + "у"
+    return surname
 
 
 async def task_cancel(s: Session, nl: dict) -> ChatResponse:

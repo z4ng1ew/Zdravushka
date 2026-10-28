@@ -212,11 +212,15 @@ async def offer_slots(s: Session, doctors: list[dict], exclude: str | None = Non
     if exclude:
         busy.add(exclude)
     want = datetime.strptime(c["date"], "%d.%m.%Y").date() if c.get("date") else None
-    found = schedule.find_free_slots(doctors, busy, date_from=want, date_to=want,
+    # «На следующую неделю» — вся неделя, варианты на разные дни (регламент С-03: «в понедельник …,
+    # во вторник … или в среду …»); иначе — названный день
+    week = bool(want and re.search(r"недел", s.text or "") and want.weekday() == 0)
+    until = want + timedelta(days=5) if week else want
+    found = schedule.find_free_slots(doctors, busy, date_from=want, date_to=until, one_per_day=week,
                                      part_of_day=c.get("part_of_day")) if want else []
     note = ""
     if want and not found:
-        note = "На этот день свободного времени нет. "
+        note = "На этой неделе свободного времени нет. " if week else "На этот день свободного времени нет. "
     if not found:
         found = schedule.find_free_slots(doctors, busy, date_from=want, part_of_day=c.get("part_of_day"))
     if not found and c.get("part_of_day"):
@@ -270,6 +274,10 @@ async def choose_slot(s: Session, nl: dict, doctors_for_retry) -> ChatResponse |
     # Пациент назвал сам вариант — время и/или врача из списка («в пятницу в 14.20, врач Рябинин»):
     # выбираем его, а не ищем заново (живой звонок 28.10: такой ответ дважды запускал новый поиск)
     chosen = pick_by_details(s, s.text)
+    if not chosen and nl["date"] and not nl["part_of_day"]:
+        # «Вторник» — а во вторник в списке ровно один вариант: это выбор, а не новый поиск (регламент С-03)
+        same_day = [o for o in s.options or [] if o.scheduled_at[:10] == nl["date"]]
+        chosen = same_day[0] if len(same_day) == 1 else None
     # Назван новый день («29 октября») — это новый поиск, даже если модель увидела в фразе «номер»
     if not chosen:
         chosen = None if (nl["date"] or nl["part_of_day"]) else pick(s, nl, "options")
@@ -283,8 +291,18 @@ async def choose_slot(s: Session, nl: dict, doctors_for_retry) -> ChatResponse |
             last = max(schedule.from_api(o.scheduled_at) for o in s.options)
             s.fields["date"] = (last + timedelta(days=1)).strftime("%d.%m.%Y")
         return await offer_slots(s, await doctors_for_retry())
-    return reply(s, "Скажите номер варианта: первый, второй или третий. Или назовите другой день.",
+    numbers = {1: "Скажите «да», если подходит", 2: "Скажите номер варианта: первый или второй"}
+    return reply(s, numbers.get(len(s.options), "Скажите номер варианта: первый, второй или третий")
+                 + ". Или назовите другой день.",
                   options=s.options)
+
+
+def old_visit_day(s: Session):
+    """«Я записана на четверг, хочу перенести» — четверг это ДЕНЬ ТЕКУЩЕЙ ЗАПИСИ, а не желаемая дата
+    (живой звонок 28.10: ассистент искал новое время на четверг). Переносим дату в «_visit_day»."""
+    c = s.fields
+    if c.get("date") and re.search(r"записан\w*\s+(на|в|во|к)\b|запись\s+(на|в|во)\b", s.text or ""):
+        c["_visit_day"] = c.pop("date")
 
 
 async def choose_visit(s: Session, nl: dict, verb: str) -> ChatResponse | None:
@@ -293,10 +311,15 @@ async def choose_visit(s: Session, nl: dict, verb: str) -> ChatResponse | None:
         s.visits = await client_visits(s)
     visits = s.visits
     if not visits:
-        return task_done(s, "У вас нет предстоящих записей.", "справка")
+        return task_done(s, "Активных записей не найдено. Хотите записаться?", "справка")
     if len(visits) == 1:
         s.visit = visits[0]
         return None
+    if (day := s.fields.get("_visit_day")) and s.step != "choose_visit":
+        same = [v for v in visits if v["scheduled_at"][:10] == day]  # пациент сам назвал день записи
+        if len(same) == 1:
+            s.visit = same[0]
+            return None
     if s.step == "choose_visit":
         v = pick(s, nl, "visits")
         if v:
@@ -305,5 +328,7 @@ async def choose_visit(s: Session, nl: dict, verb: str) -> ChatResponse | None:
     s.step = "choose_visit"
     words = ["первая", "вторая", "третья"]
     items = [visit_booking(v) for v in visits[:3]]
-    listing = "; ".join(f"{words[i]} — {b.specialty.lower()}, {b.spoken}" for i, b in enumerate(items))
+    # Фамилия врача — чтобы записи в одно время у разных врачей различались на слух
+    listing = "; ".join(f"{words[i]} — {b.specialty.lower()} {b.doctor_name.split()[0]}, {b.spoken}"
+                        for i, b in enumerate(items))
     return reply(s, f"У вас несколько записей: {listing}. Какую {verb}?", options=items)

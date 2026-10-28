@@ -117,7 +117,7 @@ PARTS_OF_DAY = {"утро": (7, 12), "до обеда": (7, 13), "день": (12
 def find_free_slots(doctors: list[dict], busy: set[tuple[int, str]],
                     date_from: date | None = None, date_to: date | None = None,
                     part_of_day: str | None = None, limit: int = 3,
-                    search_days: int = 30) -> list[tuple[dict, datetime]]:
+                    search_days: int = 30, one_per_day: bool = False) -> list[tuple[dict, datetime]]:
     """Ближайшие свободные слоты у списка врачей.
 
     doctors — врачи со стенда (id стенда + ФИО), busy — наши записи в стенде:
@@ -147,6 +147,8 @@ def find_free_slots(doctors: list[dict], busy: set[tuple[int, str]],
             # «завтра в восемь сорок пять или в пятницу в десять тридцать»)
             if len(found) < limit and all(s != slot for _, s in found):
                 found.append((doc, slot))
+                if one_per_day:  # «на следующей неделе» — по одному варианту на день (пример С-03)
+                    break
         day += timedelta(days=1)
     return found
 

@@ -202,7 +202,8 @@ def relative_date(low: str):
         return today + timedelta(days=1)
     if "через неделю" in low:
         return today + timedelta(days=7)
-    if "следующей неделе" in low or "после выходных" in low:
+    # «на следующую неделю», «на следующей неделе» (живой звонок 28.10: «следующую» не распознавалось)
+    if re.search(r"следующ\w* недел|после выходных", low):
         return today + timedelta(days=7 - today.weekday())  # ближайший понедельник
     for i, stem in enumerate(_WEEKDAY_STEMS):
         if re.search(rf"\b{stem}", low) and not re.search(rf"не\s+(в|во|на)\s+{stem}", low):
@@ -286,7 +287,7 @@ _PATRONYMIC = ("ич", "вна", "чна", "ична", "оглы", "кызы")
 OUT_OF_BASE = re.compile(r"парковк|стоянк|припарков|банкомат|кафе|столов|буфет|wi-?fi|вай-?фай|аптек")
 
 
-FAST_STEPS = ("parent", "paid_offer", "paid_transfer", "paid_free", "confirm", "confirm_all", "choose_slot", "choose_visit", "remind", "remind_no", "more")
+FAST_STEPS = ("parent", "confirm_visit", "paid_offer", "paid_transfer", "paid_free", "confirm", "confirm_all", "choose_slot", "choose_visit", "remind", "remind_no", "more")
 
 
 def _fast_path(text: str, expecting: str) -> dict | None:
