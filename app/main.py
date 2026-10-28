@@ -15,6 +15,8 @@ from app import ai, config, dialog, journal, schedule, telephony, tts, ui_texts,
 from app import reminders as reminder_service
 from app.models import ChatRequest, ChatResponse
 
+# Сообщения модулей (телефония, распознавание, перезвон) — в server.log рядом с запросами uvicorn
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
 
 

@@ -44,7 +44,7 @@ async def handle(session_id: str | None, text: str, asr_confidence: float | None
                             done=True, collected=collected(s))
     if not text:
         return reply(s, "Вы меня слышите?")
-    _log_patient(s, text)
+    _log_patient(s, text, asr_confidence)
     s.asr_confidence, s.understood_by = asr_confidence, None
 
     if (resp := await run_guards(s, text)):
@@ -86,9 +86,9 @@ async def _break_loop(s: Session, before: str, resp: ChatResponse) -> ChatRespon
     return resp
 
 
-def _log_patient(s: Session, text: str):
+def _log_patient(s: Session, text: str, confidence: float | None = None):
     """Реплика в расшифровку. 152-ФЗ: ФИО и дату рождения храним только в МИС, не в журнале."""
-    journal.say(s.call, "patient", ({"address": "[адрес — скрыто]", "phone": "[телефон — скрыто]"}.get(s.step, "[ФИО и дата рождения — скрыто]")) if s.step in HIDDEN_STEPS else text)
+    journal.say(s.call, "patient", ({"address": "[адрес — скрыто]", "phone": "[телефон — скрыто]"}.get(s.step, "[ФИО и дата рождения — скрыто]")) if s.step in HIDDEN_STEPS else text, confidence)
     s.text = text.lower()
 
 

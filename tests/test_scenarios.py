@@ -1357,3 +1357,12 @@ async def test_home_visit_can_come_goes_to_booking(mis):
         pytest.skip("воскресенье")
     r = await talk("вызовите врача на дом", "Соколов Андрей Викторович, 09.02.1985", "Лесная 12", "кашель", "да, могу прийти")
     assert r.options and not mis.escalations
+
+
+
+async def test_journal_keeps_recognition_confidence(mis):
+    """Журнал звонка: у реплики пациента — уверенность распознавания (регистратор видит «Распознано 82%»)."""
+    r = await dialog.handle(None, "")
+    r = await dialog.handle(r.session_id, "запишите к терапевту", asr_confidence=0.82)
+    line = [x for x in dialog.journal.CALLS[r.session_id]["transcript"] if x["speaker"] == "patient"][-1]
+    assert line["confidence"] == 0.82

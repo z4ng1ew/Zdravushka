@@ -110,11 +110,15 @@ def start_call(call_id: str, direction: str = "входящий") -> dict:
     return call
 
 
-def say(call: dict, speaker: str, text: str):
-    """Реплика в расшифровку: speaker = patient / bot / operator."""
+def say(call: dict, speaker: str, text: str, confidence: float | None = None):
+    """Реплика в расшифровку: speaker = patient / bot / operator.
+    confidence — уверенность распознавания фразы пациента (0..1): регистратор видит «✓ Распознано 82%»."""
     if speaker == "patient":
         text = redact(text)
-    call["transcript"].append({"speaker": speaker, "text": text, "at": schedule.now().strftime("%H:%M:%S")})
+    line = {"speaker": speaker, "text": text, "at": schedule.now().strftime("%H:%M:%S")}
+    if confidence is not None:
+        line["confidence"] = round(float(confidence), 2)
+    call["transcript"].append(line)
     call["duration_sec"] = int(schedule.now().timestamp() - call["_t0"])
 
 
