@@ -216,10 +216,32 @@ def pick(s: Session, nl: dict, key: str) -> object | None:
     return None
 
 
+def pick_by_details(s: Session, text: str):
+    """Вариант из списка по названному времени («14.20», «14:20») и/или фамилии врача. Один подходящий — он."""
+    if not s.options:
+        return None
+    low = text.lower()
+    times = {f"{int(h):02d}:{m}" for h, m in re.findall(r"\b(\d{1,2})[.:\s](\d{2})\b", low)}
+    words = re.findall(r"[а-яё]{4,}", low)
+    cands = list(s.options)
+    if times:
+        cands = [o for o in cands if o.scheduled_at[-5:] in times]
+    by_doc = [o for o in cands if any(is_same_doctor(o.doctor_name, w) for w in words)]
+    if by_doc:
+        cands = by_doc
+    elif not times:
+        return None  # ни времени, ни врача из списка — это не выбор варианта
+    return cands[0] if len(cands) == 1 else None
+
+
 async def choose_slot(s: Session, nl: dict, doctors_for_retry) -> ChatResponse | None:
     """Шаг выбора времени: номер варианта → подтверждение; новый день/время → новый поиск."""
+    # Пациент назвал сам вариант — время и/или врача из списка («в пятницу в 14.20, врач Рябинин»):
+    # выбираем его, а не ищем заново (живой звонок 28.10: такой ответ дважды запускал новый поиск)
+    chosen = pick_by_details(s, s.text)
     # Назван новый день («29 октября») — это новый поиск, даже если модель увидела в фразе «номер»
-    chosen = None if (nl["date"] or nl["part_of_day"]) else pick(s, nl, "options")
+    if not chosen:
+        chosen = None if (nl["date"] or nl["part_of_day"]) else pick(s, nl, "options")
     if chosen:
         s.chosen = chosen
         s.step = "confirm"

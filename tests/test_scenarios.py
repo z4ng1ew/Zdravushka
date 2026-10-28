@@ -1321,3 +1321,14 @@ async def test_aga_is_yes(mis):
     """Живой звонок 28.10: «Ага.» на «Верно?» — переспрашивал."""
     r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "1", "Ага.")
     assert "записаны" in r.reply
+
+
+
+async def test_choose_option_by_time_and_doctor(mis):
+    """Живой звонок 28.10: «Давайте в пятницу 30 октября в 14.20, врач Рябин…» — запускало новый поиск."""
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990")
+    o = r.options[2]
+    hhmm = o.scheduled_at[-5:].replace(":", ".")
+    surname = o.doctor_name.split()[0][:-1]
+    r2 = await dialog.handle(r.session_id, f"Давайте в {hhmm}, врач {surname}")
+    assert "Записываю" in r2.reply and dialog.SESSIONS[r.session_id].chosen.scheduled_at == o.scheduled_at
