@@ -1441,3 +1441,13 @@ async def test_paid_specialist_price(mis):
 async def test_paid_booking_intent_goes_to_price_first(mis):
     r = await talk("Можно платно записаться к кардиологу?")
     assert r.reply == "Приём врача-специалиста стоит тысячу восемьсот рублей. Записать вас?"
+
+
+async def test_paid_choice_before_identity_is_kept(mis):
+    """Живой звонок 28.10: выбрали «первый» до ФИО — после ФИО ассистент спросил вариант второй раз."""
+    r = await talk("Сколько стоит УЗИ щитовидки?", "да", "первый")
+    assert r.reply.startswith("Хорошо, ") and "ноль" in r.reply and "фамилию" in r.reply
+    r = await talk("Сколько стоит УЗИ щитовидки?", "да", "первый", "Козлов Андрей Петрович 10.10.1990")
+    assert r.reply.startswith("Спасибо, Андрей Петрович. Записываю: врач") and r.reply.endswith("Верно?")
+    r = await talk("Сколько стоит УЗИ щитовидки?", "да", "первый", "Козлов Андрей Петрович 10.10.1990", "да")
+    assert "записаны" in r.reply and len(mis.visits) == 1

@@ -4,7 +4,7 @@ from app import prices, schedule
 from app.dialog.mis import BOOKING_LOCK
 from app.dialog.common import reply, task_done
 from app.dialog.mis import busy_slots, cancel_visit, create_visit, doctors_for
-from app.dialog.steps import (PARENT_RE, age_specialty, for_child, genitive, choose_slot, fits_age, is_same_doctor, need_identity, offer_slots,
+from app.dialog.steps import (PARENT_RE, pick, pick_by_details, age_specialty, for_child, genitive, choose_slot, fits_age, is_same_doctor, need_identity, offer_slots,
                                patient_age, room, wanted_specialty)
 from app.models import ChatResponse
 from app.dialog.session import Session
@@ -46,6 +46,14 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         resp.reply = (resp.reply.replace(" Какой вариант удобен?", "")
                       + " Для записи назовите, пожалуйста, фамилию, имя, отчество и дату рождения.")
         return resp
+    # Живой звонок 28.10: вариант выбрали сразу после списка («первый…»), до ФИО — запоминаем выбор,
+    # иначе после ФИО ассистент спрашивал «Какой вариант удобен?» второй раз
+    if paid and s.options and not s.client and s.step == "identity" and not (nl["last_name"] or nl["birth_date"]):
+        chosen = pick_by_details(s, s.text) or pick(s, nl, "options")
+        if chosen:
+            s.chosen = chosen
+            return reply(s, f"Хорошо, {chosen.spoken}. Для записи назовите, пожалуйста, фамилию, имя, "
+                            "отчество и дату рождения.")
     if (r := await need_identity(s)):
         return r
     age = patient_age(s)
@@ -82,6 +90,12 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         if any(not fits_age(d, age) for d in doctors if d["id"] in {o.doctor_id for o in s.options}):
             s.options = []
             return await offer_slots(s, doctors)
+        if s.chosen and s.chosen in s.options:  # вариант уже выбран до ФИО — сразу подтверждение
+            s.step = "confirm"
+            first, middle = c.get("first_name"), c.get("middle_name")
+            o = s.chosen
+            return reply(s, f"Спасибо{', ' + first + ' ' + middle if first and middle else ''}. Записываю: врач "
+                            f"{o.doctor_name}, {o.spoken}{room(o.doctor_name)}. Верно?", booking=o)
         s.step = "choose_slot"
         if not (nl["choice"] or nl["date"] or nl["part_of_day"]):
             first, middle = c.get("first_name"), c.get("middle_name")
