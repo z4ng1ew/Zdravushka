@@ -708,9 +708,38 @@ def test_journal_redacts_personal_data_in_any_step():
 async def test_minor_is_booked_to_children_doctor(mis):
     """Найдено на живом звонке: 17-летнего записали к врачу «Взрослые 18+»."""
     year = dialog_now_year() - 10
-    r = await talk("запишите к офтальмологу", f"Козлов Андрей Петрович 10.10.{year}")
+    r = await talk("запишите к офтальмологу", f"Козлов Андрей Петрович 10.10.{year}", "да")
     assert r.options and all("Детский" in o.specialty or o.specialty == "Педиатр" for o in r.options)
     assert "восемнадцати" in r.reply
+
+
+async def test_child_booking_follows_regulation(mis):
+    """Пример диалога регламента: «записать дочку к педиатру» → «…дату рождения ребёнка» → «Вы мама Алисы?»
+    → варианты педиатров → «возьмите полис ребёнка и свой паспорт» (живой звонок 28.10)."""
+    year = dialog_now_year() - 7
+    r = await talk("Мне нужно записать дочку к педиатру.")
+    assert r.reply.endswith("дату рождения ребёнка.")
+    r = await talk("Мне нужно записать дочку к педиатру.", f"Смирнова Алиса Дмитриевна 07.04.{year}")
+    assert r.reply == "Спасибо. Вы мама Алисы?"
+    r = await talk("Мне нужно записать дочку к педиатру.", f"Смирнова Алиса Дмитриевна 07.04.{year}", "Да.")
+    assert r.options and all(o.specialty == "Педиатр" for o in r.options) and not r.reply.startswith("Спасибо, Алиса")
+    r = await talk("Мне нужно записать дочку к педиатру.", f"Смирнова Алиса Дмитриевна 07.04.{year}", "Да.",
+                   "первый", "да")
+    assert "полис ребёнка и свой паспорт" in r.reply
+
+
+async def test_child_caller_not_parent(mis):
+    year = dialog_now_year() - 7
+    r = await talk("запишите сына к педиатру", f"Козлов Андрей Петрович 10.10.{year}", "нет")
+    assert "законный представитель" in r.reply and "Кем вы приходитесь" in r.reply
+    r = await talk("запишите сына к педиатру", f"Козлов Андрей Петрович 10.10.{year}", "нет", "я бабушка")
+    assert r.options
+
+
+def test_genitive_names():
+    from app.dialog.steps import genitive
+    assert [genitive(n) for n in ("Алиса", "Ольга", "Мария", "Андрей", "Пётр", "Иван")] == \
+        ["Алисы", "Ольги", "Марии", "Андрея", "Петра", "Ивана"]
 
 
 async def test_adult_is_not_booked_to_pediatrician(mis):

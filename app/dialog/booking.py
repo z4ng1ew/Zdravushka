@@ -4,7 +4,7 @@ from app import schedule
 from app.dialog.mis import BOOKING_LOCK
 from app.dialog.common import reply, task_done
 from app.dialog.mis import busy_slots, cancel_visit, create_visit, doctors_for
-from app.dialog.steps import (age_specialty, choose_slot, fits_age, is_same_doctor, need_identity, offer_slots,
+from app.dialog.steps import (PARENT_RE, age_specialty, for_child, genitive, choose_slot, fits_age, is_same_doctor, need_identity, offer_slots,
                                patient_age, room, wanted_specialty)
 from app.models import ChatResponse
 from app.dialog.session import Session
@@ -30,9 +30,25 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         chosen_docs = [d for d in doctors if is_same_doctor(d["full_name"], c["doctor_name"])]
         if chosen_docs:
             doctors = chosen_docs
+    for_child(s)  # «записать дочку» — запоминаем до вопроса о ФИО
     if (r := await need_identity(s)):
         return r
     age = patient_age(s)
+    # Регламент (пример С-01 для ребёнка): после МИС — «Спасибо. Вы мама Алисы?»
+    if age is not None and age < 18 and not c.get("_parent_ok"):
+        name = genitive((s.client or {}).get("first_name") or c.get("first_name") or "ребёнка")
+        if s.step == "parent":
+            if PARENT_RE.search(s.text) or c.get("_parent_asked_who"):
+                c["_parent_ok"] = True
+                c["representative"] = s.text[:60]
+                s.step = "start"
+            else:  # «нет» — уточняем, кем приходится: записывает законный представитель
+                c["_parent_asked_who"] = True
+                return reply(s, f"Записать ребёнка может законный представитель. Кем вы приходитесь {name[:-1] + 'е' if name.endswith(('ы', 'и')) else 'ребёнку'}?")
+        else:
+            s.step = "parent"
+            return reply(s, f"Спасибо. Вы мама {name}?",
+                         explanation="Пациенту нет 18 лет — уточняем, что звонит законный представитель.")
     note = ""
     if not any(fits_age(d, age) for d in doctors) and (spec := age_specialty(c["specialty"], age)):
         who = "Пациенту нет восемнадцати лет" if age < 18 else "Педиатр принимает только детей"
@@ -72,7 +88,9 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
                 await cancel_visit(s, old, notify=False)
                 extra = " Прежняя запись отменена."
             return task_done(s, f"Готово, вы записаны {o.spoken}{room(o.doctor_name)}.{extra} "
-                                 "SMS с деталями придёт на этот номер. Возьмите паспорт и полис ОМС. "
+                                 "SMS с деталями придёт на этот номер. "
+                                 + ("На приём возьмите полис ребёнка и свой паспорт. " if c.get("_parent_ok")
+                                    else "Возьмите паспорт и полис ОМС. ") +
                                  "Накануне придёт напоминание.", "записан", booking=done)
         if nl["answer"] == "no" or nl["date"] or nl["part_of_day"]:
             return await offer_slots(s, doctors)
@@ -81,7 +99,8 @@ async def task_booking(s: Session, nl: dict) -> ChatResponse:
         resp = await offer_slots(s, doctors)
         # Пример диалога С-01: «Спасибо, Ольга Викторовна. … Ближайшее время: …»
         first, middle = s.fields.get("first_name"), s.fields.get("middle_name")
-        thanks = f"Спасибо, {first} {middle}. " if first and middle and not note and not s.options_shown else ""
+        thanks = (f"Спасибо, {first} {middle}. " if first and middle and not note and not s.options_shown
+                  and not c.get("_parent_ok") else "")  # за ребёнка «Спасибо» уже сказали в «Вы мама …?»
         s.options_shown = True
         resp.reply = thanks + note + resp.reply
         return resp

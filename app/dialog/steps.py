@@ -90,6 +90,35 @@ def age_specialty(specialty: str, age: int | None) -> str | None:
     return "Педиатр"
 
 
+# ---------- Звонят за ребёнка (пример диалога регламента РГ-ТЕЛ-01: «записать дочку к педиатру») ----------
+# Живой звонок 28.10: ассистент спросил ФИО «пациента» и не уточнил, кто звонит. По регламенту:
+# «Назовите … дату рождения ребёнка» → МИС → «Спасибо. Вы мама Алисы?» → запись → «возьмите полис
+# ребёнка и свой паспорт». Тесты: test_child_booking_follows_regulation, test_child_caller_not_parent.
+_CHILD_RE = re.compile(r"\b(доч\w*|сын\w*|ребен\w*|ребён\w*|дет\w*|внук\w*|внучк\w*|малыш\w*)\b")
+PARENT_RE = re.compile(r"\b(да|ага|угу|мама|мать|папа|отец|опекун\w*|бабушка|дедушка|законн\w*)\b")
+
+
+def for_child(s: Session) -> bool:
+    """Звонят за ребёнка: так сказали в этом звонке или просят педиатра."""
+    if _CHILD_RE.search(s.text or "") or (s.fields.get("specialty") or "").lower().startswith(("педиатр", "детск")):
+        s.fields["_for_child"] = True
+    return bool(s.fields.get("_for_child"))
+
+
+def genitive(name: str) -> str:
+    """Имя в родительном падеже для вопроса «Вы мама Алисы?»: Алиса → Алисы, Ольга → Ольги, Пётр → Петра."""
+    low = name.lower()
+    if low.endswith("я") or low.endswith("ия"):
+        return name[:-1] + "и"
+    if low.endswith("а"):
+        return name[:-1] + ("и" if low[-2:-1] in "гкхжшчщ" else "ы")
+    if low.endswith(("й", "ь")):
+        return name[:-1] + "я"
+    if low == "пётр" or low == "петр":
+        return "Петра"
+    return name + "а"
+
+
 _PATRONYMIC_END = ("ич", "вна", "чна", "ична", "оглы", "кызы")  # «Ильич», «Петрович», «Кузьминична»
 
 
@@ -130,6 +159,8 @@ async def need_identity(s: Session, create: bool = True) -> ChatResponse | None:
         s.step = "identity"
         if c.get("birth_date") or c.get("last_name"):  # часть уже назвали — просим только недостающее
             return reply(s, "Спасибо. Теперь назовите фамилию и имя пациента полностью.")
+        if for_child(s):  # пример диалога регламента: «…и дату рождения ребёнка»
+            return reply(s, "Хорошо. Назовите, пожалуйста, фамилию, имя, отчество и дату рождения ребёнка.")
         return reply(s, "Хорошо. Назовите, пожалуйста, фамилию, имя, отчество и дату рождения.")
     # Полное ФИО (по требованию заказчика на живой проверке): отчество спрашиваем отдельно,
     # если его не назвали; нет отчества — пациент говорит «нет», и это фиксируется.
