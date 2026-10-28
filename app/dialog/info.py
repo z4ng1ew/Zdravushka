@@ -14,6 +14,8 @@ async def task_schedule_info(s: Session, nl: dict) -> ChatResponse:
     """С-07. Когда принимает врач. Идентификация не нужна."""
     c = s.fields
     s.call["intent"] = "График врача"
+    if s.step == "schedule_offer" and (r := await schedule_offer(s, nl)):
+        return r
     docs = []
     if c.get("doctor_name"):
         docs = [d for d in schedule.demo_doctors() if is_same_doctor(d["full_name"], c["doctor_name"])]
@@ -24,8 +26,46 @@ async def task_schedule_info(s: Session, nl: dict) -> ChatResponse:
     if not docs:
         s.step = "specialty"
         return reply(s, "Какой врач вас интересует? Назовите фамилию или специальность.")
-    lines = [f"{d['full_name']}: {schedule.weekly_text(d['full_name'])}" for d in docs[:3]]
-    return task_done(s, "График приёма. " + "; ".join(lines) + ". Если нужно, могу записать к этому врачу.", "справка")
+    # Регламент С-07: «Хирурги принимают каждый будний день. Волков — с восьми до четырнадцати, Никитина —
+    # с четырнадцати до двадцати, кабинет сто двенадцать. Записать вас?» — фамилии, часы и кабинет словами
+    docs = docs[:3]
+    names = [d["full_name"] for d in docs]
+    every = all(schedule.works_every_weekday(n) for n in names)
+    head = ""
+    if every and c.get("specialty") and len(docs) > 1 and not c["specialty"].startswith("Врач"):
+        head = f"{_plural(c['specialty'])} принимают каждый будний день. "
+    if schedule.uses_shifts(names):
+        head += "Утром — с восьми до четырнадцати, вечером — с четырнадцати до двадцати. "
+    lines = []
+    for n in names:
+        cab = (schedule.excel_doctor(n) or {}).get("cabinet")
+        lines.append(f"{n.split()[0]} — {schedule.weekly_spoken(n) or 'по расписанию'}"
+                     + (f", кабинет {schedule.cabinet_words(cab)}" if cab else ""))
+    text = head + "; ".join(lines) + "."
+    s.step = "schedule_offer"
+    s.fields["_schedule_doctor"] = docs[0]["full_name"] if len(docs) == 1 else None
+    return reply(s, text + " Записать вас?", source="расписание поликлиники",
+                 explanation="График врачей из расписания поликлиники (регламент С-07).")
+
+
+def _plural(specialty: str) -> str:
+    """Хирург → Хирурги, Терапевт → Терапевты, Лор (отоларинголог) → Лор-врачи."""
+    word = specialty.split()[0]
+    return {"Лор": "Лор-врачи"}.get(word, word + ("и" if word[-1] in "гкх" else "ы"))
+
+
+async def schedule_offer(s: Session, nl: dict) -> ChatResponse | None:
+    """«Записать вас?» после графика: «да» — запись к этому врачу / специальности (С-01)."""
+    from app.dialog.booking import task_booking
+    if nl["answer"] == "yes" or nl["date"] or nl["part_of_day"]:
+        doc = s.fields.pop("_schedule_doctor", None)
+        if doc:
+            s.fields["doctor_name"] = doc
+        s.task, s.step = "booking", "start"
+        return await task_booking(s, nl)
+    if nl["answer"] == "no":
+        return task_done(s, "Хорошо.", "справка")
+    return None
 
 
 async def task_info(s: Session, nl: dict) -> ChatResponse:

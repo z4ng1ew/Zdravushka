@@ -1,4 +1,5 @@
 import re
+import re
 # Автотесты сценариев Здравушки, включая пограничные случаи (edge cases).
 # Стенд «Регистратура» подменяется заглушкой в памяти — тесты не трогают настоящий МИС и не тратят лимит.
 # Нейросеть не нужна: работает запасной разбор фраз (как при сбое LLM).
@@ -860,7 +861,7 @@ async def test_misheard_doctor_surname_and_specialty(mis):
     r = await talk("когда принимает Верещакин?")
     assert "Верещагин" in r.reply
     r = await talk("когда принимает Иксов?", "автальмолог")
-    assert "График" in r.reply
+    assert "Офтальмологи принимают" in r.reply or "кабинет" in r.reply
 
 
 async def test_cancel_for_another_person_asks_identity_again(mis):
@@ -1486,3 +1487,19 @@ def day_word(option) -> str:
     from datetime import datetime
     names = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
     return names[datetime.strptime(option.scheduled_at[:10], "%d.%m.%Y").weekday()]
+
+
+
+async def test_schedule_spoken_like_regulation(mis):
+    """Живой звонок 28.10: «Пн 08:00–14:00 …» синтез читал как «14-020-027-014». Регламент С-07: часы словами."""
+    r = await talk("Когда принимает хирург?")
+    assert not re.search(r"\d", r.reply), r.reply
+    assert "с восьми до четырнадцати" in r.reply and "утром" in r.reply and "кабинет" in r.reply and r.reply.endswith("Записать вас?")
+    r = await talk("Когда принимает хирург?", "да")
+    assert "фамилию" in r.reply
+
+
+def test_schedule_words():
+    from app import schedule
+    assert schedule.cabinet_words("112") == "сто двенадцать" and schedule.cabinet_words("203") == "двести три"
+    assert schedule._hours_words("09:00–13:00, 14:00–18:00") == "с девяти до восемнадцати"

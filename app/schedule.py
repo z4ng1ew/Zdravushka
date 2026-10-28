@@ -5,6 +5,7 @@
 # Стенд не хранит расписание и не проверяет занятость, поэтому свободное время
 # = свободно по Excel И нет нашей записи в стенде на это время.
 import json
+import re
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -159,6 +160,90 @@ def weekly_text(full_name: str) -> str | None:
     if not doc or not doc["weekly"]:
         return None
     return ", ".join(f"{d} {h}" for d, h in doc["weekly"].items())
+
+
+# ---------- График словами (регламент С-07, живой звонок 28.10) ----------
+# Было: «Пн 08:00–14:00, Вт 14:00–20:00 …» — синтез читал это как «14-020-027-014…». По примеру
+# регламента: «Хирурги принимают каждый будний день. Волков — с восьми до четырнадцати, …, кабинет сто двенадцать».
+
+_DAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+_DAYS_DAT = {"Пн": "понедельникам", "Вт": "вторникам", "Ср": "средам", "Чт": "четвергам", "Пт": "пятницам",
+             "Сб": "субботам", "Вс": "воскресеньям"}
+_HOURS_GEN = {7: "семи", 8: "восьми", 9: "девяти", 10: "десяти", 11: "одиннадцати", 12: "двенадцати",
+              13: "тринадцати", 14: "четырнадцати", 15: "пятнадцати", 16: "шестнадцати", 17: "семнадцати",
+              18: "восемнадцати", 19: "девятнадцати", 20: "двадцати", 21: "двадцати одного"}
+_HUNDREDS = ["", "сто", "двести", "триста", "четыреста", "пятьсот", "шестьсот", "семьсот", "восемьсот", "девятьсот"]
+_TENS_ALL = {2: "двадцать", 3: "тридцать", 4: "сорок", 5: "пятьдесят", 6: "шестьдесят", 7: "семьдесят",
+             8: "восемьдесят", 9: "девяносто"}
+
+
+def cabinet_words(n: str) -> str:
+    """«112» → «сто двенадцать»: номер кабинета словами (цифры синтез произносит невнятно)."""
+    if not str(n).isdigit() or not 0 < int(n) < 1000:
+        return str(n)
+    h, rest = divmod(int(n), 100)
+    parts = [_HUNDREDS[h]] if h else []
+    if rest >= 20:
+        tens, units = divmod(rest, 10)
+        parts += [_TENS_ALL[tens]] + ([UNITS[units]] if units else [])
+    elif rest:
+        parts.append(UNITS[rest])
+    return " ".join(parts)
+
+
+def _clock_gen(hhmm: str) -> str:
+    h, m = (int(x) for x in hhmm.split(":"))
+    return _HOURS_GEN.get(h, str(h)) + (f" {number_words(m)}" if m else "")
+
+
+def _hours_words(hours: str) -> str:
+    """«09:00–13:00, 14:00–18:00» → «с девяти до восемнадцати» (обед не называем — как в регламенте)."""
+    times = re.findall(r"\d{1,2}:\d{2}", hours)
+    return f"с {_clock_gen(times[0])} до {_clock_gen(times[-1])}" if len(times) >= 2 else hours
+
+
+SHIFTS = {"с восьми до четырнадцати": "утром", "с четырнадцати до двадцати": "вечером"}
+_DAYS_ACC = {"Пн": "понедельник", "Вт": "вторник", "Ср": "среду", "Чт": "четверг", "Пт": "пятницу",
+             "Сб": "субботу", "Вс": "воскресенье"}
+
+
+def _days_words(days: list[str]) -> str:
+    if days == _DAYS[:5]:
+        return "каждый будний день"
+    names = [_DAYS_ACC[d] for d in days]
+    first = "во" if days[0] == "Вт" else "в"
+    return f"{first} " + (", ".join(names[:-1]) + " и " + names[-1] if len(names) > 1 else names[0])
+
+
+def _groups(full_name: str) -> dict[str, list[str]]:
+    doc = excel_doctor(full_name)
+    groups: dict[str, list[str]] = {}
+    for day in _DAYS:
+        if doc and day in (doc.get("weekly") or {}):
+            groups.setdefault(_hours_words(doc["weekly"][day]), []).append(day)
+    return groups
+
+
+def weekly_spoken(full_name: str, with_days: bool = True) -> str | None:
+    """Коротко и словами: «утром в понедельник, среду и пятницу, вечером во вторник и четверг» или
+    «каждый будний день с девяти до восемнадцати». Утро/вечер — смены 8–14 и 14–20 (называем их один раз)."""
+    groups = _groups(full_name)
+    if not groups:
+        return None
+    if len(groups) == 1:
+        hours, days = next(iter(groups.items()))
+        shift = SHIFTS.get(hours, hours)
+        return shift if not with_days else f"{_days_words(days)} {shift}"
+    return ", ".join(f"{SHIFTS.get(h, h)} {_days_words(d)}" for h, d in groups.items())
+
+
+def uses_shifts(full_names: list[str]) -> bool:
+    return any(h in SHIFTS for n in full_names for h in _groups(n))
+
+
+def works_every_weekday(full_name: str) -> bool:
+    doc = excel_doctor(full_name) or {}
+    return list((doc.get("weekly") or {}).keys()) == _DAYS[:5]
 
 
 # ---------- Произношение дат и времени для синтеза речи ----------
