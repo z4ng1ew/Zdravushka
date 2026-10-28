@@ -1451,3 +1451,12 @@ async def test_paid_choice_before_identity_is_kept(mis):
     assert r.reply.startswith("Спасибо, Андрей Петрович. Записываю: врач") and r.reply.endswith("Верно?")
     r = await talk("Сколько стоит УЗИ щитовидки?", "да", "первый", "Козлов Андрей Петрович 10.10.1990", "да")
     assert "записаны" in r.reply and len(mis.visits) == 1
+
+
+async def test_before_lunch_replaces_after_lunch(mis):
+    """Живой звонок 28.10: «после обеда» → «а до обеда в субботу?» — предлагали 14:00."""
+    from app import nlu
+    assert nlu.part_of_day("а есть вариант до обеда в субботу") == "до обеда"
+    r = await talk("запишите к терапевту", "Козлов Андрей Петрович 10.10.1990", "А после обеда есть что-нибудь?",
+                   "А есть вариант до обеда в субботу?")
+    assert r.options and all(int(o.scheduled_at[-5:-3]) < 13 for o in r.options)
