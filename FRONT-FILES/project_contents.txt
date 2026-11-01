@@ -1,0 +1,2858 @@
+===== ДЕРЕВО ПРОЕКТА =====
+.
+├── app
+│   ├── staff
+│   │   ├── calls
+│   │   │   └── page.tsx
+│   │   ├── errors
+│   │   │   └── page.tsx
+│   │   ├── live
+│   │   │   └── page.tsx
+│   │   ├── operator
+│   │   │   └── page.tsx
+│   │   ├── reminders
+│   │   │   └── page.tsx
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── globals.css
+│   ├── icon.png
+│   ├── layout.tsx
+│   └── page.tsx
+├── components
+│   ├── Brand.tsx
+│   ├── Bubble.tsx
+│   ├── ErrorCode.tsx
+│   ├── Icons.tsx
+│   ├── Mascot.tsx
+│   ├── StaffNav.tsx
+│   ├── Tags.tsx
+│   └── Transcript.tsx
+├── lib
+│   ├── api.ts
+│   ├── baseline.ts
+│   ├── chat.ts
+│   ├── errors.ts
+│   ├── live.ts
+│   ├── types.ts
+│   └── voice.ts
+├── public
+│   └── img
+│       ├── icons
+│       │   ├── calendar.png
+│       │   ├── chat.png
+│       │   ├── check.png
+│       │   ├── clock.png
+│       │   ├── doc.png
+│       │   ├── dot.png
+│       │   ├── hangup.png
+│       │   ├── record.png
+│       │   └── refresh.png
+│       ├── avatar-patient.png
+│       ├── avatar-staff.png
+│       ├── bot.png
+│       ├── logo.png
+│       ├── mascot-circle.png
+│       ├── mic-button.png
+│       ├── mic-flat.png
+│       ├── mic-glow.png
+│       └── zdravushka.png
+├── scripts
+│   └── export-static.mjs
+├── cheat-sheet.md
+├── .gitignore
+├── next.config.mjs
+├── package.json
+├── project_contents.txt
+├── README.md
+├── save_project.sh
+└── tsconfig.json
+
+
+===== СОДЕРЖИМОЕ ФАЙЛОВ =====
+
+===== app/globals.css =====
+/* ClinicAI — светлая «медицинская» тема: голубой градиент, мягкие тени, скругления */
+:root {
+  --bg1: #eaf3ff;
+  --bg2: #dbe9ff;
+  --card: rgba(255, 255, 255, 0.82);
+  --card-solid: #ffffff;
+  --text: #1a2a4a;
+  --muted: #7286a6;
+  --line: #dbe6f6;
+  --blue: #1f6cf0;
+  --blue-2: #2f8bff;
+  --blue-soft: #e8f1ff;
+  --sky: #d7ecff;
+  --ok: #1e9b62;
+  --ok-soft: #e5f6ec;
+  --warn: #c27410;
+  --warn-soft: #fff3df;
+  --bad: #e03a48;
+  --bad-soft: #fde9eb;
+  --radius: 22px;
+  --shadow: 0 10px 30px rgba(43, 98, 186, 0.12), 0 2px 6px rgba(43, 98, 186, 0.06);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { background: #dbe9ff; }
+
+body {
+  color: var(--text);
+  font-family: "Nunito", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, #cfe3ff 0%, transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, #d8ecff 0%, transparent 60%),
+    linear-gradient(180deg, var(--bg1), var(--bg2));
+  background-attachment: fixed;
+}
+
+/* лёгкие «медицинские крестики» на фоне */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><path d='M70 40h20v30h30v20H90v30H70V90H40V70h30z' fill='%23c6dcfb'/></svg>");
+  background-size: 260px 260px;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font: inherit; }
+
+.page { position: relative; max-width: 1240px; margin: 0 auto; padding: 14px 18px 40px; }
+
+/* ---------- шапка ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 22px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f9fbff, #e9f0fb);
+  box-shadow: var(--shadow);
+  border: 1px solid #ffffff;
+  margin-bottom: 14px;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-name {
+  font-weight: 800; font-size: 24px; letter-spacing: -0.02em; line-height: 1.1;
+  background: linear-gradient(90deg, #1e5fe0, #2fa5ff);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.brand-sub { font-size: 12px; color: var(--muted); }
+
+.topbar-right { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.live { display: inline-flex; align-items: center; gap: 8px; color: var(--blue); font-weight: 600; font-size: 14px; }
+.live i { width: 12px; height: 12px; border-radius: 50%; background: #9db6dc; box-shadow: 0 0 0 4px #dfe9f8; }
+.live.on i { background: var(--blue); box-shadow: 0 0 0 4px #cfe0ff; animation: blink 1.4s infinite; }
+.timer { color: var(--blue); font-variant-numeric: tabular-nums; font-weight: 600; }
+.pill { padding: 10px 26px; border-radius: 999px; font-weight: 700; font-size: 14px; }
+.pill-blue { background: linear-gradient(180deg, var(--blue-2), var(--blue)); color: #fff; box-shadow: 0 6px 16px rgba(31,108,240,.35); }
+.pill-ghost { background: #fff; color: var(--muted); border: 1px solid var(--line); }
+.link-staff { font-size: 13px; color: var(--blue); font-weight: 600; white-space: nowrap; }
+.link-staff:hover { text-decoration: underline; }
+
+@keyframes blink { 50% { opacity: 0.35; } }
+
+/* ---------- панели ---------- */
+.panel {
+  background: var(--card);
+  backdrop-filter: blur(6px);
+  border: 1px solid #ffffff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px 26px;
+}
+.panel + .panel { margin-top: 14px; }
+
+.section-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 18px; font-weight: 800; color: #1d3b6e; margin: 0 0 16px;
+}
+.section-title.right { justify-content: flex-end; }
+.section-title svg { color: #36507c; }
+
+/* ---------- экран звонка ---------- */
+.call-panel { display: grid; grid-template-columns: 380px 1fr; gap: 26px; }
+.call-left { display: flex; flex-direction: column; align-items: center; }
+.greeting { align-self: stretch; display: flex; align-items: center; gap: 4px; }
+.greeting p { color: var(--blue); font-size: 13px; font-weight: 600; margin: 0; max-width: 160px; }
+.mascot-ring {
+  width: 132px; height: 132px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: radial-gradient(circle, #ffffff 0 55%, #9cc4ff 56% 62%, #e2eeff 63%);
+}
+
+.mic {
+  margin-top: 34px;
+  width: 250px; height: 250px; border-radius: 50%; border: 0; cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+  background: radial-gradient(circle, #a9cbff 0 58%, #d3e4ff 59% 78%, #e8f1ff 79%);
+  transition: transform .2s;
+}
+.mic:hover { transform: scale(1.02); }
+.mic-core {
+  width: 128px; height: 128px; border-radius: 50%; display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 35% 30%, #4ea6ff, #1563e8 70%);
+  box-shadow: 0 0 0 18px #6aa4f7, 0 12px 28px rgba(21, 99, 232, .45);
+}
+.mic-on { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(47,139,255,.35); }
+  50% { box-shadow: 0 0 0 26px rgba(47,139,255,0); }
+}
+.mic-status { margin-top: 22px; color: var(--blue); font-weight: 700; font-size: 16px; min-height: 24px; }
+
+.call-buttons { display: flex; flex-direction: column; gap: 14px; margin-top: 26px; width: 100%; max-width: 280px; }
+.btn-big {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 15px 18px; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 15px;
+}
+.btn-big:disabled { opacity: .45; cursor: default; }
+.btn-red { background: linear-gradient(180deg, #ef4f5c, var(--bad)); color: #fff; border: 0; box-shadow: 0 6px 14px rgba(224,58,72,.3); }
+.btn-outline { background: #fff; color: var(--blue); border: 1.5px solid #b9d0f3; }
+
+.demo-picker { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; font-size: 12px; color: var(--muted); }
+.chip { border: 1px solid var(--line); background: #fff; color: var(--text); padding: 5px 12px; border-radius: 999px; cursor: pointer; font-size: 12px; }
+.chip-on { background: var(--blue-soft); border-color: #9cc0f7; color: var(--blue); font-weight: 700; }
+.chip:disabled { cursor: default; }
+
+/* ---------- диалог ---------- */
+.call-right { display: flex; flex-direction: column; min-width: 0; }
+.dialog { display: flex; flex-direction: column; gap: 14px; height: 560px; overflow-y: auto; padding: 4px 6px 4px 0; }
+.dialog-compact { height: auto; max-height: 460px; gap: 10px; }
+.dialog-empty { margin: auto; color: var(--muted); text-align: center; max-width: 280px; }
+.row { display: flex; align-items: flex-start; gap: 10px; }
+.row.patient { justify-content: flex-end; }
+.bubble-wrap { max-width: 72%; }
+.bubble {
+  padding: 11px 18px; border-radius: 18px; font-size: 14px;
+  border: 1.5px solid #8fb6ef; background: #f4f8ff;
+}
+.row.patient .bubble { background: #e3f5ff; border-color: #9fd2f5; }
+.meta { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: #6f8fc0; padding: 2px 14px 0; }
+.row.bot .meta { justify-content: flex-start; }
+.recog { color: #3d86e0; }
+.ava { flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; }
+.ava-bot { background: radial-gradient(circle, #ffffff 0 55%, #cfe2ff 56%); border: 2px solid #8fb6ef; }
+.ava-user { background: radial-gradient(circle at 40% 30%, #e7f6ff, #bfe5fb); color: #2b8fe3; }
+.ava-sm { width: 34px; height: 34px; }
+.typing-dots { display: flex; gap: 5px; padding: 6px 60px; }
+.typing-dots i { width: 7px; height: 7px; border-radius: 50%; background: #8fb6ef; animation: dot 1.2s infinite; }
+.typing-dots i:nth-child(2) { animation-delay: .2s; }
+.typing-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+.ask {
+  margin-top: 14px; display: flex; align-items: center; gap: 10px;
+  border: 1.5px solid #c6d9f5; background: #fff; border-radius: 999px; padding: 10px 10px 10px 20px; color: #8ea4c6;
+}
+.ask input { flex: 1; border: 0; outline: 0; font: inherit; color: var(--text); background: transparent; }
+.ask button { border: 0; background: var(--blue); color: #fff; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: grid; place-items: center; }
+.ask button:disabled { background: #c6d9f5; cursor: default; }
+
+/* ---------- нижняя панель ---------- */
+.bottom-panel { display: grid; grid-template-columns: 380px 1fr; gap: 26px; align-items: start; }
+.bottom-panel > div .section-title { justify-content: center; }
+
+.understood { background: var(--card-solid); border-radius: 18px; overflow: hidden; box-shadow: 0 4px 14px rgba(43,98,186,.08); }
+.intent-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: linear-gradient(180deg, var(--blue-2), var(--blue)); color: #fff; padding: 6px 6px 6px 22px;
+}
+.intent-bar b { background: #fff; color: var(--blue); padding: 6px 20px; border-radius: 999px; font-size: 13px; }
+.facts { list-style: none; margin: 0; padding: 14px 22px 18px; }
+.facts li { display: flex; gap: 14px; align-items: center; padding: 8px 0; }
+.facts small { display: block; color: var(--muted); font-size: 12px; }
+.facts-empty { color: var(--muted); font-size: 14px; }
+.ok-ico { color: var(--ok); display: grid; place-items: center; }
+.ok-ico.warn { color: var(--warn); }
+
+.record { background: var(--card-solid); border-radius: 18px; padding: 0 0 16px; box-shadow: 0 4px 14px rgba(43,98,186,.08); overflow: hidden; }
+.record-empty { display: flex; align-items: center; gap: 14px; padding: 22px; color: var(--muted); }
+.doctor-head { display: flex; align-items: center; gap: 12px; background: linear-gradient(90deg, #ffffff 0%, var(--sky) 40%); padding: 10px 20px; }
+.doctor-name { flex: 1; text-align: center; }
+.doctor-name b { display: block; font-size: 18px; }
+.doctor-name span { color: var(--muted); }
+.doctor-photo {
+  width: 92px; height: 92px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0;
+  font-size: 28px; font-weight: 800; color: var(--blue);
+  background: linear-gradient(180deg, #f2f8ff, #d5e7ff);
+  border: 5px solid #fff; box-shadow: 0 0 0 4px #7fb0f6;
+}
+.record-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; padding: 18px 26px 6px; }
+.record-grid > div { display: grid; grid-template-columns: 26px 1fr; column-gap: 6px; color: var(--text); }
+.record-grid svg { color: var(--blue); grid-row: span 2; margin-top: 2px; }
+.record-grid small { color: var(--muted); font-size: 12px; }
+.result { display: flex; gap: 14px; align-items: center; margin: 12px 16px 0; padding: 18px 22px; border-radius: 16px; }
+.result b { font-size: 16px; }
+.result div div { font-size: 13px; }
+.result-ok { background: var(--ok-soft); color: #11724a; }
+.result-warn { background: var(--warn-soft); color: #93560a; }
+
+.tech { margin-top: 12px; font-size: 12.5px; background: rgba(255,255,255,.7); border-radius: 14px; padding: 10px 16px; }
+.tech summary { cursor: pointer; color: var(--muted); }
+.tech .stand-line { margin-top: 6px; }
+
+/* ---------- кабинет сотрудника ---------- */
+.tabs { display: flex; gap: 6px; background: #e3ecfa; padding: 5px; border-radius: 999px; flex-wrap: wrap; }
+.tab { padding: 8px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; color: #4a6491; }
+.tab:hover { color: var(--blue); }
+.tab-on { background: #fff; color: var(--blue); box-shadow: 0 2px 8px rgba(43,98,186,.15); }
+.staff-body { padding-top: 6px; }
+
+.page-title { font-size: 26px; font-weight: 800; margin: 8px 0 4px; color: #1d3b6e; }
+.page-sub { color: var(--muted); margin: 0 0 20px; }
+
+.mock-note { background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 8px 14px; font-size: 13px; margin-bottom: 16px; }
+
+.card {
+  background: var(--card); border: 1px solid #fff; border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 20px 22px;
+}
+.card h2 { font-size: 17px; font-weight: 800; color: #1d3b6e; margin: 0 0 14px; }
+.card h2.mt { margin-top: 22px; }
+
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.grid { display: grid; gap: 16px; }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-5 { grid-template-columns: repeat(5, 1fr); }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-queue { grid-template-columns: 1fr 1.2fr; align-items: start; }
+
+.kpi-label { color: var(--muted); font-size: 13px; }
+.kpi-value { font-size: 30px; font-weight: 800; margin: 4px 0 2px; color: #1d3b6e; }
+.kpi-hint { font-size: 13px; color: var(--muted); }
+.kpi-hint b { color: var(--text); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1.5px solid #c6d9f5; background: #fff; color: var(--blue);
+  padding: 9px 18px; border-radius: 12px; font-weight: 700; cursor: pointer;
+}
+.btn:hover { border-color: #9cc0f7; }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn-primary { background: linear-gradient(180deg, var(--blue-2), var(--blue)); border-color: transparent; color: #fff; box-shadow: 0 6px 14px rgba(31,108,240,.28); }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.tag { display: inline-block; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #eef2f8; color: #52688c; white-space: nowrap; }
+.tag-ok { background: var(--ok-soft); color: var(--ok); }
+.tag-warn { background: var(--warn-soft); color: var(--warn); }
+.tag-bad { background: var(--bad-soft); color: var(--bad); }
+.tag-info, .tag-brand { background: var(--blue-soft); color: var(--blue); }
+
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: #f3f8ff; }
+tr.selected td { background: var(--blue-soft); }
+
+select { font: inherit; padding: 8px 12px; border: 1.5px solid #c6d9f5; border-radius: 12px; background: #fff; color: var(--text); }
+
+.bars { display: flex; flex-direction: column; gap: 7px; }
+.bar-row { display: grid; grid-template-columns: 150px 1fr 48px; gap: 10px; align-items: center; font-size: 13px; }
+.bar-track { background: #e7eef9; border-radius: 6px; height: 12px; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(90deg, #7fb6ff, var(--blue)); border-radius: 6px; }
+.bar-fill.warn { background: linear-gradient(90deg, #ffc46b, #f08a24); }
+.bar-num { text-align: right; color: var(--muted); }
+
+.columns { display: flex; align-items: flex-end; gap: 6px; height: 170px; padding-top: 10px; }
+.column { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.column-fill { width: 100%; background: linear-gradient(180deg, #7fb6ff, var(--blue)); border-radius: 6px 6px 2px 2px; min-height: 2px; }
+.column-fill.peak { background: linear-gradient(180deg, #ffc46b, #f08a24); }
+.column-fill.closed { background: linear-gradient(180deg, #ff8a95, var(--bad)); }
+.column-label, .column-value { font-size: 11px; color: var(--muted); }
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 10px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: 8px 12px; font-size: 14px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-weight: 600; }
+
+.stand-log { display: flex; flex-direction: column; gap: 6px; }
+.stand-line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+.stand-note { color: var(--muted); }
+
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.mt { margin-top: 14px; }
+.urgent-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); margin-right: 7px; box-shadow: 0 0 0 3px var(--bad-soft); }
+
+/* ---------- адаптив ---------- */
+@media (max-width: 1050px) {
+  .call-panel, .bottom-panel { grid-template-columns: 1fr; }
+  .grid-4, .grid-5 { grid-template-columns: 1fr 1fr; }
+  .grid-2, .grid-queue { grid-template-columns: 1fr; }
+  .dialog { height: 460px; }
+}
+@media (max-width: 640px) {
+  .page { padding: 10px 10px 30px; }
+  .panel { padding: 18px 16px; }
+  .topbar { padding: 12px 16px; }
+  .topbar-right { gap: 12px; }
+  .mic { width: 200px; height: 200px; }
+  .mic-core { width: 104px; height: 104px; }
+  .bubble-wrap { max-width: 80%; }
+  .grid-4, .grid-5 { grid-template-columns: 1fr; }
+  .bar-row { grid-template-columns: 110px 1fr 40px; }
+  .record-grid { grid-template-columns: 1fr; }
+  .doctor-photo { width: 64px; height: 64px; font-size: 20px; }
+}
+
+/* ---------- участники разговора: свой цвет у каждого ----------
+   ИИ Здравушка — синий, пациент — серый, регистратор — зелёный */
+:root {
+  --ai-bg: #eaf2ff;   --ai-line: #7faaf0;   --ai-text: #1f5fd6;
+  --pt-bg: #f2f4f7;   --pt-line: #c3cbd8;   --pt-text: #5b6b84;
+  --op-bg: #e6f7ee;   --op-line: #6fcf9c;   --op-text: #158a52;
+}
+.row.bot .bubble { background: var(--ai-bg); border-color: var(--ai-line); }
+.row.patient .bubble { background: var(--pt-bg); border-color: var(--pt-line); }
+.row.operator .bubble { background: var(--op-bg); border-color: var(--op-line); }
+.row.operator .meta { justify-content: flex-start; }
+.who { font-size: 11px; font-weight: 700; padding: 0 14px 3px; letter-spacing: .01em; }
+.row.bot .who { color: var(--ai-text); }
+.row.patient .who { color: var(--pt-text); text-align: right; }
+.row.operator .who { color: var(--op-text); }
+.recog { color: var(--pt-text); }
+.ava-user { background: radial-gradient(circle at 40% 30%, #f6f7fa, #d9dee7); color: #6b7a92; }
+.ava-op { background: radial-gradient(circle at 40% 30%, #e9fbf1, #bfead3); color: var(--op-text); border: 2px solid var(--op-line); }
+
+.speaker-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.speaker-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.dot-bot { background: var(--ai-line); }
+.dot-patient { background: var(--pt-line); }
+.dot-op { background: var(--op-line); }
+.dialog-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+
+.pill-green { background: linear-gradient(180deg, #34c27f, #1e9b62); color: #fff; box-shadow: 0 6px 16px rgba(30,155,98,.3); }
+.pill-orange { background: linear-gradient(180deg, #ffb24d, #f08a24); color: #fff; box-shadow: 0 6px 16px rgba(240,138,36,.3); }
+.btn-green { background: #fff; color: var(--op-text); border: 1.5px solid var(--op-line); }
+.btn-green:not(:disabled):hover { background: var(--op-bg); }
+
+.banner { display: flex; align-items: center; gap: 8px; border-radius: 12px; padding: 9px 14px; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.banner-op { background: var(--op-bg); color: var(--op-text); }
+.banner-wait { background: var(--warn-soft); color: var(--warn); }
+
+.mic-op .mic-core { background: radial-gradient(circle at 35% 30%, #4fd795, #17925a 70%); box-shadow: 0 0 0 18px #73d3a2, 0 12px 28px rgba(23,146,90,.4); }
+.mic-op { background: radial-gradient(circle, #b7ebcf 0 58%, #d8f4e5 59% 78%, #ebfaf2 79%); }
+.st-op { color: var(--op-text); }
+.st-wait { color: var(--warn); }
+.result-op { background: var(--op-bg); color: #11724a; }
+
+/* кабинет: живой звонок */
+.live-empty { display: flex; gap: 18px; align-items: center; color: var(--muted); }
+.live-empty b { color: var(--text); font-size: 16px; }
+.live-status { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 14px; margin-bottom: 14px; background: var(--ai-bg); }
+.live-status > div:first-child { display: flex; align-items: center; gap: 12px; }
+.live-status.operator { background: var(--op-bg); }
+.live-status.waiting { background: var(--warn-soft); animation: blink 1.4s infinite; }
+.btn-takeover { background: linear-gradient(180deg, #34c27f, #1e9b62); color: #fff; border-color: transparent; box-shadow: 0 6px 14px rgba(30,155,98,.3); }
+.dialog-live { height: 440px; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.ask-op { border-color: var(--op-line); }
+.ask-op button { background: #1e9b62; }
+
+/* ---------- картинки команды (public/img) ---------- */
+.mascot-img { display: block; object-fit: contain; }
+.mascot-ring { overflow: hidden; }
+.mascot-ring .mascot-img { transform: translateY(4px) scale(1.15); }
+
+/* большой микрофон: вся кнопка — картинка с сиянием */
+.mic { background: none; width: 270px; height: 270px; }
+.mic-img { width: 100%; height: 100%; display: block; transition: filter .3s; }
+.mic-on { animation: none; }
+.mic-on .mic-img { animation: breathe 1.8s ease-in-out infinite; }
+.mic-op .mic-img { filter: hue-rotate(-75deg) saturate(1.15); } /* регистратор на линии — зелёный */
+.mic-op { background: none; }
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
+/* аватар ИИ — робот */
+.ava-bot { background: none; border: 0; }
+.ava-bot img { width: 100%; height: 100%; object-fit: contain; }
+
+/* кнопка голоса в поле ввода */
+.ask { padding-left: 6px; }
+.ask .ask-mic { background: none; width: 40px; height: 40px; padding: 0; }
+.ask .ask-mic img { width: 40px; height: 40px; display: block; }
+.ask .ask-mic:disabled { background: none; opacity: .5; }
+.live-empty img { flex-shrink: 0; }
+.mascot-ring .mascot-img { transform: translateY(2px) scale(1.02); }
+.call-buttons { max-width: 310px; }
+.btn-big { white-space: nowrap; }
+
+/* ================= разгрузка интерфейса ================= */
+
+/* ---------- всплывающие подсказки: data-tip="текст" ---------- */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; z-index: 60;
+  bottom: calc(100% + 8px); left: 50%;
+  transform: translate(-50%, 4px);
+  width: max-content; max-width: 260px;
+  background: #18315c; color: #fff;
+  font-size: 12px; font-weight: 500; line-height: 1.4; text-align: left; letter-spacing: 0; text-transform: none;
+  white-space: normal;
+  padding: 8px 11px; border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(24, 49, 92, .25);
+  opacity: 0; pointer-events: none;
+  transition: opacity .15s ease .25s, transform .15s ease .25s;
+}
+[data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; transform: translate(-50%, 0); }
+[data-tip-pos="bottom"]::after { bottom: auto; top: calc(100% + 8px); transform: translate(-50%, -4px); }
+[data-tip-pos="bottom"]:hover::after { transform: translate(-50%, 0); }
+[data-tip-pos="left"]::after { bottom: auto; left: auto; right: calc(100% + 8px); top: 50%; transform: translate(4px, -50%); }
+[data-tip-pos="left"]:hover::after, [data-tip-pos="left"]:focus-visible::after { transform: translate(0, -50%); }
+.row.patient .who[data-tip]::after, .row.patient .recog[data-tip]::after { left: auto; right: 0; transform: translate(0, 4px); }
+.row.patient .who[data-tip]:hover::after, .row.patient .recog[data-tip]:hover::after { transform: translate(0, 0); }
+.row.bot .who[data-tip]::after, .row.operator .who[data-tip]::after { left: 0; transform: translate(0, 4px); }
+.row.bot .who[data-tip]:hover::after, .row.operator .who[data-tip]:hover::after { transform: translate(0, 0); }
+.greeting[data-tip]::after { left: 0; transform: translate(0, 4px); bottom: auto; top: calc(100% + 4px); }
+.greeting[data-tip]:hover::after { transform: translate(0, 0); }
+.who, .recog { cursor: help; }
+
+.info {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--blue-soft); color: var(--blue); font-size: 11px; font-weight: 800; font-style: normal; cursor: help;
+}
+
+/* ---------- микрофон: заметный и отзывчивый ---------- */
+.mic-wrap { position: relative; margin-top: 30px; display: flex; flex-direction: column; align-items: center; }
+.mic {
+  position: relative; margin: 0; width: 240px; height: 240px; border-radius: 50%;
+  display: grid; place-items: center; background: none; border: 0; padding: 0;
+  cursor: default; -webkit-tap-highlight-color: transparent; outline: none;
+  transition: transform .18s cubic-bezier(.3,1.6,.5,1);
+}
+.mic-img {
+  position: relative; z-index: 2; width: 100%; height: 100%;
+  /* убираем серый ободок картинки — оставляем только голубое сияние */
+  -webkit-mask-image: radial-gradient(circle, #000 52%, transparent 70%);
+  mask-image: radial-gradient(circle, #000 52%, transparent 70%);
+  transition: filter .2s, transform .2s;
+  user-select: none;
+}
+.mic:focus-visible { box-shadow: 0 0 0 4px #fff, 0 0 0 7px var(--blue-2); }
+
+/* ожидание нажатия: волны расходятся, подсказка покачивается */
+.mic-idle .mic { cursor: pointer; }
+.mic-idle .mic:hover { transform: scale(1.06); }
+.mic-idle .mic:hover .mic-img { filter: brightness(1.08) saturate(1.15); }
+.mic-idle .mic:active { transform: scale(.92); transition-duration: .08s; }
+.ring {
+  position: absolute; z-index: 1; inset: 22%; border-radius: 50%;
+  border: 2px solid rgba(47,139,255,.55); opacity: 0; pointer-events: none;
+}
+.mic-idle .ring { animation: ripple 2.4s ease-out infinite; }
+.mic-idle .r2 { animation-delay: .8s; }
+.mic-idle .r3 { animation-delay: 1.6s; }
+@keyframes ripple { 0% { transform: scale(.7); opacity: .9; } 100% { transform: scale(1.65); opacity: 0; } }
+
+.mic-hint {
+  position: absolute; top: -18px; z-index: 3;
+  background: linear-gradient(180deg, var(--blue-2), var(--blue)); color: #fff;
+  font-weight: 700; font-size: 13px; padding: 7px 14px; border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(31,108,240,.35); white-space: nowrap; pointer-events: none;
+  animation: hint-bob 1.6s ease-in-out infinite;
+}
+.mic-hint::after {
+  content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -6px;
+  border: 6px solid transparent; border-bottom: 0; border-top-color: var(--blue);
+}
+@keyframes hint-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+
+/* всплеск при нажатии */
+.burst {
+  position: absolute; z-index: 3; inset: 30%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,.9), rgba(47,139,255,.35) 60%, transparent 70%);
+  animation: burst .65s ease-out forwards;
+}
+@keyframes burst { 0% { transform: scale(.4); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+
+/* во время разговора: мягкое «дыхание», цвет по тому, кто ведёт */
+.mic-on .mic-img { animation: breathe 1.8s ease-in-out infinite; }
+.mic-on .ring { animation: ripple 3s ease-out infinite; border-color: rgba(47,139,255,.3); }
+.mic-op .mic-img { filter: hue-rotate(-75deg) saturate(1.15); }
+.mic-op .ring { border-color: rgba(30,155,98,.4); }
+.mic-wait .mic-img { filter: hue-rotate(170deg) saturate(1.4); }
+.mic-wait .ring { border-color: rgba(240,138,36,.45); }
+.mic-status { margin-top: 10px; }
+
+/* ---------- кнопки под микрофоном ---------- */
+.call-buttons { gap: 10px; margin-top: 18px; max-width: 300px; }
+.btn-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn-pair .btn-big { padding: 12px 10px; font-size: 14px; }
+
+/* ---------- демо-меню: спрятано, раскрывается при наведении ---------- */
+.demo-menu { position: relative; margin-top: 18px; }
+.demo-toggle { background: none; border: 0; color: var(--muted); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 8px; }
+.demo-toggle:hover { background: var(--blue-soft); color: var(--blue); }
+.demo-list {
+  position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%);
+  display: none; flex-direction: column; gap: 6px; min-width: 200px;
+  background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow); z-index: 20;
+}
+.demo-list small { color: var(--muted); }
+.demo-list .chip { text-align: left; }
+.demo-menu:hover .demo-list, .demo-menu:focus-within .demo-list { display: flex; }
+
+/* ---------- нижний блок: раскрывается по клику ---------- */
+.bottom-wrap { padding: 0; }
+.collapse-head {
+  width: 100%; display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+  background: none; border: 0; cursor: pointer; text-align: left;
+  padding: 16px 24px; border-radius: var(--radius); color: var(--text);
+}
+.collapse-head:hover { background: rgba(232,241,255,.6); }
+.ch-item { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; color: #1d3b6e; }
+.ch-item svg { color: #36507c; }
+.ch-count { font-size: 12px; font-weight: 600; color: var(--muted); }
+.chevron { margin-left: auto; font-size: 20px; color: var(--blue); transition: transform .25s; line-height: 1; }
+.bottom-wrap.open .chevron { transform: rotate(180deg); }
+.news-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 4px var(--bad-soft); animation: blink 1.2s infinite; }
+.bottom-wrap .bottom-panel { padding: 4px 24px 22px; animation: unfold .25s ease-out; }
+@keyframes unfold { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+/* разгружаем диалог */
+.dialog { height: 520px; }
+.who { font-weight: 600; opacity: .85; }
+.greeting p { max-width: 140px; }
+
+@media (max-width: 640px) {
+  .mic { width: 200px; height: 200px; }
+  .collapse-head { gap: 10px; padding: 14px 16px; }
+  .bottom-wrap .bottom-panel { padding: 4px 14px 16px; }
+}
+.btn-big:disabled { opacity: 1; background: #eef2f8; color: #a3b2c9; border-color: #e1e8f2; box-shadow: none; }
+
+/* ---------- логотип, маскот и иконки команды ---------- */
+.brand-logo { height: 46px; width: auto; display: block; }
+.brand-badge { font-size: 12px; font-weight: 700; color: var(--blue); background: var(--blue-soft); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.mascot-circle { display: block; flex-shrink: 0; }
+.ico-img { display: inline-block; object-fit: contain; flex-shrink: 0; }
+.live i { background: url("/img/icons/dot.png") center / 8px no-repeat, #e4edfd; box-shadow: 0 0 0 4px #e4edfd; filter: grayscale(1); opacity: .7; }
+.live.on i { filter: none; opacity: 1; background-color: #cfe0ff; box-shadow: 0 0 0 4px #cfe0ff; }
+@media (max-width: 640px) { .brand-logo { height: 36px; } }
+.brand-logo { height: 60px; margin: -6px 0; }
+.tab { padding: 8px 14px; }
+.btn-big:disabled .ico-img { filter: invert(.55); }
+.tab-back { color: var(--blue); }
+@media (min-width: 1100px) {
+  .topbar-staff { flex-wrap: nowrap; gap: 12px; }
+  .topbar-staff .tabs { flex-wrap: nowrap; gap: 2px; }
+  .topbar-staff .tab { padding: 8px 12px; font-size: 13.5px; white-space: nowrap; }
+  .topbar-staff .brand-badge { font-size: 11px; padding: 3px 8px; }
+}
+
+/* ---------- живой бэкенд: варианты времени, экстренный блок ---------- */
+.options { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin-top: 12px; }
+.options-title { width: 100%; font-size: 12px; color: var(--muted); }
+.option {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: center; text-align: left;
+  background: #fff; border: 1.5px solid #b9d0f3; border-radius: 14px; padding: 9px 14px; cursor: pointer;
+  transition: transform .12s, border-color .12s, box-shadow .12s;
+}
+.option b { grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--blue); color: #fff; }
+.option span { font-weight: 700; color: #1d3b6e; }
+.option small { color: var(--muted); }
+.option:hover { border-color: var(--blue-2); box-shadow: 0 6px 14px rgba(31,108,240,.15); transform: translateY(-1px); }
+.option:active { transform: scale(.97); }
+.option:disabled { opacity: .5; cursor: default; }
+
+.emergency {
+  display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px;
+  background: linear-gradient(180deg, #ef4f5c, #d92d3c); color: #fff;
+  border-radius: 14px; padding: 12px 16px; box-shadow: 0 8px 20px rgba(217,45,60,.3);
+  animation: blink 1.6s infinite;
+}
+.emergency b { font-size: 18px; }
+.api-badge { margin-top: 18px; font-size: 12px; color: var(--ok); font-weight: 700; }
+
+/* ---------- ошибки: одна крупная цифра в стиле сайта ---------- */
+.err-code {
+  display: inline-grid; place-items: center; min-width: 74px; padding: 6px 16px;
+  border-radius: 16px; font-size: 26px; font-weight: 800; letter-spacing: .02em; line-height: 1.1;
+  font-variant-numeric: tabular-nums; cursor: help;
+}
+.err-4xx { color: #c2410c; background: linear-gradient(180deg, #fff7ed, #ffe7cc); box-shadow: inset 0 0 0 1.5px #fbbf77; }
+.err-5xx { color: #c81e2e; background: linear-gradient(180deg, #fff1f2, #ffd9dd); box-shadow: inset 0 0 0 1.5px #f8a1aa; }
+.err-row { justify-content: center; align-items: center; gap: 10px; padding: 4px 0; animation: unfold .25s ease-out; }
+.err-time { font-size: 11px; color: var(--muted); }
+.err-block { display: flex; justify-content: center; padding: 26px; margin-bottom: 16px; }
+.err-block .err-code { font-size: 40px; padding: 10px 26px; border-radius: 20px; }
+.table-err .err-code, td .err-code { font-size: 18px; min-width: 56px; padding: 3px 10px; border-radius: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.api-badge.off { color: var(--bad); }
+@media (min-width: 1100px) {
+  .topbar-staff .tab { padding: 8px 10px; font-size: 13px; }
+}
+@media (max-width: 1320px) { .topbar-staff .brand-badge { display: none; } }
+
+/* ---------- запись голоса ---------- */
+.mic-listen .mic { cursor: pointer; }
+.mic-listen .mic-img { animation: breathe 0.9s ease-in-out infinite; filter: saturate(1.3) brightness(1.05); }
+.mic-listen .ring { animation: ripple 1.2s ease-out infinite; border-color: rgba(224,58,72,.55); }
+.mic-listen .r2 { animation-delay: .4s; }
+.mic-listen .r3 { animation-delay: .8s; }
+.mic-hint-rec { background: linear-gradient(180deg, #ef4f5c, var(--bad)); box-shadow: 0 6px 16px rgba(224,58,72,.35); animation: none; }
+.mic-hint-rec::after { border-top-color: var(--bad); }
+.result-off { background: #eef2f8; color: #52688c; }
+
+/* ---------- аватарки-картинки в диалоге ---------- */
+.ava-img { background: none !important; border: 0 !important; overflow: visible; }
+.ava-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ava-img.ava-bot img { transform: scale(1.12); }
+
+
+===== app/layout.tsx =====
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "ClinicAI — голосовой помощник поликлиники",
+  description: "Здравушка записывает на приём, переносит и отменяет записи, напоминает о визитах",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ru">
+      <body>{children}</body>
+    </html>
+  );
+}
+
+
+===== app/page.tsx =====
+"use client";
+
+// Экран пациента: звонок голосовому помощнику Здравушке.
+// Разговор идёт через бэкенд Здравушки: POST /api/chat (lib/chat.ts).
+// Ошибки сервера показываются в ленте одной цифрой (400, 403, 500…) и пишутся в журнал ошибок.
+// Регистратор может в любой момент перехватить разговор из кабинета (/staff/live).
+
+import Link from "next/link";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import Brand from "@/components/Brand";
+import Bubble from "@/components/Bubble";
+import ErrorCode from "@/components/ErrorCode";
+import Mascot from "@/components/Mascot";
+import {
+  CalendarIcon, ChatIcon, CheckCircle, ClipIcon, ClockIcon, DocIcon, HangupIcon,
+  HeadsetIcon, RefreshIcon, SendIcon,
+} from "@/components/Icons";
+import { chat, health, INTENT_LABEL, type ChatBooking, type ChatEscalation, type ChatResponse, type UiBooking } from "@/lib/chat";
+import { ApiError, logError } from "@/lib/errors";
+import { asr, play, startRecording, tts, type Recording } from "@/lib/voice";
+import { hms, nowHM, openLive, type CallMode, type LiveCall, type LiveLine, type LiveMessage } from "@/lib/live";
+
+type Phase = LiveCall["phase"];
+type FeedItem =
+  | { type: "line"; line: LiveLine }
+  | { type: "error"; status: number | null; detail: string; at: string };
+
+function toBooking(b: ChatBooking, intent: string | null): UiBooking {
+  const [date, time] = (b.scheduled_at ?? "").split(" ");
+  const base = { doctor: b.doctor_name ?? "Врач", specialty: b.specialty ?? "", date, time };
+  if (b.status === "Отменена") {
+    return { ...base, kind: "cancelled", title: "Запись отменена", note: "Отмена сохранена в МИС, время освободилось" };
+  }
+  if (b.status === "Запланирована") {
+    return {
+      ...base, kind: "booked",
+      title: intent === "reschedule" ? "Перенесено в МИС" : intent === "cancel" ? "Запись найдена" : "Записано в МИС",
+      note: b.visit_id ? `Запись № ${b.visit_id}` : "Запись подтверждена",
+    };
+  }
+  return { ...base, kind: "pending", title: "Ожидает подтверждения", note: "Скажите «да», чтобы подтвердить" };
+}
+
+export default function PatientPage() {
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [mode, setMode] = useState<CallMode>("ai");
+  const [operator, setOperator] = useState<string | null>(null);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [intent, setIntent] = useState<string | null>(null);
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [booking, setBooking] = useState<UiBooking | null>(null);
+  const [options, setOptions] = useState<ChatBooking[]>([]);
+  const [escalation, setEscalation] = useState<ChatEscalation | null>(null);
+  const [seconds, setSeconds] = useState(0);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [online, setOnline] = useState<boolean | null>(null); // ответил ли /api/health
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [seen, setSeen] = useState("");
+  const [bursts, setBursts] = useState<number[]>([]);
+  // голос: слушаем микрофон / распознаём / озвучиваем ответ
+  const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const voiceRef = useRef(false); // звонок ведётся голосом (начат с микрофона)
+  const recRef = useRef<Recording | null>(null);
+  const ttsOk = useRef<boolean | null>(null); // есть ли /api/tts (выясняется при первом ответе)
+  const phaseRef = useRef<Phase>("idle");
+
+  const sessionRef = useRef<string | null>(null);
+  const modeRef = useRef<CallMode>("ai");
+  const chatRef = useRef<HTMLDivElement>(null);
+  const live = useRef<{ send: (m: LiveMessage) => void; close: () => void } | null>(null);
+  const snapshot = useRef<LiveCall | null>(null);
+
+  const lines = feed.filter((f): f is Extract<FeedItem, { type: "line" }> => f.type === "line").map((f) => f.line);
+
+  const say = useCallback((speaker: LiveLine["speaker"], text: string, confidence?: number) => {
+    setFeed((f) => [...f, { type: "line", line: { speaker, text, at: nowHM(), confidence } }]);
+  }, []);
+
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  function showError(e: unknown) {
+    const err = e instanceof ApiError ? e : new ApiError(null, "?", "?", String(e));
+    setFeed((f) => [...f, { type: "error", status: err.status, detail: err.message, at: nowHM() }]);
+  }
+
+  function changeMode(m: CallMode) {
+    modeRef.current = m;
+    setMode(m);
+  }
+
+  // ---- проверка сервера при открытии
+  useEffect(() => {
+    health().then(() => setOnline(true)).catch((e) => { setOnline(false); showError(e); });
+  }, []);
+
+  // ---- связь с кабинетом регистратора
+  useEffect(() => {
+    live.current = openLive((m) => {
+      if (m.type === "hello" && snapshot.current) live.current?.send({ type: "state", call: snapshot.current });
+      if (m.type === "takeover") {
+        recRef.current?.cancel(); recRef.current = null; setListening(false);
+        setPhase("active");
+        setOperator(m.operator);
+        changeMode("operator");
+      }
+      if (m.type === "release") {
+        setOperator(null);
+        changeMode("ai");
+        say("bot", "Я снова с вами. Чем ещё могу помочь?");
+      }
+      if (m.type === "operator_say") say("operator", m.text);
+    });
+    return () => live.current?.close();
+  }, [say]);
+
+  useEffect(() => {
+    const call: LiveCall = { phase, mode, seconds, intent, fields, lines, operator };
+    snapshot.current = call;
+    live.current?.send({ type: "state", call });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, mode, seconds, intent, fields, feed, operator]);
+
+  useEffect(() => {
+    if (phase !== "active") return;
+    const t = setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [phase]);
+
+  useEffect(() => {
+    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
+  }, [feed]);
+
+  // ---- разговор с бэкендом
+  function clearAll() {
+    setFeed([]); setIntent(null); setFields({}); setBooking(null); setSeconds(0);
+    setOptions([]); setEscalation(null); setOperator(null); changeMode("ai");
+    sessionRef.current = null;
+    recRef.current?.cancel(); recRef.current = null; setListening(false);
+  }
+
+  function applyChat(r: ChatResponse) {
+    sessionRef.current = r.session_id || sessionRef.current;
+    if (r.reply) say("bot", r.reply);
+    if (r.intent) setIntent(INTENT_LABEL[r.intent] ?? r.intent);
+    setFields(r.collected);
+    setOptions(r.options);
+    if (r.booking) setBooking(toBooking(r.booking, r.intent));
+    if (r.escalation) {
+      // бот передаёт пациента человеку — звонок не обрываем, ждём регистратора
+      setEscalation(r.escalation);
+      setBooking({ kind: "handoff", title: "Передано регистратору", note: `${r.escalation.reason}. ${r.escalation.summary}` });
+      changeMode("waiting");
+      return;
+    }
+    if (r.done) setPhase("ended");
+  }
+
+  async function send(text: string): Promise<ChatResponse | null> {
+    setSending(true);
+    try {
+      const r = await chat(sessionRef.current, text);
+      applyChat(r);
+      setOnline(true);
+      return r;
+    } catch (e) {
+      showError(e);
+      if (!(e instanceof ApiError) || e.status === null || e.status >= 500) setOnline(false);
+      return null;
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function startCall(firstPhrase?: string) {
+    clearAll();
+    setPhase("active");
+    phaseRef.current = "active";
+    const r = await send(""); // приветствие и session_id
+    if (!r) { setPhase("ended"); voiceRef.current = false; return; }
+    if (firstPhrase) { say("patient", firstPhrase); await afterBotTurn(await send(firstPhrase)); return; }
+    await afterBotTurn(r);
+  }
+
+  function endCall() {
+    recRef.current?.cancel(); recRef.current = null;
+    setListening(false);
+    voiceRef.current = false;
+    setPhase("ended");
+  }
+
+  // ---- голос
+  /** Озвучить ответ бота (если на бэкенде есть /api/tts). Ошибки — только в журнал. */
+  async function speakText(text: string) {
+    if (!text || ttsOk.current === false) return;
+    try {
+      const audio = await tts(text);
+      ttsOk.current = true;
+      setSpeaking(true);
+      await play(audio);
+    } catch (e) {
+      if (e instanceof ApiError && e.status !== null && [404, 405, 501].includes(e.status)) ttsOk.current = false;
+    } finally {
+      setSpeaking(false);
+    }
+  }
+
+  /** После ответа бота в голосовом звонке: озвучить и снова слушать пациента. */
+  async function afterBotTurn(r: ChatResponse | null) {
+    if (!r || !voiceRef.current) return;
+    await speakText(r.reply);
+    if (!r.done && !r.escalation && phaseRef.current === "active" && modeRef.current === "ai") startListening();
+  }
+
+  async function startListening() {
+    if (recRef.current) return;
+    try {
+      recRef.current = await startRecording(() => finishListening(false));
+      setListening(true);
+    } catch (err) {
+      voiceRef.current = false;
+      const e = new ApiError(null, "MIC", "микрофон", `Нет доступа к микрофону: ${err instanceof Error ? err.message : err}`);
+      logError(e, "голос");
+      showError(e);
+    }
+  }
+
+  /** manual — пациент сам нажал «отправить»: тогда отправляем запись, даже если она тихая */
+  async function finishListening(manual = false) {
+    const rec = recRef.current;
+    if (!rec) return;
+    recRef.current = null;
+    setListening(false);
+    const heard = rec.heardSpeech();
+    const audio = await rec.stop();
+    if (phaseRef.current !== "active" || modeRef.current !== "ai") return;
+    if (!heard && !manual) { startListening(); return; } // молчание — слушаем дальше
+    setTranscribing(true);
+    try {
+      const res = await asr(audio);
+      if (!res.text) { startListening(); return; }
+      say("patient", res.text, res.confidence ?? undefined);
+      setOptions([]);
+      await afterBotTurn(await send(res.text));
+    } catch (e) {
+      voiceRef.current = false; // не крутим ошибку по кругу — пациент нажмёт микрофон ещё раз
+      showError(e);
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  function callRegistrar() {
+    if (phase !== "active") setPhase("active");
+    changeMode("waiting");
+    say("bot", "Соединяю вас с регистратором, оставайтесь на линии.");
+  }
+
+  function chooseOption(i: number) {
+    if (sending) return;
+    const o = options[i];
+    say("patient", o?.spoken ? `${i + 1} — ${o.spoken}` : String(i + 1));
+    setOptions([]);
+    recRef.current?.cancel(); recRef.current = null; setListening(false);
+    send(String(i + 1)).then(afterBotTurn);
+  }
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || sending) return;
+    setInput("");
+    if (mode !== "ai") { say("patient", text); return; } // с регистратором — просто передаём фразу
+    if (phase !== "active") { startCall(text); return; }
+    say("patient", text);
+    setOptions([]);
+    send(text);
+  }
+
+  function pressMic() {
+    if (sending || transcribing || speaking) return;
+    const id = Date.now();
+    setBursts((b) => [...b, id]);
+    setTimeout(() => setBursts((b) => b.filter((x) => x !== id)), 700);
+    if (phase !== "active") { voiceRef.current = true; startCall(); return; }
+    if (listening) { finishListening(true); return; } // нажал ещё раз — отправить сразу
+    if (mode === "ai") { voiceRef.current = true; startListening(); }
+  }
+
+  const last = lines[lines.length - 1];
+  const status =
+    phase === "idle" ? "Здравушка готов помочь"
+    : phase === "ended" ? "Звонок завершён"
+    : mode === "waiting" ? "Соединяю с регистратором…"
+    : mode === "operator" ? (last?.speaker === "operator" ? "Говорит регистратор…" : "Регистратор слушает вас…")
+    : listening ? "Слушаю — говорите"
+    : transcribing ? "Распознаю речь…"
+    : sending ? "Здравушка думает…"
+    : speaking ? "Здравушка говорит…"
+    : !last || last.speaker === "bot" ? "Здравушка говорит…" : "Слушаю вас…";
+
+  const pill =
+    phase !== "active" ? { cls: "pill-ghost", text: phase === "ended" ? "Звонок завершён" : "Нет звонка" }
+    : mode === "operator" ? { cls: "pill-green", text: `На линии регистратор${operator ? " " + operator : ""}` }
+    : mode === "waiting" ? { cls: "pill-orange", text: "Ожидание регистратора" }
+    : { cls: "pill-blue", text: "Ведёт ИИ" };
+
+  const canCall = phase !== "active" && !sending;
+  const canTalk = phase === "active" && mode === "ai" && !sending && !transcribing && !speaking;
+
+  const recordStatus =
+    booking && booking.kind !== "handoff" ? { cls: booking.kind === "booked" ? "tag-ok" : booking.kind === "cancelled" ? "" : "tag-warn", text: booking.title }
+    : mode !== "ai" || booking?.kind === "handoff" ? { cls: "tag-warn", text: mode === "operator" ? "Ведёт регистратор" : "Передано регистратору" }
+    : { cls: "", text: "Записи пока нет" };
+  const summaryKey = `${intent}|${Object.keys(fields).length}|${recordStatus.text}`;
+  const hasNews = !detailsOpen && summaryKey !== seen && (intent !== null || booking !== null || mode !== "ai");
+
+  function toggleDetails() {
+    setDetailsOpen((o) => !o);
+    setSeen(summaryKey);
+  }
+
+  return (
+    <div className="page">
+      <header className="topbar">
+        <Brand />
+        <div className="topbar-right">
+          <span className={`live ${phase === "active" ? "on" : ""}`}
+            data-tip={phase === "active" ? "Идёт разговор" : "Сейчас никто не звонит"} data-tip-pos="bottom">
+            <i />{phase === "active" ? "На линии" : "Свободно"}
+          </span>
+          <span className="timer" data-tip="Длительность звонка" data-tip-pos="bottom">{hms(seconds)}</span>
+          <span className={`pill ${pill.cls}`}
+            data-tip="Кто сейчас ведёт разговор: ИИ или живой регистратор" data-tip-pos="bottom">{pill.text}</span>
+          <Link href="/staff/live" className="link-staff"
+            data-tip="Кабинет регистратуры: живые звонки, очередь, журнал, напоминания" data-tip-pos="bottom">
+            Для сотрудников →
+          </Link>
+        </div>
+      </header>
+
+      <section className="panel call-panel">
+        <div className="call-left">
+          <div className="greeting" data-tip="Здравушка — голосовой помощник. Записывает, переносит и отменяет приёмы, отвечает на вопросы о работе поликлиники.">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/img/mascot-circle.png" width={118} height={118} alt="Здравушка" className="mascot-circle" />
+            <p>Привет! Я Здравушка. Чем могу помочь?</p>
+          </div>
+
+          <div className={`mic-wrap ${canCall || (canTalk && !listening) ? "mic-idle" : ""} ${listening ? "mic-listen" : ""}`}>
+            {canCall && <div className="mic-hint">{phase === "ended" ? "Позвонить ещё раз" : "Нажмите, чтобы позвонить"}</div>}
+            {canTalk && !listening && <div className="mic-hint">Нажмите и говорите</div>}
+            {listening && <div className="mic-hint mic-hint-rec">● Говорите… нажмите, чтобы отправить</div>}
+            <button
+              className={`mic ${phase === "active" ? "mic-on" : ""} ${mode === "operator" ? "mic-op" : ""} ${mode === "waiting" ? "mic-wait" : ""}`}
+              onClick={pressMic}
+              aria-label={canCall ? "Позвонить Здравушке" : listening ? "Отправить фразу" : "Говорить"}
+              aria-disabled={!canCall && !canTalk}
+            >
+              <span className="ring r1" /><span className="ring r2" /><span className="ring r3" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/img/mic-glow.png" alt="" className="mic-img" draggable={false} />
+              {bursts.map((id) => <span key={id} className="burst" />)}
+            </button>
+          </div>
+          <div className={`mic-status ${mode === "operator" ? "st-op" : mode === "waiting" ? "st-wait" : ""}`}>{status}</div>
+
+          <div className="call-buttons">
+            <button className="btn-big btn-red" onClick={endCall} disabled={phase !== "active"} data-tip="Положить трубку">
+              <HangupIcon /> Завершить
+            </button>
+            <div className="btn-pair">
+              <button className="btn-big btn-green" onClick={callRegistrar} disabled={mode !== "ai"}
+                data-tip="Переключить на живого регистратора — он увидит весь разговор и не будет переспрашивать">
+                <HeadsetIcon size={20} /> Регистратор
+              </button>
+              <button className="btn-big btn-outline" onClick={() => startCall()} disabled={sending}
+                data-tip="Начать разговор заново">
+                <RefreshIcon /> Заново
+              </button>
+            </div>
+          </div>
+
+          <div className={`api-badge ${online === false ? "off" : ""}`}
+            data-tip={online === false ? "Сервер не ответил — подробности в журнале ошибок" : "Разговор идёт через бэкенд Здравушки"}>
+            {online === null ? "Проверяю сервер…" : online ? "● Сервер на связи" : "● Сервер недоступен"}
+          </div>
+        </div>
+
+        <div className="call-right">
+          <h2 className="section-title right">
+            <ChatIcon /> Диалог
+            <span className="info" tabIndex={0}
+              data-tip="Синие реплики — сказал ИИ Здравушка. Серые — что ИИ услышал от пациента. Зелёные — живой регистратор. Красная цифра — ошибка сервера."
+              data-tip-pos="left">i</span>
+          </h2>
+
+          {escalation?.emergency && (
+            <div className="emergency">
+              <b>Звоните 103 или 112</b>
+              <span>{escalation.reason}. Это может быть опасно — не ждите записи к врачу.</span>
+            </div>
+          )}
+          {mode === "operator" && (
+            <div className="banner banner-op"><HeadsetIcon size={18} /> На линии регистратор{operator ? ` ${operator}` : ""}</div>
+          )}
+          {mode === "waiting" && !escalation?.emergency && (
+            <div className="banner banner-wait"><HeadsetIcon size={18} />
+              {escalation ? `Перевод на регистратора: ${escalation.reason}` : "Ждём регистратора — он увидит весь разговор"}
+            </div>
+          )}
+
+          <div className="dialog" ref={chatRef}>
+            {feed.length === 0 && <div className="dialog-empty">Нажмите на микрофон или напишите вопрос ниже</div>}
+            {feed.map((f, i) => f.type === "line"
+              ? <Bubble key={i} {...f.line} operator={operator} />
+              : <div key={i} className="row err-row"><ErrorCode status={f.status} detail={f.detail} /><span className="err-time">{f.at}</span></div>)}
+            {phase === "active" && sending && <div className="typing-dots"><i /><i /><i /></div>}
+          </div>
+
+          {options.length > 0 && (
+            <div className="options">
+              <span className="options-title">Выберите время — или скажите номер:</span>
+              {options.map((o, i) => (
+                <button key={i} className="option" onClick={() => chooseOption(i)} disabled={sending}
+                  data-tip={`${o.doctor_name ?? ""}${o.specialty ? ", " + o.specialty : ""}`}>
+                  <b>{i + 1}</b>
+                  <span>{o.scheduled_at ?? o.spoken}</span>
+                  {o.doctor_name && <small>{o.doctor_name}</small>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <form className="ask" onSubmit={onSubmit}>
+            <button type="button" className="ask-mic" aria-label="Говорить"
+              onClick={pressMic} disabled={!canCall} data-tip="Позвонить голосом">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/img/mic-button.png" alt="" />
+            </button>
+            <input value={input} onChange={(e) => setInput(e.target.value)}
+              placeholder={mode === "ai" ? "Спросите Здравушку…" : "Сообщение регистратору…"} disabled={sending} />
+            <button type="submit" disabled={!input.trim() || sending} aria-label="Отправить" data-tip="Отправить">
+              <SendIcon />
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section className={`panel bottom-wrap ${detailsOpen ? "open" : ""}`}>
+        <button className="collapse-head" onClick={toggleDetails} aria-expanded={detailsOpen}>
+          <span className="ch-item"><DocIcon /> Что понял Здравушка
+            <span className="tag tag-info">{intent ?? "—"}</span>
+            {Object.keys(fields).length > 0 && <span className="ch-count">{Object.keys(fields).length} поля</span>}
+          </span>
+          <span className="ch-item"><ClipIcon /> Запись на приём
+            <span className={`tag ${recordStatus.cls}`}>{recordStatus.text}</span>
+          </span>
+          {hasNews && <span className="news-dot" title="Есть новое" />}
+          <span className="chevron" aria-hidden="true">⌄</span>
+        </button>
+
+        {detailsOpen && (
+          <div className="bottom-panel">
+            <div>
+              <div className="understood">
+                <div className="intent-bar">
+                  <span>Намерение</span>
+                  <b>{intent ?? "—"}</b>
+                </div>
+                <ul className="facts">
+                  {Object.keys(fields).length === 0 && <li className="facts-empty">Пока ничего — начните разговор.</li>}
+                  {Object.entries(fields).map(([k, v]) => (
+                    <li key={k}>
+                      <span className="ok-ico"><CheckCircle /></span>
+                      <div><small>{k}</small><div>{v}</div></div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <div>
+              {booking && booking.kind !== "handoff" ? (
+                <div className="record">
+                  <div className="doctor-head">
+                    <Mascot size={86} />
+                    <div className="doctor-name">
+                      <b>{booking.doctor}</b>
+                      <span>{booking.specialty}</span>
+                    </div>
+                    <div className="doctor-photo">
+                      {(booking.doctor ?? "").split(" ").slice(0, 2).map((w) => w[0]).join("")}
+                    </div>
+                  </div>
+                  <div className="record-grid">
+                    <div><CalendarIcon /><small>Дата</small><div>{booking.date}</div></div>
+                    <div><ClockIcon /><small>Время</small><div>{booking.time}</div></div>
+                  </div>
+                  <div className={`result ${booking.kind === "pending" ? "result-warn" : booking.kind === "cancelled" ? "result-off" : "result-ok"}`}>
+                    <span className="ok-ico">{booking.kind === "booked" ? <CheckCircle size={22} /> : <ClockIcon size={22} />}</span>
+                    <div><b>{booking.title}</b><div>{booking.note}</div></div>
+                  </div>
+                </div>
+              ) : mode !== "ai" || booking?.kind === "handoff" ? (
+                <div className="record">
+                  <div className={`result ${mode === "operator" ? "result-op" : "result-warn"}`}>
+                    <span className="ok-ico"><HeadsetIcon size={22} /></span>
+                    <div>
+                      <b>{mode === "operator" ? "Разговор ведёт регистратор" : "Передано регистратору"}</b>
+                      <div>{booking?.kind === "handoff" ? booking.note : "Регистратор видит весь разговор и то, что понял ИИ."}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="record record-empty">
+                  <Mascot size={80} />
+                  <p>Здесь появится запись, как только Здравушка оформит её в МИС.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+
+===== app/staff/calls/page.tsx =====
+"use client";
+
+import { Fragment, useEffect, useState } from "react";
+import { getCalls } from "@/lib/api";
+import type { Call, CallResult } from "@/lib/types";
+import { ErrorBlock } from "@/components/ErrorCode";
+import { ApiError } from "@/lib/errors";
+import { ResultTag } from "@/components/Tags";
+import Transcript from "@/components/Transcript";
+
+const results: CallResult[] = ["записан", "перенесён", "отменён", "справка", "переведён", "сброшен"];
+const AUTO: CallResult[] = ["записан", "перенесён", "отменён", "справка"];
+
+export default function CallsPage() {
+  const [calls, setCalls] = useState<Call[]>([]);
+  const [filter, setFilter] = useState<CallResult | "все">("все");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  // Свежие сверху. Формат «ДД.ММ.ГГГГ ЧЧ:ММ» переводим в сортируемый вид
+  const sortKey = (s: string) => s.slice(6, 10) + s.slice(3, 5) + s.slice(0, 2) + s.slice(11);
+  useEffect(() => {
+    getCalls()
+      .then((l) => setCalls([...l].sort((a, b) => sortKey(b.started_at).localeCompare(sortKey(a.started_at)))))
+      .catch((e: ApiError) => setError(e));
+  }, []);
+
+  const shown = filter === "все" ? calls : calls.filter((c) => c.result === filter);
+  const auto = calls.filter((c) => AUTO.includes(c.result)).length;
+
+  return (
+    <>
+      <h1 className="page-title">Журнал звонков</h1>
+      <p className="page-sub">
+        Все входящие и исходящие звонки ассистента. Решено без оператора: <b>{auto}</b> из <b>{calls.length}</b>.
+        Нажмите на строку, чтобы увидеть разговор и запросы к МИС.
+      </p>
+      {error && <ErrorBlock status={error.status} detail={error.message} />}
+
+      <div className="btn-row" style={{ marginBottom: 14, alignItems: "center" }}>
+        <span className="muted small">Итог:</span>
+        <select value={filter} onChange={(e) => setFilter(e.target.value as CallResult | "все")}>
+          <option value="все">все</option>
+          {results.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </div>
+
+      <div className="card" style={{ padding: 0 }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Время</th>
+              <th>Тип</th>
+              <th>Цель обращения</th>
+              <th>Пациент</th>
+              <th>Длит.</th>
+              <th>Итог</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((c) => (
+              <Fragment key={c.id}>
+                <tr className={`clickable ${openId === c.id ? "selected" : ""}`}
+                  onClick={() => setOpenId(openId === c.id ? null : c.id)}>
+                  <td className="small">{c.started_at}</td>
+                  <td className="small">{c.direction}</td>
+                  <td>{c.intent}</td>
+                  <td>{c.patient ?? <span className="muted">—</span>}</td>
+                  <td className="small">{c.duration_sec} с</td>
+                  <td><ResultTag value={c.result} /></td>
+                </tr>
+                {openId === c.id && (
+                  <tr>
+                    <td colSpan={6} style={{ background: "rgba(232,241,255,.5)" }}>
+                      <div className="grid grid-2">
+                        <div>
+                          <b className="small">Разговор</b>
+                          <div className="mt"><Transcript items={c.transcript} /></div>
+                        </div>
+                        <div>
+                          <b className="small">Запросы к МИС</b>
+                          <div className="stand-log mt">
+                            {c.stand_requests.length === 0 && <span className="muted">не было</span>}
+                            {c.stand_requests.map((r, i) => (
+                              <div className="stand-line" key={i}>
+                                <span className={`tag ${r.status < 300 ? "tag-ok" : "tag-bad"}`}>{r.status}</span>
+                                <b>{r.method}</b> <span>{r.path}</span>
+                                {r.note && <span className="stand-note">— {r.note}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+            {shown.length === 0 && (
+              <tr><td colSpan={6} className="muted">Нет звонков с таким итогом.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+
+===== app/staff/errors/page.tsx =====
+"use client";
+
+// Журнал ошибок: всё, что сервер вернул с ошибкой (экран пациента и кабинет).
+// Можно скачать одним файлом .log и отправить бэкенду.
+
+import { useEffect, useState } from "react";
+import ErrorCode from "@/components/ErrorCode";
+import { clearErrors, describe, readErrors, toLogText, type ErrorEntry } from "@/lib/errors";
+
+export default function ErrorsPage() {
+  const [list, setList] = useState<ErrorEntry[]>([]);
+
+  useEffect(() => {
+    const load = () => setList(readErrors());
+    load();
+    window.addEventListener("storage", load); // ошибки с экрана пациента в соседней вкладке
+    const t = setInterval(load, 3000);
+    return () => { window.removeEventListener("storage", load); clearInterval(t); };
+  }, []);
+
+  function download() {
+    const blob = new Blob([toLogText(list)], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `clinicai-errors-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.log`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function clear() {
+    clearErrors();
+    setList([]);
+  }
+
+  return (
+    <>
+      <h1 className="page-title">Журнал ошибок</h1>
+      <p className="page-sub">
+        Ошибки запросов к серверу со всех экранов. Скачайте файл и отправьте бэкенду — там время, код, запрос и описание.
+      </p>
+
+      <div className="btn-row" style={{ marginBottom: 14 }}>
+        <button className="btn btn-primary" onClick={download} disabled={list.length === 0}
+          data-tip="Файл .log: одна строка — одна ошибка">Скачать .log</button>
+        <button className="btn" onClick={clear} disabled={list.length === 0}>Очистить</button>
+      </div>
+
+      {list.length === 0 ? (
+        <div className="card live-empty"><b>Ошибок нет</b></div>
+      ) : (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <table>
+            <thead>
+              <tr><th>Код</th><th>Время</th><th>Запрос</th><th>Где</th><th>Описание</th></tr>
+            </thead>
+            <tbody>
+              {list.map((e, i) => (
+                <tr key={i}>
+                  <td><ErrorCode status={e.status} detail={e.message} /></td>
+                  <td className="small">{new Date(e.at).toLocaleString("ru-RU")}</td>
+                  <td className="small mono">{e.method} {e.path}</td>
+                  <td className="small">{e.where}</td>
+                  <td className="small"><b>{describe(e.status)}</b><div className="muted">{e.message}</div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+===== app/staff/layout.tsx =====
+import Brand from "@/components/Brand";
+import StaffNav from "@/components/StaffNav";
+
+export default function StaffLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="page">
+      <header className="topbar topbar-staff">
+        <Brand subtitle="Кабинет сотрудника" />
+        <StaffNav />
+      </header>
+      <div className="staff-body">{children}</div>
+    </div>
+  );
+}
+
+
+===== app/staff/live/page.tsx =====
+"use client";
+
+// «Звонок сейчас»: регистратор сидит параллельно ИИ, видит разговор в реальном времени
+// и в любой момент может перехватить его, а потом вернуть ИИ.
+
+import Link from "next/link";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import Bubble, { SpeakerLegend } from "@/components/Bubble";
+import { CheckCircle, HeadsetIcon, SendIcon } from "@/components/Icons";
+import { hms, openLive, type LiveCall, type LiveMessage } from "@/lib/live";
+
+const OPERATOR = "Анна";
+
+const quick = [
+  "Здравствуйте, регистратура, меня зовут Анна. Слушаю вас.",
+  "Уточните, пожалуйста, вашу дату рождения.",
+  "Минуту, проверяю расписание.",
+  "Записала вас. Хорошего дня!",
+];
+
+export default function LivePage() {
+  const [call, setCall] = useState<LiveCall | null>(null);
+  const [text, setText] = useState("");
+  const live = useRef<{ send: (m: LiveMessage) => void; close: () => void } | null>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    live.current = openLive((m) => { if (m.type === "state") setCall(m.call); });
+    live.current.send({ type: "hello" }); // попросить текущее состояние, если звонок уже идёт
+    return () => live.current?.close();
+  }, []);
+
+  useEffect(() => {
+    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
+  }, [call?.lines.length]);
+
+  function takeover() {
+    live.current?.send({ type: "takeover", operator: OPERATOR });
+    setTimeout(() => live.current?.send({ type: "operator_say", text: quick[0] }), 300);
+  }
+  function release() { live.current?.send({ type: "release" }); }
+  function send(t: string) {
+    if (!t.trim()) return;
+    live.current?.send({ type: "operator_say", text: t.trim() });
+  }
+  function onSubmit(e: FormEvent) { e.preventDefault(); send(text); setText(""); }
+
+  const active = call?.phase === "active";
+  const mine = call?.mode === "operator";
+
+  return (
+    <>
+      <h1 className="page-title">Звонок сейчас</h1>
+      <p className="page-sub">
+        Вы видите разговор ИИ с пациентом в реальном времени и можете перехватить его в любой момент —
+        например, если пациент нервничает или ИИ не справляется.
+      </p>
+
+      {!call || call.phase === "idle" ? (
+        <div className="card live-empty">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/img/mic-flat.png" width={64} height={64} alt="" />
+          <div>
+            <b>Сейчас нет активных звонков</b>
+            <p className="muted small">
+              Для демо откройте <Link href="/" target="_blank" className="link-staff">экран пациента</Link> в соседнем окне
+              и начните звонок — он сразу появится здесь.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-queue" style={{ gridTemplateColumns: "1.5fr 1fr" }}>
+          <div className="card">
+            <div className={`live-status ${call.mode}`}>
+              <div>
+                <span className={`live ${active ? "on" : ""}`}><i /></span>
+                <b>
+                  {call.phase === "ended" ? "Звонок завершён"
+                    : call.mode === "operator" ? "Вы на линии с пациентом"
+                    : call.mode === "waiting" ? "Пациент ждёт регистратора!"
+                    : "Разговор ведёт ИИ"}
+                </b>
+                <span className="timer">{hms(call.seconds)}</span>
+              </div>
+              <div className="btn-row">
+                {!mine && (
+                  <button className="btn btn-takeover" onClick={takeover} disabled={!active} data-tip="ИИ сразу замолчит, пациент услышит вас">
+                    <HeadsetIcon size={18} /> Перехватить разговор
+                  </button>
+                )}
+                {mine && (
+                  <button className="btn" onClick={release} disabled={!active} data-tip="Здравушка продолжит разговор сам">Вернуть ИИ</button>
+                )}
+              </div>
+            </div>
+
+            <SpeakerLegend />
+            <div className="dialog dialog-live" ref={chatRef}>
+              {call.lines.map((l, i) => <Bubble key={i} {...l} operator={call.operator} small />)}
+            </div>
+
+            {mine && active && (
+              <>
+                <div className="quick">
+                  {quick.slice(1).map((q) => (
+                    <button key={q} className="chip" onClick={() => send(q)}>{q}</button>
+                  ))}
+                </div>
+                <form className="ask ask-op" onSubmit={onSubmit}>
+                  <HeadsetIcon size={18} />
+                  <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Ответ пациенту…" />
+                  <button type="submit" disabled={!text.trim()} aria-label="Отправить"><SendIcon /></button>
+                </form>
+                <p className="small muted">В реальном звонке регистратор говорит в гарнитуру; поле ввода — для демо.</p>
+              </>
+            )}
+          </div>
+
+          <div className="card">
+            <h2>Что уже понял ИИ</h2>
+            <p className="small muted" style={{ marginTop: -8 }}>Не переспрашивайте пациента — данные уже собраны.</p>
+            <dl className="kv mt">
+              <dt>Намерение</dt><dd>{call.intent ?? "—"}</dd>
+              {Object.entries(call.fields).map(([k, v]) => (
+                <div key={k} style={{ display: "contents" }}>
+                  <dt>{k}</dt>
+                  <dd><span className="ok-ico" style={{ display: "inline-flex", verticalAlign: "-3px", marginRight: 4 }}><CheckCircle size={15} /></span>{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+
+===== app/staff/operator/page.tsx =====
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { getHandoffs, updateHandoff } from "@/lib/api";
+import type { Handoff, HandoffStatus } from "@/lib/types";
+import { ErrorBlock } from "@/components/ErrorCode";
+import { ApiError } from "@/lib/errors";
+import { HandoffTag } from "@/components/Tags";
+import Transcript from "@/components/Transcript";
+
+const order: Record<HandoffStatus, number> = { новая: 0, "в работе": 1, перезвонили: 2, закрыта: 3 };
+
+export default function OperatorPage() {
+  const [items, setItems] = useState<Handoff[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  useEffect(() => {
+    getHandoffs().catch((e: ApiError) => { setError(e); return [] as Handoff[]; }).then((list) => {
+      setItems(list);
+      setSelectedId(list[0]?.id ?? null);
+    });
+  }, []);
+
+  // Срочные и новые — наверх
+  const sorted = useMemo(
+    () =>
+      [...items].sort(
+        (a, b) => Number(b.urgent) - Number(a.urgent) || order[a.status] - order[b.status],
+      ),
+    [items],
+  );
+  const selected = items.find((h) => h.id === selectedId) ?? null;
+  const openCount = items.filter((h) => h.status === "новая" || h.status === "в работе").length;
+
+  async function setStatus(id: string, status: HandoffStatus) {
+    setItems((list) => list.map((h) => (h.id === id ? { ...h, status } : h)));
+    try { await updateHandoff(id, status); } catch (e) { setError(e as ApiError); }
+  }
+
+  return (
+    <>
+      <h1 className="page-title">Очередь оператора</h1>
+      <p className="page-sub">
+        Обращения, которые ассистент передал регистратору: жалобы, острые состояния, медицинские и
+        нестандартные вопросы. Открыто: <b>{openCount}</b>.
+      </p>
+      {error && <ErrorBlock status={error.status} detail={error.message} />}
+
+      <div className="grid grid-queue">
+        <div className="card" style={{ padding: 0 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Причина</th>
+                <th>Время</th>
+                <th>Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((h) => (
+                <tr
+                  key={h.id}
+                  className={`clickable ${h.id === selectedId ? "selected" : ""}`}
+                  onClick={() => setSelectedId(h.id)}
+                >
+                  <td>
+                    {h.urgent && <span className="urgent-dot" title="срочно" />}
+                    <b>{h.reason}</b>
+                    <div className="small muted">{h.summary}</div>
+                  </td>
+                  <td className="small">{h.created_at.split(" ")[1]}</td>
+                  <td><HandoffTag value={h.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {selected && (
+          <div className="card">
+            <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0 }}>
+                {selected.urgent && <span className="tag tag-bad" style={{ marginRight: 8 }}>срочно</span>}
+                {selected.reason}
+              </h2>
+              <HandoffTag value={selected.status} />
+            </div>
+
+            <dl className="kv mt">
+              <dt>Телефон</dt><dd>{selected.phone}</dd>
+              <dt>Поступило</dt><dd>{selected.created_at}</dd>
+              <dt>Звонок</dt><dd>{selected.call_id}</dd>
+              {Object.entries(selected.collected).map(([k, v]) => (
+                <div key={k} style={{ display: "contents" }}>
+                  <dt>{k}</dt><dd>{v}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <p className="mt">{selected.summary}</p>
+
+            <div className="btn-row mt">
+              <button className="btn btn-primary" onClick={() => setStatus(selected.id, "в работе")}
+                disabled={selected.status !== "новая"} data-tip="Отметить, что вы занялись обращением">Взять в работу</button>
+              <button className="btn" onClick={() => setStatus(selected.id, "перезвонили")}
+                disabled={selected.status === "закрыта" || selected.status === "перезвонили"}>Перезвонил</button>
+              <button className="btn" onClick={() => setStatus(selected.id, "закрыта")}
+                disabled={selected.status === "закрыта"}>Закрыть</button>
+            </div>
+
+            <h2 className="mt">Разговор с ассистентом</h2>
+            <Transcript items={selected.transcript} />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+
+===== app/staff/page.tsx =====
+import { BASELINE, MISSED_BY_HOUR, NOSHOW_BY_SPECIALTY, TARGETS, economics } from "@/lib/baseline";
+
+const pct = (x: number) => `${(x * 100).toFixed(1).replace(".", ",")}%`;
+const num = (x: number, d = 0) => x.toLocaleString("ru-RU", { maximumFractionDigits: d });
+
+export default function DashboardPage() {
+  const e = economics();
+  const maxNoShow = Math.max(...NOSHOW_BY_SPECIALTY.map((s) => s.share));
+
+  return (
+    <>
+      <h1 className="page-title">Дашборд</h1>
+      <p className="page-sub">
+        Как работает регистратура сейчас (по выгрузкам поликлиники) и какие цели ставит пилот ассистента.
+      </p>
+
+      <div className="grid grid-4">
+        <div className="card">
+          <div className="kpi-label">Пропущенные звонки <span className="info" tabIndex={0} data-tip="Доля звонков, на которые никто не ответил. Часы пик: 7–10 и 16–18. Источник — журнал звонков за 3 месяца.">i</span></div>
+          <div className="kpi-value">{pct(BASELINE.missedShare)}</div>
+          <div className="kpi-hint">
+            в часы пик <b>{pct(BASELINE.missedPeakShare)}</b> · цель ≤ <b>{pct(TARGETS.missedShare)}</b>
+          </div>
+        </div>
+        <div className="card">
+          <div className="kpi-label">Неявки на приём <span className="info" tabIndex={0} data-tip="Записанные пациенты, которые не пришли. Напоминание за день до визита снижает неявки на 30–40%.">i</span></div>
+          <div className="kpi-value">{pct(BASELINE.noShowShare)}</div>
+          <div className="kpi-hint">
+            ещё <b>{pct(BASELINE.cancelShare)}</b> отмен · цель: −30–40% неявок
+          </div>
+        </div>
+        <div className="card">
+          <div className="kpi-label">Ожидание на линии <span className="info" tabIndex={0} data-tip="Среднее время от звонка до ответа. ИИ отвечает сразу, без очереди.">i</span></div>
+          <div className="kpi-value">{num(BASELINE.avgWaitSec, 1).replace(".", ",")} с</div>
+          <div className="kpi-hint">
+            в среднем · цель ≤ <b>{TARGETS.waitSec} с</b>
+          </div>
+        </div>
+        <div className="card">
+          <div className="kpi-label">Звонков в день <span className="info" tabIndex={0} data-tip="Около 60% обращений типовые: запись, перенос, отмена, справки. Их ИИ закрывает сам.">i</span></div>
+          <div className="kpi-value">{num(BASELINE.callsPerDay)}</div>
+          <div className="kpi-hint">
+            цель: ≥ <b>{pct(TARGETS.automatedShare)}</b> типовых без оператора
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-2 mt">
+        <div className="card">
+          <h2>Доля пропущенных звонков по часам</h2>
+          <div className="columns">
+            {MISSED_BY_HOUR.map((h) => {
+              const cls = h.missed >= 1 ? "closed" : [8, 9, 16, 17].includes(h.hour) ? "peak" : "";
+              return (
+                <div className="column" key={h.hour} title={`${h.hour}:00 — ${h.calls} звонков, пропущено ${pct(h.missed)}`}>
+                  <span className="column-value">{Math.round(h.missed * 100)}</span>
+                  <div className={`column-fill ${cls}`} style={{ height: `${Math.max(h.missed * 100, 2)}%` }} />
+                  <span className="column-label">{h.hour}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="legend">
+            <span><i style={{ background: "#f08a24" }} />часы пик</span>
+            <span><i style={{ background: "#e03a48" }} />регистратура не отвечает</span>
+            <span><i style={{ background: "#1f6cf0" }} />обычные часы</span>
+          </div>
+          <p className="small muted mt">
+            В 7:00 и после 20:00 не отвечает никто — это {num(357 + 245 + 110)} звонков за 3 месяца. Ассистент
+            закрывает эти часы полностью.
+          </p>
+        </div>
+
+        <div className="card">
+          <h2>Неявки по специальностям</h2>
+          <div className="bars">
+            {NOSHOW_BY_SPECIALTY.map((s) => (
+              <div className="bar-row" key={s.name}>
+                <span>{s.name}</span>
+                <div className="bar-track">
+                  <div className={`bar-fill ${s.share >= 0.13 ? "warn" : ""}`} style={{ width: `${(s.share / maxNoShow) * 100}%` }} />
+                </div>
+                <span className="bar-num">{pct(s.share)}</span>
+              </div>
+            ))}
+          </div>
+          <p className="small muted mt">Напоминания в первую очередь отправляем туда, где неявок больше всего.</p>
+        </div>
+      </div>
+
+      <div className="card mt">
+        <h2>Экономический эффект пилота (оценка)</h2>
+        <div className="grid grid-4">
+          <div>
+            <div className="kpi-label">Возвращённых приёмов в день <span className="info" tabIndex={0} data-tip="Неявки в день × 35% (эффект напоминаний).">i</span></div>
+            <div className="kpi-value">≈ {num(e.savedVisitsPerDay, 1).replace(".", ",")}</div>
+            <div className="kpi-hint">{num(e.noShowsPerDay, 1).replace(".", ",")} неявок/день × 35%</div>
+          </div>
+          <div>
+            <div className="kpi-label">Экономия на неявках <span className="info" tabIndex={0} data-tip="Возвращённые приёмы × 1 200 ₽ (средняя стоимость приёма по ОМС) × 21 рабочий день.">i</span></div>
+            <div className="kpi-value">≈ {num(e.rubPerMonth / 1000)} тыс. ₽</div>
+            <div className="kpi-hint">в месяц · {num(e.rubPerDay)} ₽/день по 1 200 ₽ за приём</div>
+          </div>
+          <div>
+            <div className="kpi-label">Звонков без оператора <span className="info" tabIndex={0} data-tip="Отвеченные звонки в день × 60% типовых обращений.">i</span></div>
+            <div className="kpi-value">≈ {num(e.automatedPerDay)}</div>
+            <div className="kpi-hint">в день при 60% автоматизации</div>
+          </div>
+          <div>
+            <div className="kpi-label">Высвобождено времени <span className="info" tabIndex={0} data-tip="Звонки без оператора × средняя длительность разговора (123 с).">i</span></div>
+            <div className="kpi-value">≈ {num(e.hoursFreedPerDay, 1).replace(".", ",")} ч</div>
+            <div className="kpi-hint">регистраторов в день (разговор ~{BASELINE.avgTalkSec} с)</div>
+          </div>
+        </div>
+        <p className="small muted mt">
+          Источник: журнал звонков 01.06–31.08.2026 ({num(BASELINE.callsTotal)} звонков) и история записей
+          25.03–24.09.2026 ({num(BASELINE.visitsTotal)} записей).
+        </p>
+      </div>
+    </>
+  );
+}
+
+
+===== app/staff/reminders/page.tsx =====
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { getReminders, runReminders } from "@/lib/api";
+import { ApiError } from "@/lib/errors";
+import type { Reminder, ReminderStatus } from "@/lib/types";
+import { ErrorBlock } from "@/components/ErrorCode";
+import { ReminderTag } from "@/components/Tags";
+
+const summaryOrder: ReminderStatus[] = ["подтвердил", "перенёс", "отменил", "не ответил", "ожидает"];
+const byTime = (l: Reminder[]) => [...l].sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+
+export default function RemindersPage() {
+  const [items, setItems] = useState<Reminder[]>([]);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    getReminders().then((l) => setItems(byTime(l))).catch((e: ApiError) => setError(e));
+    return () => timers.current.forEach(clearTimeout);
+  }, []);
+
+  async function run() {
+    setRunning(true);
+    setError(null);
+    try {
+      await runReminders();
+      // бэкенд обзванивает сам — перечитываем статусы через несколько секунд
+      timers.current.push(setTimeout(async () => {
+        try { setItems(byTime(await getReminders())); } catch (e) { setError(e as ApiError); }
+        setRunning(false);
+      }, 5000));
+    } catch (e) {
+      setError(e as ApiError);
+      setRunning(false);
+    }
+  }
+
+  const count = (s: ReminderStatus) => items.filter((r) => r.status === s).length;
+
+  return (
+    <>
+      <h1 className="page-title">Напоминания</h1>
+      <p className="page-sub">
+        За день до визита ассистент звонит пациенту, получает подтверждение, а при отказе предлагает перенос
+        или отменяет запись — результат сразу записывается в МИС.
+      </p>
+      {error && <ErrorBlock status={error.status} detail={error.message} />}
+
+      <div className="grid grid-5">
+        {summaryOrder.map((s) => (
+          <div className="card" key={s}>
+            <div className="kpi-label">{s}</div>
+            <div className="kpi-value">{count(s)}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card mt" style={{ padding: 0 }}>
+        <div className="btn-row" style={{ justifyContent: "space-between", alignItems: "center", padding: "14px 16px" }}>
+          <b>Приёмы на 15 октября</b>
+          <button className="btn btn-primary" onClick={run} disabled={running || count("ожидает") === 0}>
+            {running ? "Идёт обзвон…" : "Запустить обзвон"}
+          </button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Время приёма</th>
+              <th>Пациент</th>
+              <th>Врач</th>
+              <th>Статус</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((r) => (
+              <tr key={r.visit_id}>
+                <td>{r.scheduled_at.split(" ")[1]}</td>
+                <td>{r.patient}</td>
+                <td>{r.doctor} <span className="muted small">· {r.specialty}</span></td>
+                <td>
+                  <ReminderTag value={r.status} />
+                  {r.new_time && <div className="small muted">новое время: {r.new_time}</div>}
+                  {r.status === "не ответил" && <div className="small muted">повторный звонок через 2 часа</div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+
+===== components/Brand.tsx =====
+// Логотип ClinicAI (картинка из public/img/logo.png, уже с подписью «Голосовой помощник поликлиники»).
+// Для кабинета сотрудника рядом показываем пометку.
+export default function Brand({ subtitle }: { subtitle?: string }) {
+  return (
+    <div className="brand">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/img/logo.png" alt="ClinicAI — голосовой помощник поликлиники" className="brand-logo" />
+      {subtitle && <span className="brand-badge">{subtitle}</span>}
+    </div>
+  );
+}
+
+
+===== components/Bubble.tsx =====
+import type { Speaker } from "@/lib/types";
+
+// Одна реплика разговора. У каждого участника свой цвет и подпись:
+//  ИИ (Здравушка) — синий, «сказал ИИ»
+//  Пациент — серый, «услышано» + точность распознавания
+//  Регистратор — зелёный, «сказал регистратор»
+export default function Bubble({
+  speaker, text, at, confidence, operator, small,
+}: {
+  speaker: Speaker; text: string; at: string; confidence?: number; operator?: string | null; small?: boolean;
+}) {
+  const label =
+    speaker === "bot" ? "Здравушка · ИИ сказал"
+    : speaker === "operator" ? `Регистратор${operator ? " " + operator : ""}`
+    : "Пациент · ИИ услышал";
+  const tip =
+    speaker === "bot" ? "Ответ голосового помощника (ИИ), озвучен синтезом речи"
+    : speaker === "operator" ? "Живой регистратор, перехвативший разговор"
+    : "Так ИИ распознал речь пациента";
+
+  // Аватарки: ИИ — Здравушка, пациент — серый человечек, регистратор — голубой (public/img)
+  const img = speaker === "bot" ? "/img/mascot-circle.png"
+    : speaker === "operator" ? "/img/avatar-staff.png" : "/img/avatar-patient.png";
+  const name = speaker === "bot" ? "ИИ Здравушка" : speaker === "operator" ? "Регистратор" : "Пациент";
+  const avatar = (
+    <div className={`ava ava-img ava-${speaker} ${small ? "ava-sm" : ""}`} data-tip={name}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={img} alt={name} />
+    </div>
+  );
+
+  return (
+    <div className={`row ${speaker}`}>
+      {speaker !== "patient" && avatar}
+      <div className="bubble-wrap">
+        <div className="who" data-tip={tip}>{label}</div>
+        <div className="bubble">{text}</div>
+        <div className="meta">
+          {speaker === "patient" && (
+            <span className="recog" data-tip={confidence !== undefined
+              ? `ИИ распознал речь с точностью ${Math.round(confidence * 100)}%. При низкой точности он переспросит.`
+              : "Речь распознана ИИ"}>
+              ✓ Распознано{confidence !== undefined && ` ${Math.round(confidence * 100)}%`}
+            </span>
+          )}
+          <span>{at}</span>
+        </div>
+      </div>
+      {speaker === "patient" && avatar}
+    </div>
+  );
+}
+
+export function SpeakerLegend() {
+  return (
+    <div className="speaker-legend">
+      <span><i className="dot-bot" />ИИ Здравушка</span>
+      <span><i className="dot-patient" />Пациент</span>
+      <span><i className="dot-op" />Регистратор</span>
+    </div>
+  );
+}
+
+
+===== components/ErrorCode.tsx =====
+import { describe } from "@/lib/errors";
+
+// Ошибка — одной крупной цифрой. Что она значит — во всплывающей подсказке.
+export default function ErrorCode({ status, detail }: { status: number | null; detail?: string }) {
+  const tip = `${describe(status)}${detail ? ` — ${detail}` : ""}. Подробности — в журнале ошибок.`;
+  return (
+    <span className={`err-code ${status !== null && status < 500 ? "err-4xx" : "err-5xx"}`} data-tip={tip} tabIndex={0}>
+      {status ?? "—"}
+    </span>
+  );
+}
+
+/** Ошибка на месте пустой страницы/таблицы */
+export function ErrorBlock({ status, detail }: { status: number | null; detail?: string }) {
+  return (
+    <div className="card err-block">
+      <ErrorCode status={status} detail={detail} />
+    </div>
+  );
+}
+
+
+===== components/Icons.tsx =====
+// Иконки: часть — картинки команды из public/img/icons, остальные — SVG
+type P = { size?: number };
+const base = (size: number) => ({
+  width: size, height: size, viewBox: "0 0 24 24", fill: "none",
+  stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+});
+
+export const MicIcon = ({ size = 40 }: P) => (
+  <svg {...base(size)}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>
+);
+export const HangupIcon = ({ size = 20 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/hangup.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const RefreshIcon = ({ size = 20 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/refresh.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const ChatIcon = ({ size = 20 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/chat.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const DocIcon = ({ size = 20 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/doc.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const ClipIcon = ({ size = 20 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/record.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const CheckCircle = ({ size = 18 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/check.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const CalendarIcon = ({ size = 18 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/calendar.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const ClockIcon = ({ size = 18 }: P) => (
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/img/icons/clock.png" width={size} height={size} alt="" className="ico-img" />
+);
+export const PinIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12Z" /><circle cx="12" cy="9" r="2.5" /></svg>
+);
+export const UserIcon = ({ size = 22 }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="8" r="4.2" fill="currentColor" />
+    <path d="M3.5 21c.8-4.4 4.3-7 8.5-7s7.7 2.6 8.5 7Z" fill="currentColor" />
+  </svg>
+);
+export const SendIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><path d="M4 12 20 4l-6 16-3-7Z" /></svg>
+);
+export const PhoneIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z" /></svg>
+);
+export const HeadsetIcon = ({ size = 22 }: P) => (
+  <svg {...base(size)}><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><rect x="3" y="14" width="4" height="6" rx="1.5" /><rect x="17" y="14" width="4" height="6" rx="1.5" /><path d="M19 20a4 4 0 0 1-4 2h-2" /></svg>
+);
+
+
+===== components/Mascot.tsx =====
+// Здравушка — маскот ассистента (картинка из public/img)
+export default function Mascot({ size = 120 }: { size?: number }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/img/zdravushka.png" width={size} height={size} alt="Здравушка" className="mascot-img" />;
+}
+
+
+===== components/StaffNav.tsx =====
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const links = [
+  { href: "/staff", label: "Дашборд" },
+  { href: "/staff/live", label: "Звонок сейчас" },
+  { href: "/staff/operator", label: "Очередь оператора" },
+  { href: "/staff/calls", label: "Журнал звонков" },
+  { href: "/staff/reminders", label: "Напоминания" },
+  { href: "/staff/errors", label: "Ошибки" },
+];
+
+export default function StaffNav() {
+  const path = usePathname();
+  return (
+    <nav className="tabs">
+      {links.map((l) => (
+        <Link key={l.href} href={l.href} className={path === l.href ? "tab tab-on" : "tab"}>
+          {l.label}
+        </Link>
+      ))}
+      <Link href="/" className="tab tab-back" data-tip="Экран звонка пациента" data-tip-pos="bottom">← Пациент</Link>
+    </nav>
+  );
+}
+
+
+===== components/Tags.tsx =====
+import type { CallResult, HandoffStatus, ReminderStatus } from "@/lib/types";
+
+const resultClass: Record<CallResult, string> = {
+  записан: "tag-ok",
+  перенесён: "tag-ok",
+  отменён: "tag-info",
+  справка: "tag-brand",
+  переведён: "tag-warn",
+  сброшен: "tag-bad",
+};
+
+export function ResultTag({ value }: { value: CallResult }) {
+  return <span className={`tag ${resultClass[value]}`}>{value}</span>;
+}
+
+const handoffClass: Record<HandoffStatus, string> = {
+  новая: "tag-bad",
+  "в работе": "tag-warn",
+  перезвонили: "tag-info",
+  закрыта: "tag-ok",
+};
+
+export function HandoffTag({ value }: { value: HandoffStatus }) {
+  return <span className={`tag ${handoffClass[value]}`}>{value}</span>;
+}
+
+const reminderClass: Record<ReminderStatus, string> = {
+  ожидает: "",
+  звоним: "tag-info",
+  подтвердил: "tag-ok",
+  перенёс: "tag-brand",
+  отменил: "tag-warn",
+  "не ответил": "tag-bad",
+};
+
+export function ReminderTag({ value }: { value: ReminderStatus }) {
+  return <span className={`tag ${reminderClass[value]}`}>{value}</span>;
+}
+
+
+===== components/Transcript.tsx =====
+import type { Utterance } from "@/lib/types";
+import Bubble from "./Bubble";
+
+// Расшифровка разговора в том же виде и тех же цветах, что на экране пациента
+export default function Transcript({ items }: { items: Utterance[] }) {
+  if (items.length === 0) return <p className="muted small">Расшифровки нет.</p>;
+  return (
+    <div className="dialog dialog-compact">
+      {items.map((u, i) => <Bubble key={i} {...u} small />)}
+    </div>
+  );
+}
+
+
+===== lib/api.ts =====
+// Данные кабинета сотрудника — только из бэкенда, без демо-данных.
+// Ошибки попадают в журнал (lib/errors.ts) и показываются кодом на странице.
+// Фронт никогда не обращается к стенду «Регистратура» напрямую.
+
+import { request } from "./errors";
+import type { Call, Handoff, HandoffStatus, Reminder } from "./types";
+
+export const getCalls = () => request<Call[]>("GET", "/api/calls", "журнал звонков");
+export const getHandoffs = () => request<Handoff[]>("GET", "/api/handoffs", "очередь оператора");
+export const updateHandoff = (id: string, status: HandoffStatus) =>
+  request<unknown>("PATCH", `/api/handoffs/${id}`, "очередь оператора", { status });
+export const getReminders = () => request<Reminder[]>("GET", "/api/reminders", "напоминания");
+export const runReminders = () => request<unknown>("POST", "/api/reminders/run", "напоминания");
+
+
+===== lib/baseline.ts =====
+// Базовая линия «до ассистента». Посчитано по выгрузкам поликлиники:
+// журнал звонков 01.06–31.08.2026 (17 772 звонка),
+// история записей 25.03–24.09.2026 (35 470 записей).
+
+export const BASELINE = {
+  callsTotal: 17772,
+  callsPerDay: 193,
+  missedShare: 0.207, // доля пропущенных звонков за всё время
+  missedPeakShare: 0.249, // в часы пик 7–10 и 16–18
+  avgWaitSec: 22.1,
+  avgTalkSec: 123, // средний разговор у отвеченных звонков
+  results: { записан: 0.43, справка: 0.276, пропущен: 0.207, перевод: 0.087 },
+  visitsTotal: 35470,
+  visitsPerDay: 230,
+  noShowShare: 0.115,
+  cancelShare: 0.122,
+};
+
+// Доля пропущенных по часам (7:00 и 20:00–21:00 — регистратура не отвечает вовсе)
+export const MISSED_BY_HOUR: { hour: number; calls: number; missed: number }[] = [
+  { hour: 7, calls: 357, missed: 1.0 },
+  { hour: 8, calls: 1909, missed: 0.212 },
+  { hour: 9, calls: 2414, missed: 0.228 },
+  { hour: 10, calls: 2073, missed: 0.216 },
+  { hour: 11, calls: 1720, missed: 0.114 },
+  { hour: 12, calls: 1394, missed: 0.121 },
+  { hour: 13, calls: 1138, missed: 0.12 },
+  { hour: 14, calls: 1366, missed: 0.121 },
+  { hour: 15, calls: 1272, missed: 0.172 },
+  { hour: 16, calls: 1242, missed: 0.193 },
+  { hour: 17, calls: 1110, missed: 0.18 },
+  { hour: 18, calls: 840, missed: 0.181 },
+  { hour: 19, calls: 582, missed: 0.163 },
+  { hour: 20, calls: 245, missed: 1.0 },
+  { hour: 21, calls: 110, missed: 1.0 },
+];
+
+export const NOSHOW_BY_SPECIALTY: { name: string; share: number }[] = [
+  { name: "Дерматовенеролог", share: 0.164 },
+  { name: "Оториноларинголог", share: 0.15 },
+  { name: "Уролог", share: 0.139 },
+  { name: "Невролог", share: 0.134 },
+  { name: "Гастроэнтеролог", share: 0.134 },
+  { name: "Травматолог-ортопед", share: 0.128 },
+  { name: "Хирург", share: 0.123 },
+  { name: "Офтальмолог", share: 0.115 },
+  { name: "Терапевт", share: 0.112 },
+  { name: "Педиатр", share: 0.093 },
+  { name: "Эндокринолог", share: 0.089 },
+  { name: "Акушер-гинеколог", share: 0.087 },
+  { name: "Кардиолог", share: 0.08 },
+];
+
+// Цели из задания поликлиники
+export const TARGETS = {
+  missedShare: 0.15,
+  automatedShare: 0.6,
+  waitSec: 30,
+  noShowShare: 0.12,
+  csat: 4,
+};
+
+// Экономический эффект: простые прозрачные формулы, чтобы их можно было проговорить на защите
+export function economics() {
+  const visitPrice = 1200; // ₽, средняя стоимость приёма по ОМС (из задания)
+  const noShowCut = 0.35; // напоминания снижают неявки на 30–40% (берём середину)
+  const noShowsPerDay = BASELINE.visitsPerDay * BASELINE.noShowShare;
+  const savedVisitsPerDay = noShowsPerDay * noShowCut;
+  const rubPerDay = savedVisitsPerDay * visitPrice;
+
+  const answeredPerDay = BASELINE.callsPerDay * (1 - BASELINE.missedShare);
+  const automatedPerDay = answeredPerDay * TARGETS.automatedShare;
+  const hoursFreedPerDay = (automatedPerDay * BASELINE.avgTalkSec) / 3600;
+
+  return {
+    noShowsPerDay,
+    savedVisitsPerDay,
+    rubPerDay,
+    rubPerMonth: rubPerDay * 21, // рабочих дней
+    automatedPerDay,
+    hoursFreedPerDay,
+  };
+}
+
+
+===== lib/chat.ts =====
+// Клиент к бэкенду Здравушки (репозиторий Zdravushka, app/models.py).
+// Один адрес: POST /api/chat {session_id, text} → ChatResponse.
+// Поля меняем только вместе с Мовсаром.
+
+import { request } from "./errors";
+
+export interface ChatBooking {
+  visit_id: number | null;
+  doctor_id: number | null;
+  doctor_name: string | null;
+  specialty: string | null;
+  scheduled_at: string | null; // "ДД.ММ.ГГГГ ЧЧ:ММ"
+  spoken: string | null;
+  status: string | null; // null — ещё не подтверждена; «Запланирована» — записано в МИС
+}
+
+export interface ChatEscalation {
+  rule: string;
+  reason: string;
+  priority: string;
+  emergency: boolean;
+  summary: string;
+}
+
+export interface ChatResponse {
+  session_id: string;
+  reply: string;
+  intent: string | null;
+  collected: Record<string, string>;
+  options: ChatBooking[];
+  booking: ChatBooking | null;
+  escalation: ChatEscalation | null;
+  done: boolean;
+}
+
+/** Карточка записи для экрана (из ChatBooking или для перевода на регистратора). */
+export interface UiBooking {
+  kind: "booked" | "pending" | "cancelled" | "handoff";
+  doctor?: string;
+  specialty?: string;
+  date?: string;
+  time?: string;
+  title: string;
+  note: string;
+}
+
+export const INTENT_LABEL: Record<string, string> = {
+  booking: "Запись к врачу",
+  reschedule: "Перенос записи",
+  cancel: "Отмена записи",
+  status: "Статус записи",
+  info: "Справка",
+  escalation: "Перевод на регистратора",
+};
+
+const WHERE = "экран пациента";
+
+export async function health(): Promise<void> {
+  await request("GET", "/api/health", WHERE);
+}
+
+export async function chat(sessionId: string | null, text: string): Promise<ChatResponse> {
+  const d = await request<Partial<ChatResponse>>("POST", "/api/chat", WHERE, { session_id: sessionId, text });
+  // Поля могут быть пустыми — подстраховываемся, чтобы экран не падал
+  return {
+    session_id: d.session_id ?? "",
+    reply: d.reply ?? "",
+    intent: d.intent ?? null,
+    collected: d.collected ?? {},
+    options: Array.isArray(d.options) ? d.options : [],
+    booking: d.booking ?? null,
+    escalation: d.escalation ?? null,
+    done: Boolean(d.done),
+  };
+}
+
+
+===== lib/errors.ts =====
+// Ошибки запросов к бэкенду: единый формат, журнал (лог) и короткое описание кода.
+// Журнал хранится в браузере (localStorage) и общий для экрана пациента и кабинета —
+// его можно посмотреть во вкладке «Журнал ошибок» и скачать файлом .log.
+
+export class ApiError extends Error {
+  constructor(
+    public status: number | null, // null — сервер недоступен (нет ответа)
+    public method: string,
+    public path: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export interface ErrorEntry {
+  at: string; // ISO-время
+  status: number | null;
+  method: string;
+  path: string;
+  message: string;
+  where: string; // «экран пациента», «очередь оператора» и т. п.
+}
+
+const KEY = "clinicai-errors";
+const MAX = 500;
+
+export const STATUS_TEXT: Record<number, string> = {
+  400: "Неверный запрос",
+  401: "Нет доступа: токен не принят",
+  403: "Доступ запрещён",
+  404: "Не найдено",
+  408: "Сервер не ответил вовремя",
+  409: "Конфликт: запись уже изменена",
+  422: "Неверные данные в запросе",
+  429: "Слишком много запросов",
+  500: "Ошибка сервера",
+  502: "Ошибка шлюза",
+  503: "Сервис недоступен",
+  504: "Сервер не ответил вовремя",
+};
+
+export function describe(status: number | null): string {
+  if (status === null) return "Нет связи с сервером";
+  return STATUS_TEXT[status] ?? (status >= 500 ? "Ошибка сервера" : "Ошибка запроса");
+}
+
+export function readErrors(): ErrorEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+export function clearErrors(): void {
+  try { localStorage.removeItem(KEY); } catch { /* хранилище недоступно */ }
+}
+
+export function logError(e: ApiError, where: string): void {
+  const entry: ErrorEntry = {
+    at: new Date().toISOString(), status: e.status, method: e.method, path: e.path, message: e.message, where,
+  };
+  console.error(`[${where}] ${e.status ?? "нет связи"} ${e.method} ${e.path}: ${e.message}`);
+  try {
+    const list = [entry, ...readErrors()].slice(0, MAX);
+    localStorage.setItem(KEY, JSON.stringify(list));
+  } catch { /* хранилище недоступно — остаётся консоль */ }
+}
+
+/** Текст лога для скачивания: одна строка — одна ошибка. */
+export function toLogText(list: ErrorEntry[]): string {
+  const head = "# ClinicAI — журнал ошибок\n# время | код | запрос | где | описание\n";
+  return head + list.map((e) =>
+    [e.at, e.status ?? "---", `${e.method} ${e.path}`, e.where, e.message.replace(/\s+/g, " ")].join(" | "),
+  ).join("\n") + "\n";
+}
+
+const API = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+
+/** Запрос к бэкенду. Любая ошибка записывается в журнал и выбрасывается как ApiError.
+ *  body: объект → JSON, FormData → файл (multipart). as: "json" (по умолчанию) или "blob" (звук). */
+export async function request<T>(
+  method: string, path: string, where: string, body?: unknown, as: "json" | "blob" = "json",
+): Promise<T> {
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  let r: Response;
+  try {
+    r = await fetch(`${API}${path}`, {
+      method,
+      cache: "no-store",
+      headers: body !== undefined && !isForm ? { "Content-Type": "application/json" } : undefined,
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
+    });
+  } catch (err) {
+    const e = new ApiError(null, method, path, err instanceof Error ? err.message : "сеть недоступна");
+    logError(e, where);
+    throw e;
+  }
+  if (!r.ok) {
+    let detail = r.statusText;
+    try {
+      const j = await r.json();
+      detail = typeof j.detail === "string" ? j.detail : j.message ?? JSON.stringify(j.detail ?? j);
+    } catch { /* тело не JSON */ }
+    const e = new ApiError(r.status, method, path, detail || describe(r.status));
+    logError(e, where);
+    throw e;
+  }
+  return (as === "blob" ? r.blob() : r.json()) as Promise<T>;
+}
+
+
+===== lib/live.ts =====
+// «Живой» звонок между экраном пациента и кабинетом регистратора.
+// Для демо используем BroadcastChannel — встроенный в браузер канал между вкладками
+// одного сайта (без сервера). На бэкенде этот же обмен пойдёт через WebSocket:
+// формат сообщений тот же.
+
+import type { Speaker } from "./types";
+
+export type CallMode = "ai" | "waiting" | "operator"; // ведёт ИИ / ждёт регистратора / ведёт регистратор
+
+export interface LiveLine {
+  speaker: Speaker;
+  text: string;
+  at: string;
+  confidence?: number; // для реплик пациента: уверенность распознавания
+}
+
+export interface LiveCall {
+  phase: "idle" | "active" | "ended";
+  mode: CallMode;
+  seconds: number;
+  intent: string | null;
+  fields: Record<string, string>;
+  lines: LiveLine[];
+  operator: string | null;
+}
+
+export type LiveMessage =
+  | { type: "state"; call: LiveCall } // экран пациента → регистратору
+  | { type: "hello" } // регистратор открыл вкладку и просит текущее состояние
+  | { type: "takeover"; operator: string } // регистратор перехватил разговор
+  | { type: "release" } // регистратор вернул разговор ИИ
+  | { type: "operator_say"; text: string }; // реплика регистратора
+
+const NAME = "clinicai-live";
+
+export function openLive(onMessage: (m: LiveMessage) => void): { send: (m: LiveMessage) => void; close: () => void } {
+  if (typeof window === "undefined" || !("BroadcastChannel" in window)) {
+    return { send: () => {}, close: () => {} };
+  }
+  const ch = new BroadcastChannel(NAME);
+  ch.onmessage = (e) => onMessage(e.data as LiveMessage);
+  return { send: (m) => ch.postMessage(m), close: () => ch.close() };
+}
+
+// Демо-оценка уверенности распознавания (на бэкенде её отдаёт ASR)
+export function fakeConfidence(text: string): number {
+  let h = 0;
+  for (const c of text) h = (h * 31 + c.charCodeAt(0)) % 1000;
+  return 0.88 + (h % 11) / 100; // 0,88–0,98
+}
+
+export const nowHM = () => new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+export const hms = (s: number) =>
+  `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+
+
+===== lib/types.ts =====
+// Контракт данных фронт ↔ бэкенд (FastAPI). Бэкенд отдаёт ровно такие объекты.
+
+export type CallResult =
+  | "записан"
+  | "перенесён"
+  | "отменён"
+  | "справка"
+  | "переведён"
+  | "сброшен";
+
+export type Speaker = "patient" | "bot" | "operator"; // пациент, ИИ-ассистент, регистратор
+
+export interface Utterance {
+  speaker: Speaker;
+  confidence?: number; // уверенность распознавания речи пациента (0–1)
+  text: string;
+  at: string; // "ЧЧ:ММ:СС"
+}
+
+// Вызов API стенда «Регистратура», сделанный ассистентом
+export interface StandRequest {
+  method: "GET" | "POST" | "PATCH";
+  path: string;
+  status: number;
+  note?: string;
+}
+
+export interface Call {
+  id: string;
+  direction: "входящий" | "исходящий";
+  started_at: string; // "ДД.ММ.ГГГГ ЧЧ:ММ"
+  duration_sec: number;
+  intent: string;
+  result: CallResult;
+  patient: string | null; // маскированное ФИО, например «Иванов П. С.»
+  transcript: Utterance[];
+  stand_requests: StandRequest[];
+}
+
+export type HandoffReason =
+  | "острая боль"
+  | "неотложное состояние"
+  | "жалоба"
+  | "медицинский вопрос"
+  | "не распознано"
+  | "просьба оператора";
+
+export type HandoffStatus = "новая" | "в работе" | "перезвонили" | "закрыта";
+
+export interface Handoff {
+  id: string;
+  call_id: string;
+  created_at: string;
+  reason: HandoffReason;
+  urgent: boolean;
+  status: HandoffStatus;
+  phone: string; // маскированный номер
+  summary: string;
+  collected: Record<string, string>; // что ассистент успел узнать
+  transcript: Utterance[];
+}
+
+export type ReminderStatus =
+  | "ожидает"
+  | "звоним"
+  | "подтвердил"
+  | "перенёс"
+  | "отменил"
+  | "не ответил";
+
+export interface Reminder {
+  visit_id: number;
+  patient: string;
+  doctor: string;
+  specialty: string;
+  scheduled_at: string;
+  status: ReminderStatus;
+  new_time?: string;
+}
+
+
+===== lib/voice.ts =====
+// Голос: запись с микрофона, распознавание (/api/asr → Whisper) и озвучка ответов (/api/tts).
+// Микрофон в браузере работает только на https:// или http://localhost.
+
+import { request } from "./errors";
+
+const WHERE = "голос";
+
+export interface AsrResult {
+  text: string;
+  confidence: number | null; // 0–1, если распознаватель её отдаёт
+}
+
+/** Отправить запись на распознавание. Бэкенд проксирует её в Whisper. */
+export async function asr(audio: Blob): Promise<AsrResult> {
+  const form = new FormData();
+  const ext = audio.type.includes("ogg") ? "ogg" : audio.type.includes("mp4") ? "m4a" : "webm";
+  form.append("file", audio, `speech.${ext}`);
+  const r = await request<Partial<AsrResult>>("POST", "/api/asr", WHERE, form);
+  return { text: (r.text ?? "").trim(), confidence: typeof r.confidence === "number" ? r.confidence : null };
+}
+
+/** Озвучить ответ. Возвращает звук или выбрасывает ApiError (например, 404 — озвучки ещё нет). */
+export async function tts(text: string): Promise<Blob> {
+  return request<Blob>("POST", "/api/tts", WHERE, { text }, "blob");
+}
+
+export interface Recording {
+  stop: () => Promise<Blob>; // закончить и получить звук
+  cancel: () => void; // выбросить запись
+  heardSpeech: () => boolean; // был ли голос (а не только тишина)
+}
+
+/**
+ * Начать запись. Сама остановится (onAutoStop), когда человек замолчит после фразы
+ * или пройдёт maxMs. Тишину определяем по громкости сигнала.
+ */
+export async function startRecording(
+  onAutoStop: () => void,
+  { silenceMs = 1300, maxMs = 15000, threshold = 0.025 } = {},
+): Promise<Recording> {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+  });
+  const mime = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"]
+    .find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m));
+  const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  const chunks: BlobPart[] = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+
+  // простой детектор паузы
+  const ctx = new AudioContext();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  let spoke = false;
+  let quietSince = performance.now();
+  const started = performance.now();
+  let fired = false;
+  const tick = setInterval(() => {
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += v * v;
+    const rms = Math.sqrt(sum / buf.length);
+    const now = performance.now();
+    if (rms > threshold) { spoke = true; quietSince = now; }
+    const silentLongEnough = spoke && now - quietSince > silenceMs;
+    if (!fired && (silentLongEnough || now - started > maxMs)) { fired = true; onAutoStop(); }
+  }, 100);
+
+  const cleanup = () => {
+    clearInterval(tick);
+    stream.getTracks().forEach((t) => t.stop());
+    ctx.close().catch(() => {});
+  };
+
+  rec.start(250);
+  return {
+    stop: () => new Promise<Blob>((resolve) => {
+      rec.onstop = () => { cleanup(); resolve(new Blob(chunks, { type: rec.mimeType || "audio/webm" })); };
+      if (rec.state !== "inactive") rec.stop(); else { cleanup(); resolve(new Blob(chunks)); }
+    }),
+    cancel: () => { if (rec.state !== "inactive") rec.stop(); cleanup(); },
+    heardSpeech: () => spoke,
+  };
+}
+
+/** Проиграть звук и дождаться конца. */
+export function play(audio: Blob): Promise<void> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(audio);
+    const a = new Audio(url);
+    const done = () => { URL.revokeObjectURL(url); resolve(); };
+    a.onended = done;
+    a.onerror = done;
+    a.play().catch(done);
+  });
+}
+
+
+===== scripts/export-static.mjs =====
+// Копирует собранный фронт (out/) в папку static/ репозитория Zdravushka.
+// Путь задаётся аргументом или переменной STATIC_DIR, по умолчанию ../Zdravushka/static
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
+
+const dest = resolve(process.argv[2] || process.env.STATIC_DIR || "../Zdravushka/static");
+const src = resolve("out");
+if (!existsSync(src)) {
+  console.error("Нет папки out/ — сначала npm run build");
+  process.exit(1);
+}
+mkdirSync(dest, { recursive: true });
+// очищаем старую сборку фронта, но не трогаем чужие файлы, если они есть рядом
+for (const name of readdirSync(src)) rmSync(resolve(dest, name), { recursive: true, force: true });
+cpSync(src, dest, { recursive: true });
+console.log(`Фронт скопирован в ${dest}`);
+console.log("Перезапустите uvicorn и откройте http://localhost:8000/");
+
+
+===== package.json =====
+{
+  "name": "clinic-voice-front",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "export": "next build && node scripts/export-static.mjs"
+  },
+  "dependencies": {
+    "next": "^15.5.27",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3"
+  },
+  "private": true
+}
+
+
+===== tsconfig.json =====
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+
+
+===== next.config.mjs =====
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Статическая сборка: `npm run export` кладёт готовые файлы в static/ бэкенда Здравушки,
+  // FastAPI отдаёт их с порта 8000 вместе с API.
+  output: "export",
+  trailingSlash: true, // /staff/ → staff/index.html — так StaticFiles находит страницы
+  images: { unoptimized: true },
+  poweredByHeader: false,
+};
+
+export default nextConfig;
+
+
+===== .gitignore =====
+# зависимости
+node_modules/
+
+# сборка Next.js
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# локальные настройки и секреты
+.env
+.env.local
+.env.*.local
+
+# логи
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# системный мусор и редакторы
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+

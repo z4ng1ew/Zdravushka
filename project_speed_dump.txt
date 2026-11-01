@@ -1,0 +1,842 @@
+===== ДАМП: СКОРОСТЬ ЗАПРОСОВ =====
+
+===== app/config.py =====
+# Настройки проекта. Все секреты (токены, ключи) берём из файла .env,
+# чтобы они не попали в код и в репозиторий.
+import os
+from dotenv import load_dotenv
+
+# Читаем файл .env из корня проекта и кладём его строки в переменные окружения
+load_dotenv()
+# На VM организаторов ключи лежат в /opt/hackathon/ai.env (DBI_API_TOKEN, OPENAI_*). Наш .env важнее.
+load_dotenv("/opt/hackathon/ai.env", override=False)
+
+# Адрес API стенда «Регистратура» (базовый путь /api/v1 из документации)
+STAND_URL = os.getenv("STAND_URL", "https://crm-med-mock.dbi-testing.ru/api/v1")
+
+# Токен команды для стенда. Пока его нет — строка пустая
+# На VM организаторов токен уже лежит в DBI_API_TOKEN — берём его, если STAND_TOKEN не задан
+STAND_TOKEN = os.getenv("STAND_TOKEN") or os.getenv("DBI_API_TOKEN", "")
+
+# Режим МИС: stand — настоящий стенд (нужен токен); mock — имитация в памяти для отладки и тестов.
+# Без токена и без mock ассистент не выдумывает записи, а честно переводит на регистратора (R-06).
+STAND_MODE = os.getenv("STAND_MODE", "stand")
+
+# Лимит стенда: не больше 10 запросов в минуту. Держим 9, чтобы был запас
+STAND_RATE_LIMIT = int(os.getenv("STAND_RATE_LIMIT", "9"))
+
+# Сколько секунд ждать ответа стенда. По регламенту (R-06) больше 5 секунд — это сбой
+STAND_TIMEOUT = float(os.getenv("STAND_TIMEOUT", "5"))
+
+# Повторы и предохранитель для МИС
+STAND_RETRIES = int(os.getenv("STAND_RETRIES", "2"))                 # повторы GET при таймауте и 5xx
+STAND_MAX_RETRY_AFTER = float(os.getenv("STAND_MAX_RETRY_AFTER", "8"))  # дольше ждать 429 на звонке нельзя
+DOCTORS_CACHE_TTL = float(os.getenv("DOCTORS_CACHE_TTL", "600"))     # справочник врачей обновляем раз в 10 минут
+
+# Часовой пояс стенда: GMT+4 (все даты в API — в этом поясе)
+STAND_TZ_OFFSET_HOURS = 4
+
+# Имя ассистента — используется в приветствии и интерфейсе
+ASSISTANT_NAME = "Здравушка"
+
+# ---------- Нейросети (OpenAI-совместимый API) ----------
+# Адрес — базовый путь API, обычно заканчивается на /v1, например http://мой-сервер:8000/v1
+
+# Языковая модель (понимание фраз пациента)
+# На VM шлюз LLM организаторов уже задан в OPENAI_BASE_URL / OPENAI_API_KEY
+LLM_URL = os.getenv("LLM_URL") or os.getenv("OPENAI_BASE_URL", "")
+LLM_TOKEN = os.getenv("LLM_TOKEN") or os.getenv("OPENAI_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "ai-sage/GigaChat3-10B-A1.8B")
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "4"))   # дольше пациент ждать не будет — уходим в запасной разбор
+# Шлюз нейросетей хакатона принимает не больше 2 одновременных запросов (третий получает 429)
+AI_MAX_CONCURRENT = int(os.getenv("AI_MAX_CONCURRENT", "2"))
+# Распознавание с уверенностью ниже порога — переспрашиваем на важных шагах (ФИО, подтверждение)
+ASR_MIN_CONFIDENCE = float(os.getenv("ASR_MIN_CONFIDENCE", "0.45"))
+
+# Распознавание речи (Whisper)
+STT_URL = os.getenv("STT_URL") or os.getenv("OPENAI_BASE_URL", "")
+STT_TOKEN = os.getenv("STT_TOKEN") or os.getenv("OPENAI_API_KEY", "")
+# whisper-large-v3 — модель с открытыми весами; её запускает шлюз организаторов в российском контуре.
+# Префикс «openai/» — только имя модели в каталоге шлюза: аудио в OpenAI не отправляется (см. _trusted ниже).
+STT_MODEL = os.getenv("STT_MODEL", "openai/whisper-large-v3")
+# Подсказка распознаванию (словарь предметной области). Пусто — без подсказки.
+STT_PROMPT = os.getenv("STT_PROMPT", "Звонок в регистратуру поликлиники. Запись к врачу: терапевт, педиатр, "
+                       "офтальмолог, отоларинголог, лор, хирург, травматолог, невролог, кардиолог, гинеколог, "
+                       "уролог, эндокринолог. Фамилия, имя, отчество, дата рождения: пятнадцатое марта "
+                       "тысяча девятьсот восьмидесятого года. Вариант: первый, второй, третий.")
+STT_TIMEOUT = float(os.getenv("STT_TIMEOUT", "6"))
+
+# Синтез речи
+TTS_URL = os.getenv("TTS_URL", "")
+TTS_TOKEN = os.getenv("TTS_TOKEN", "")
+TTS_MODEL = os.getenv("TTS_MODEL", "tts-1")
+TTS_VOICE = os.getenv("TTS_VOICE", "")
+TTS_TIMEOUT = float(os.getenv("TTS_TIMEOUT", "30"))
+
+# Где синтезировать речь: piper — локально, openai — внешний сервер (TTS_URL)
+TTS_BACKEND = os.getenv("TTS_BACKEND", "piper")
+# Файл голоса Piper (.onnx, рядом должен лежать .onnx.json)
+# Silero (TTS_BACKEND=silero): голоса baya, xenia, kseniya — женские; aidar, eugene — мужские
+SILERO_MODEL = os.getenv("SILERO_MODEL", "v4_ru")
+SILERO_MODEL_PATH = os.getenv("SILERO_MODEL_PATH", "data/voices/silero_v4_ru.pt")
+SILERO_VOICE = os.getenv("SILERO_VOICE", "xenia")
+SILERO_RATE = int(os.getenv("SILERO_RATE", "24000"))
+# Голос персонажа: SILERO_PITCH = x-low / low / medium / high / x-high; SILERO_SHIFT 1.0 — как есть, 1.18 — «детский»
+SILERO_PITCH = os.getenv("SILERO_PITCH", "medium")
+SILERO_SHIFT = float(os.getenv("SILERO_SHIFT", "1.0"))
+SILERO_THREADS = int(os.getenv("SILERO_THREADS", "2"))
+PIPER_MODEL = os.getenv("PIPER_MODEL", "data/voices/ru_RU-irina-medium.onnx")
+
+# ---------- Телефония (Asterisk → AudioSocket) ----------
+TELEPHONY_ENABLED = os.getenv("TELEPHONY_ENABLED", "1") == "1"
+AUDIOSOCKET_HOST = os.getenv("AUDIOSOCKET_HOST", "127.0.0.1")
+AUDIOSOCKET_PORT = int(os.getenv("AUDIOSOCKET_PORT", "9092"))
+# Куда звонить с напоминанием. На хакатоне — софтфон команды через шлюз (из ~/SIP.md)
+REMINDER_ENDPOINT = os.getenv("REMINDER_ENDPOINT", "PJSIP/phone-049@gateway")
+# Детектор речи: громкость, выше которой считаем, что человек говорит (подбирается на живом звонке)
+VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", "500"))
+# Демо-режим обзвона: звонить вне окна С-10 и без паузы 2 часа между попытками (для показа жюри вечером)
+# Отметки в комментарий клиента пишутся в фоне, чтобы ответ пациенту не ждал стенд (в тестах — сразу)
+NOTES_IN_BACKGROUND = os.getenv("NOTES_IN_BACKGROUND", "1") == "1"
+# Перезвон после звонка (техчекпоинт 23.10): звоним только тем, кто звонил нам, и только с этих номеров
+CALLBACK_ENABLED = os.getenv("CALLBACK_ENABLED", "1") == "1"
+CALLBACK_ALLOWED = os.getenv("CALLBACK_ALLOWED", r"^(expert|phone)-?\d+$")
+CALLBACK_DELAY_SEC = float(os.getenv("CALLBACK_DELAY_SEC", "3"))
+# Токен администратора для смены источника нейросетей из кабинета (пусто — только с самой VM)
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+REMINDER_DEMO = os.getenv("REMINDER_DEMO", "0") == "1"
+END_OF_SPEECH_MS = int(os.getenv("END_OF_SPEECH_MS", "1200"))
+# На шагах ФИО / дата рождения / адрес пациент вспоминает и делает паузы — ждём дольше
+END_OF_SPEECH_SLOW_MS = int(os.getenv("END_OF_SPEECH_SLOW_MS", "2000"))   # пауза, после которой фраза закончена
+MIN_SPEECH_MS = int(os.getenv("MIN_SPEECH_MS", "250"))         # короче — это шум, а не речь
+BARGE_IN_MS = int(os.getenv("BARGE_IN_MS", "400"))             # столько говорит поверх — перебил
+SILENCE_PROMPT_SEC = float(os.getenv("SILENCE_PROMPT_SEC", "5"))  # «Вы меня слышите?»
+SILENCE_HANGUP_SEC = float(os.getenv("SILENCE_HANGUP_SEC", "5"))  # ещё столько тишины — прощаемся
+
+# ---------- 152-ФЗ: куда можно отправлять речь и текст пациента ----------
+# Голос и фразы пациента — персональные данные. Их можно передавать только в доверенный контур:
+# шлюз нейросетей хакатона (российский) или сервер внутри сети поликлиники/VM.
+# Любой другой адрес STT/LLM/TTS отклоняется при старте — бесплатные облачные сервисы исключены.
+TRUSTED_AI_HOSTS = {h.strip() for h in os.getenv(
+    "TRUSTED_AI_HOSTS", "hub.gigaschool.ru,localhost,127.0.0.1").split(",") if h.strip()}
+
+
+# Зарубежные облачные ИИ-сервисы запрещены условиями кейса (152-ФЗ) — даже если их внести в
+# TRUSTED_AI_HOSTS по ошибке, адрес будет отклонён. Проверяется по окончанию имени хоста.
+FORBIDDEN_AI_DOMAINS = ("openai.com", "anthropic.com", "googleapis.com", "google.com", "azure.com",
+                        "microsoft.com", "amazonaws.com", "groq.com", "mistral.ai", "deepgram.com",
+                        "assemblyai.com", "elevenlabs.io", "together.xyz", "cohere.ai", "x.ai")
+
+
+def _forbidden(host: str) -> bool:
+    return any(host == d or host.endswith("." + d) for d in FORBIDDEN_AI_DOMAINS)
+
+
+def _trusted(url: str) -> str:
+    """Адрес нейросети разрешён, только если хост в TRUSTED_AI_HOSTS или в частной сети (10.*, 192.168.*)."""
+    if not url:
+        return ""
+    from urllib.parse import urlparse
+    import ipaddress
+    host = urlparse(url).hostname or ""
+    try:
+        private = ipaddress.ip_address(host).is_private
+    except ValueError:
+        private = False
+    if not _forbidden(host) and (host in TRUSTED_AI_HOSTS or private):
+        return url
+    import logging
+    logging.getLogger("config").error("152-ФЗ: адрес %s не в доверенном контуре — отключён", host)
+    REJECTED_AI_URLS.append(host)
+    return ""
+
+
+REJECTED_AI_URLS: list[str] = []
+LLM_URL = _trusted(LLM_URL)
+STT_URL = _trusted(STT_URL)
+TTS_URL = _trusted(TTS_URL)
+
+# Технический клиент для заявок, когда пациент не успел назваться (экстренный случай, просьба оператора)
+TECH_CLIENT = {"last_name": "Срочный", "first_name": "Вызов", "middle_name": "Иванович",
+               "birth_date": os.getenv("TECH_CLIENT_BIRTH_DATE", "01.01.1970")}
+
+
+# Журнал звонков (152-ФЗ): срок хранения и предельный размер, см. app/journal.py
+JOURNAL_RETENTION_DAYS = int(os.getenv("JOURNAL_RETENTION_DAYS", "30"))
+JOURNAL_MAX_CALLS = int(os.getenv("JOURNAL_MAX_CALLS", "1000"))
+
+
+===== app/ai.py =====
+# Подключение трёх нейросетей: распознавание речи (STT), синтез речи (TTS) и языковая модель (LLM).
+# Все три вызываются по OpenAI-совместимому API — его поддерживают почти все серверы:
+# vLLM, Ollama, LM Studio, faster-whisper-server/speaches, Cloud.ru и другие.
+# Адреса, токены и названия моделей — в .env, код менять не нужно.
+import asyncio
+import json
+import math
+import re
+
+import httpx
+
+import time
+
+from app import config, providers
+from app.resilience import CircuitBreaker, backoff
+
+# Шлюз хакатона: не больше 2 одновременных запросов на команду — третий получил бы 429.
+_gateway = asyncio.Semaphore(config.AI_MAX_CONCURRENT)
+# Предохранитель на каждый источник: после 3 сбоев подряд минуту его не ждём, а сразу берём следующий
+_breakers: dict[str, CircuitBreaker] = {}
+NO_VERBOSE_JSON: set[str] = set()   # серверы, не умеющие verbose_json — второй раз не спрашиваем
+
+
+def breaker(kind: str, provider: str) -> CircuitBreaker:
+    return _breakers.setdefault(f"{kind}:{provider}", CircuitBreaker(f"{kind}:{provider}", failures=3, cooldown=60))
+
+
+llm_breaker = breaker("llm", "organizers")  # совместимость: прежнее имя
+RETRY_STATUSES = (429, 500, 502, 503, 504)
+
+
+LAST: dict[str, dict] = {}   # последний удачный вызов: кто ответил и за сколько мс (для журнала и /api/health)
+
+
+class AIError(Exception):
+    """Ошибка нейросети: сервер недоступен, неверный токен, плохой ответ."""
+
+
+def _headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+async def _post(url: str, timeout: float, retries: int = 1, **kw) -> httpx.Response:
+    """POST в шлюз нейросетей с единым поведением при сбоях.
+    Таймаут, обрыв, 429 и 5xx — один повтор с паузой; потом AIError (звонок не падает, работает запасной путь)."""
+    last = ""
+    for attempt in range(retries + 1):
+        try:
+            async with _gateway:
+                async with httpx.AsyncClient(timeout=timeout) as http:
+                    resp = await http.post(url, **kw)
+        except httpx.HTTPError as e:
+            last = f"нет ответа: {type(e).__name__}"
+        else:
+            if resp.status_code not in RETRY_STATUSES:
+                return resp
+            last = f"код {resp.status_code}"
+        if attempt < retries:
+            await backoff(attempt)
+    raise AIError(f"{url}: {last}")
+
+
+async def llm_chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 400) -> str:
+    """Отправляет диалог в LLM и возвращает текст ответа.
+
+    messages — список вида [{"role": "system", "content": "..."}, {"role": "user", "content": "..."}].
+    temperature низкая: нам нужны точные и одинаковые ответы, а не творчество.
+    """
+    endpoints = providers.chain("llm")
+    if not endpoints:
+        raise AIError("LLM не настроена")
+    errors = []
+    for i, ep in enumerate(endpoints):  # выбранный источник, при сбое — следующий; повторов нет: пациент ждёт
+        br = breaker("llm", ep.provider)
+        if br.is_open:
+            errors.append(f"{ep.provider}: отключён после серии сбоев")
+            continue
+        body = {"model": ep.model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens}
+        t0 = time.monotonic()
+        try:
+            resp = await _post(ep.url + "/chat/completions", config.LLM_TIMEOUT, retries=0,
+                               json=body, headers=_headers(ep.token))
+            if resp.status_code != 200:
+                raise AIError(f"ответила {resp.status_code}: {resp.text[:200]}")
+            content = resp.json()["choices"][0]["message"]["content"]
+            if not isinstance(content, str) or not content.strip():
+                raise AIError("пустой ответ")
+        except (AIError, ValueError, KeyError, IndexError, TypeError) as e:
+            br.failure()
+            errors.append(f"{ep.provider}: {e}")
+            continue
+        br.success()
+        LAST["llm"] = {"provider": ep.provider, "model": ep.model, "ms": int((time.monotonic() - t0) * 1000)}
+        return content.strip()
+    raise AIError("LLM: " + "; ".join(errors))
+
+
+def parse_json(text: str) -> dict:
+    """Достаёт JSON из ответа модели, даже если она обернула его в ```json ... ``` или добавила слова."""
+    match = re.search(r"\{.*\}", text, re.S)
+    if not match:
+        raise AIError(f"В ответе модели нет JSON: {text[:200]}")
+    try:
+        data = json.loads(match.group())
+    except json.JSONDecodeError as e:
+        raise AIError(f"Модель вернула битый JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise AIError("Модель вернула не объект JSON")
+    return data
+
+
+async def llm_json(messages: list[dict]) -> dict:
+    """LLM, которая обязана вернуть JSON. Битый JSON — без второго вызова: сразу запасной разбор правилами
+    (второй вызов удваивал задержку как раз тогда, когда шлюз и так медленный — техчекпоинт 23.10)."""
+    return parse_json(await llm_chat(messages, max_tokens=200))
+
+
+# Whisper «слышит» в тишине и шуме фразы из субтитров к видео. Это не слова пациента — выбрасываем
+WHISPER_HALLUCINATIONS = ("продолжение следует", "субтитр", "спасибо за просмотр", "подписывайтесь",
+                          "редактор", "корректор", "dimatorzok", "благодарю за внимание")
+
+
+def is_hallucination(text: str) -> bool:
+    low = text.lower().strip(" .!…")
+    return not low or any(h in low for h in WHISPER_HALLUCINATIONS)
+
+
+def asr_confidence(segments) -> float | None:
+    """Уверенность распознавания 0..1 из ответа Whisper (verbose_json): средняя вероятность
+    слов по сегментам (exp(avg_logprob)) с поправкой на вероятность «это не речь». Нет данных — None."""
+    if not isinstance(segments, list) or not segments:
+        return None
+    scores = []
+    for seg in segments:
+        if not isinstance(seg, dict) or not isinstance(seg.get("avg_logprob"), (int, float)):
+            continue
+        speech = 1.0 - float(seg.get("no_speech_prob") or 0.0)
+        scores.append(max(0.0, min(1.0, math.exp(seg["avg_logprob"]) * speech)))
+    return round(sum(scores) / len(scores), 2) if scores else None
+
+
+def _echo_of_prompt(text: str) -> bool:
+    """На тишине Whisper иногда «повторяет» подсказку — такой текст пациент не говорил."""
+    low = text.lower().strip(" .,!?")
+    return bool(config.STT_PROMPT) and len(low) > 15 and low in config.STT_PROMPT.lower()
+
+
+async def transcribe(audio: bytes, filename: str = "audio.wav") -> tuple[str, float | None]:
+    """Распознавание речи: аудио → (текст, уверенность 0..1 или None, если сервер её не даёт)."""
+    endpoints = providers.chain("stt")
+    if not endpoints:
+        raise AIError("распознавание речи не настроено")
+    errors, body = [], None
+    for ep in endpoints:  # выбранный источник, при сбое — следующий
+        br = breaker("stt", ep.provider)
+        if br.is_open:
+            errors.append(f"{ep.provider}: отключён после серии сбоев")
+            continue
+        data = {"model": ep.model, "language": "ru", "temperature": "0"}
+        if ep.url not in NO_VERBOSE_JSON:
+            data["response_format"] = "verbose_json"
+        if config.STT_PROMPT:  # словарь предметной области: Whisper реже путает «офтальмолог», «отоларинголог», даты
+            data["prompt"] = config.STT_PROMPT
+        t0 = time.monotonic()
+        try:
+            resp = await _post(ep.url + "/audio/transcriptions", config.STT_TIMEOUT, retries=0,
+                               files={"file": (filename, audio)}, data=data, headers=_headers(ep.token))
+            if resp.status_code == 400 and "response_format" in data:  # не умеет verbose_json — запомним
+                NO_VERBOSE_JSON.add(ep.url)
+                data.pop("response_format")
+                resp = await _post(ep.url + "/audio/transcriptions", config.STT_TIMEOUT, retries=0,
+                                   files={"file": (filename, audio)}, data=data, headers=_headers(ep.token))
+            if resp.status_code != 200:
+                raise AIError(f"ответил {resp.status_code}: {resp.text[:200]}")
+            body = resp.json()
+            text = body.get("text", "") if isinstance(body, dict) else ""
+        except (AIError, ValueError) as e:
+            br.failure()
+            errors.append(f"{ep.provider}: {e}")
+            continue
+        br.success()
+        LAST["stt"] = {"provider": ep.provider, "model": ep.model, "ms": int((time.monotonic() - t0) * 1000)}
+        break
+    else:
+        raise AIError("STT: " + "; ".join(errors))
+    text = text.strip() if isinstance(text, str) else ""
+    if is_hallucination(text) or _echo_of_prompt(text):
+        return "", None
+    return text, asr_confidence(body.get("segments"))
+
+
+async def speech_to_text(audio: bytes, filename: str = "audio.wav") -> str:
+    """Только текст распознавания (для мест, где уверенность не нужна)."""
+    return (await transcribe(audio, filename))[0]
+
+
+async def text_to_speech(text: str) -> bytes:
+    """Синтез речи: текст → аудио (wav). Возвращает байты файла."""
+    url = config.TTS_URL.rstrip("/") + "/audio/speech"
+    body = {"model": config.TTS_MODEL, "input": text, "voice": config.TTS_VOICE,
+            "response_format": "wav"}
+    if not config.TTS_URL:
+        raise AIError("внешний синтез речи не настроен")
+    resp = await _post(url, config.TTS_TIMEOUT, json=body, headers=_headers(config.TTS_TOKEN))
+    if resp.status_code != 200:
+        raise AIError(f"TTS ответил {resp.status_code}: {resp.text[:300]}")
+    return resp.content
+
+
+===== app/resilience.py =====
+# Устойчивость к сбоям внешних сервисов (МИС, нейросети): автомат-предохранитель и повторы с паузой.
+#
+# Единая политика для всех внешних вызовов (значения — в app/config.py, применение — в указанных модулях):
+#   Сервис              Таймаут  Повторы                         429                         Предохранитель   Запасной путь
+#   МИС, чтение (GET)   5 с      2, пауза 0,4→0,8 с              Retry-After ≤ 8 с, иначе отказ  3 сбоя → 30 с   перевод R-06
+#   МИС, запись         5 с      0 (повтор = риск дубля записи)  как выше                    общий с чтением  перевод R-06
+#   LLM (понимание)     8 с      1, пауза 0,4 с                  повтор 1 раз                3 сбоя → 60 с    разбор по правилам
+#   STT (распознавание) 15 с     1, пауза 0,4 с                  повтор 1 раз                —                «повторите, пожалуйста»
+#   TTS внешний         30 с     1                               повтор 1 раз                —                Piper локально
+# Шлюз нейросетей: не больше 2 одновременных запросов (семафор в app/ai.py) — третий получил бы 429.
+# Пациент на линии не может ждать минуту: если сервис упал, быстро признаём это и переводим
+# на регистратора, а не повторяем бесконечно.
+import asyncio
+import time
+
+
+class CircuitBreaker:
+    """Предохранитель: после N сбоев подряд сервис считается недоступным на cooldown секунд.
+    Пока он «разомкнут», запросы не отправляются — ответ «недоступно» приходит мгновенно."""
+
+    def __init__(self, name: str, failures: int = 3, cooldown: float = 30.0):
+        self.name, self.failures, self.cooldown = name, failures, cooldown
+        self.count = 0
+        self.opened_at: float | None = None
+
+    @property
+    def is_open(self) -> bool:
+        if self.opened_at is None:
+            return False
+        if time.monotonic() - self.opened_at >= self.cooldown:
+            self.opened_at, self.count = None, self.failures - 1  # пробный запрос: ещё сбой — снова размыкаем
+            return False
+        return True
+
+    def success(self):
+        self.count, self.opened_at = 0, None
+
+    def failure(self):
+        self.count += 1
+        if self.count >= self.failures:
+            self.opened_at = time.monotonic()
+
+
+async def backoff(attempt: int, base: float = 0.4, cap: float = 2.0):
+    """Пауза перед повтором: 0,4 с, 0,8 с, 1,6 с… не больше cap."""
+    await asyncio.sleep(min(cap, base * (2 ** attempt)))
+
+
+===== app/stand_client.py =====
+# Клиент API стенда «Регистратура».
+# Здесь собрано всё общение с МИС: пациенты, врачи, записи.
+# Остальной код не знает про HTTP — он просто вызывает функции этого класса.
+import asyncio
+import time
+from collections import deque
+
+import httpx
+
+from app import config
+from app.resilience import CircuitBreaker, backoff
+
+IDEMPOTENT = ("GET",)  # повторять безопасно только чтение: повтор POST мог бы создать вторую запись
+
+
+class StandError(Exception):
+    """Ошибка от стенда. Хранит код ответа (400, 404, 409...) и текст на русском."""
+
+    def __init__(self, status: int, code: str, message: str):
+        super().__init__(f"{status} {code}: {message}")
+        self.status = status    # HTTP-код ответа, например 409
+        self.code = code        # код стенда, например КОНФЛИКТ_СТАТУСА
+        self.message = message  # описание ошибки на русском
+
+
+def _retry_after(resp: httpx.Response) -> float:
+    try:
+        return max(0.0, float(resp.headers.get("Retry-After", "5")))
+    except ValueError:
+        return 5.0
+
+
+def _error_body(resp: httpx.Response) -> tuple[str, str]:
+    """Код и текст ошибки стенда; если тело не JSON — общий код и начало текста."""
+    try:
+        body = resp.json()
+        if isinstance(body, dict):
+            return body.get("code", "НЕИЗВЕСТНО"), body.get("message", resp.text[:200])
+    except ValueError:
+        pass
+    return "НЕИЗВЕСТНО", resp.text[:200]
+
+
+class RateLimiter:
+    """Следит, чтобы мы не отправили больше N запросов за 60 секунд."""
+
+    def __init__(self, max_calls: int, period: float = 60.0):
+        self.max_calls = max_calls
+        self.period = period
+        self.calls = deque()        # время отправки последних запросов
+        self.lock = asyncio.Lock()  # чтобы два запроса одновременно не сломали подсчёт
+
+    async def wait(self):
+        # Ждём вне блокировки (техчекпоинт 23.10): раньше один ожидающий запрос держал замок,
+        # и все остальные звонки стояли за ним по очереди — «подождать 10 с» превращалось в минуту.
+        while True:
+            async with self.lock:
+                now = time.monotonic()
+                # выкидываем запросы старше 60 секунд — они уже не считаются
+                while self.calls and now - self.calls[0] >= self.period:
+                    self.calls.popleft()
+                if len(self.calls) < self.max_calls:
+                    self.calls.append(now)
+                    return
+                pause = self.period - (now - self.calls[0]) + 0.05
+            await asyncio.sleep(pause)  # лимит исчерпан: ждём, пока самый старый запрос «выйдет» из окна
+
+
+class StandClient:
+    def __init__(self, base_url: str = config.STAND_URL, token: str = config.STAND_TOKEN,
+                 transport: httpx.AsyncBaseTransport | None = None):
+        # transport нужен только для тестов (подменяем настоящий стенд заглушкой)
+        self.http = httpx.AsyncClient(
+            base_url=base_url,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=config.STAND_TIMEOUT,
+            transport=transport,
+        )
+        self.limiter = RateLimiter(config.STAND_RATE_LIMIT)
+        self._doctors: list[dict] | None = None  # кэш справочника врачей
+        self._doctors_at = 0.0                   # когда кэш загружен (для срока жизни)
+        self.breaker = CircuitBreaker("МИС", failures=3, cooldown=30)
+
+    async def close(self):
+        await self.http.aclose()
+
+    async def _request(self, method: str, path: str, **kwargs):
+        """Единая точка отправки запросов: лимит, предохранитель, повторы, разбор ошибок.
+
+        Стратегия по видам сбоев:
+          429             — ждём Retry-After, но не дольше STAND_MAX_RETRY_AFTER (пациент на линии);
+          таймаут, обрыв  — GET повторяем с паузой; POST/PATCH не повторяем (не создать дубль записи);
+          5xx             — GET повторяем, потом считаем стенд недоступным;
+          4xx             — ошибка данных, не повторяем, отдаём код и текст стенда;
+          не JSON в ответе — «неверный ответ», не повторяем.
+        После 3 сбоев подряд предохранитель размыкается на 30 секунд — ответ «недоступно» мгновенный.
+        """
+        if self.breaker.is_open:
+            raise StandError(503, "МИС_НЕДОСТУПНА", "стенд не отвечал несколько раз подряд, пауза 30 секунд")
+        retries = config.STAND_RETRIES if method in IDEMPOTENT else 0
+        for attempt in range(retries + 3):
+            await self.limiter.wait()
+            try:
+                resp = await self.http.request(method, path, **kwargs)
+            except httpx.HTTPError as e:  # таймаут, обрыв соединения
+                if attempt < retries:
+                    await backoff(attempt)
+                    continue
+                self.breaker.failure()
+                raise StandError(0, "НЕТ_ОТВЕТА", f"{type(e).__name__}: стенд не ответил") from e
+
+            if resp.status_code == 429:
+                delay = _retry_after(resp)
+                if delay > config.STAND_MAX_RETRY_AFTER or attempt >= 2:
+                    raise StandError(429, "ПРЕВЫШЕН_ЛИМИТ", f"стенд просит подождать {delay:.0f} с")
+                await asyncio.sleep(delay)
+                continue
+
+            if resp.status_code >= 500:
+                if attempt < retries:
+                    await backoff(attempt)
+                    continue
+                self.breaker.failure()
+                raise StandError(resp.status_code, *_error_body(resp))
+
+            if resp.status_code >= 400:
+                self.breaker.success()  # стенд жив, ошибка в данных
+                raise StandError(resp.status_code, *_error_body(resp))
+
+            try:
+                data = resp.json()
+            except ValueError as e:
+                self.breaker.failure()
+                raise StandError(502, "НЕВЕРНЫЙ_ОТВЕТ", "стенд вернул не JSON") from e
+            self.breaker.success()
+            return data
+        raise StandError(429, "ПРЕВЫШЕН_ЛИМИТ", "стенд несколько раз подряд ответил 429")
+
+    async def _get_all(self, path: str, params: dict | None = None) -> list[dict]:
+        """Списки отдаются по 50 штук. Забираем все страницы подряд."""
+        params = dict(params or {})
+        result, offset = [], 0
+        while True:
+            page = await self._request("GET", path, params={**params, "limit": 50, "offset": offset})
+            items = page if isinstance(page, list) else page.get("items", [])
+            result.extend(items)
+            if len(items) < 50:
+                return result
+            offset += 50
+
+    # ---------- Врачи ----------
+
+    async def doctors(self, refresh: bool = False) -> list[dict]:
+        """Справочник врачей. Загружаем один раз и держим в памяти (экономим лимит)."""
+        stale = time.monotonic() - self._doctors_at > config.DOCTORS_CACHE_TTL
+        if self._doctors is None or refresh or stale:
+            self._doctors = await self._get_all("/doctors")
+            self._doctors_at = time.monotonic()
+        return self._doctors
+
+    def invalidate_doctors(self):
+        """Сбросить кэш справочника (например, стенд сообщил, что врач деактивирован)."""
+        self._doctors = None
+
+    async def active_doctors(self, specialty: str | None = None) -> list[dict]:
+        """Только активные врачи, при желании — одной специальности."""
+        result = [d for d in await self.doctors() if d["is_active"]]
+        if specialty:
+            s = specialty.strip().lower()
+            result = [d for d in result if d["specialty"].lower() == s]
+        return result
+
+    # ---------- Пациенты ----------
+
+    async def find_client(self, last_name: str, first_name: str, birth_date: str) -> dict | None:
+        """Ищем пациента по фамилии, имени и дате рождения (ДД.ММ.ГГГГ)."""
+        found = await self._get_all("/clients", {
+            "last_name": last_name.strip().title(),
+            "first_name": first_name.strip().title(),
+            "birth_date": birth_date,
+        })
+        return found[0] if found else None
+
+    async def create_client(self, last_name: str, first_name: str, birth_date: str,
+                            middle_name: str | None = None, comment: str | None = None) -> dict:
+        """Заводим пациента. Если такой уже есть — стенд вернёт существующую карточку."""
+        body = {"last_name": last_name.strip().title(),
+                "first_name": first_name.strip().title(),
+                "birth_date": birth_date}
+        if middle_name:
+            body["middle_name"] = middle_name.strip().title()
+        if comment:
+            body["comment"] = comment
+        return await self._request("POST", "/clients", json=body)
+
+    async def get_client(self, client_id: int) -> dict:
+        return await self._request("GET", f"/clients/{client_id}")
+
+    async def update_client_comment(self, client_id: int, comment: str) -> dict:
+        return await self._request("PATCH", f"/clients/{client_id}", json={"comment": comment})
+
+    # ---------- Записи на приём ----------
+
+    async def create_visit(self, client_id: int, doctor_id: int, scheduled_at: str) -> dict:
+        """Создаём запись. scheduled_at — строка 'ДД.ММ.ГГГГ ЧЧ:ММ' по GMT+4."""
+        return await self._request("POST", "/visits", json={
+            "client_id": client_id, "doctor_id": doctor_id, "scheduled_at": scheduled_at})
+
+    async def list_visits(self, client_id: int | None = None, doctor_id: int | None = None,
+                          status: str | None = None, date_from: str | None = None,
+                          date_to: str | None = None) -> list[dict]:
+        params = {k: v for k, v in {
+            "client_id": client_id, "doctor_id": doctor_id, "status": status,
+            "date_from": date_from, "date_to": date_to}.items() if v is not None}
+        return await self._get_all("/visits", params)
+
+    async def reschedule_visit(self, visit_id: int, scheduled_at: str,
+                               doctor_id: int | None = None) -> dict:
+        """Перенос: меняем время (и при необходимости врача) у той же записи."""
+        body = {"scheduled_at": scheduled_at}
+        if doctor_id is not None:
+            body["doctor_id"] = doctor_id
+        return await self._request("PATCH", f"/visits/{visit_id}", json=body)
+
+    async def cancel_visit(self, visit_id: int) -> dict:
+        """Отмена: запись не удаляется, а получает статус «Отменена»."""
+        return await self._request("PATCH", f"/visits/{visit_id}", json={"status": "Отменена"})
+
+    async def is_slot_taken(self, doctor_id: int, scheduled_at: str) -> bool:
+        """Стенд не проверяет занятость — проверяем сами по своим записям к врачу."""
+        day = scheduled_at.split(" ")[0]
+        visits = await self.list_visits(doctor_id=doctor_id, status="Запланирована",
+                                        date_from=day, date_to=day)
+        return any(v["scheduled_at"] == scheduled_at for v in visits)
+
+    # ---------- Заявки на соединение со специалистом ----------
+
+    async def create_escalation(self, client_id: int, description: str) -> dict:
+        """Фиксируем в МИС, что ассистент передал разговор человеку (перевод, вызов на дом)."""
+        return await self._request("POST", "/escalations", json={
+            "client_id": client_id, "description": description[:1000]})
+
+
+===== app/tts.py =====
+# Синтез речи для Здравушки.
+# Варианты (TTS_BACKEND в .env):
+#   piper  — локально на нашем сервере (Piper, без интернета, быстро на процессоре);
+#   silero — локально на нашем сервере (Silero TTS, российская модель, голос естественнее Piper).
+#            Модель загружается один раз в фоне при старте; пока не загрузилась или упала — говорим Piper.
+#            Речь пациента и ответы никуда не уходят (152-ФЗ). Зависимости: requirements-silero.txt.
+#   openai — удалённый сервер с OpenAI-совместимым API: наш Silero на Mac (scripts/silero_server.py)
+#            или любой другой. Если удалённый сервер не ответил — автоматически говорим голосом Piper.
+# Перед синтезом цифры превращаются в слова: синтезаторы плохо читают «кабинет 126».
+# Для телефона ответ режется на предложения: первое звучит, пока готовится второе.
+import asyncio
+import io
+import re
+import wave
+from functools import lru_cache
+from pathlib import Path
+
+import numpy as np
+
+from app import ai, config
+
+UNITS = ["ноль", "один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять", "десять",
+         "одиннадцать", "двенадцать", "тринадцать", "четырнадцать", "пятнадцать", "шестнадцать",
+         "семнадцать", "восемнадцать", "девятнадцать"]
+TENS = ["", "", "двадцать", "тридцать", "сорок", "пятьдесят", "шестьдесят", "семьдесят",
+        "восемьдесят", "девяносто"]
+HUNDREDS = ["", "сто", "двести", "триста", "четыреста", "пятьсот", "шестьсот", "семьсот",
+            "восемьсот", "девятьсот"]
+
+
+def number_to_words(n: int) -> str:
+    """0–9999 словами: 126 → «сто двадцать шесть»."""
+    if n < 20:
+        return UNITS[n]
+    if n >= 1000:
+        th, rest = divmod(n, 1000)
+        word = {1: "тысяча", 2: "две тысячи", 3: "три тысячи", 4: "четыре тысячи"}.get(th, f"{UNITS[th]} тысяч")
+        return word + (f" {number_to_words(rest)}" if rest else "")
+    parts = []
+    h, rest = divmod(n, 100)
+    if h:
+        parts.append(HUNDREDS[h])
+    if rest >= 20:
+        t, u = divmod(rest, 10)
+        parts.append(TENS[t])
+        if u:
+            parts.append(UNITS[u])
+    elif rest:
+        parts.append(UNITS[rest])
+    return " ".join(parts)
+
+
+def normalize(text: str) -> str:
+    """Готовим текст к озвучке: числа → слова, лишние символы убираем."""
+    text = re.sub(r"\d{1,4}", lambda m: number_to_words(int(m.group())), text)
+    return text.replace("«", "").replace("»", "").replace("—", ",")
+
+
+def split_sentences(text: str) -> list[str]:
+    """Режем ответ на предложения (и длинные перечисления по «;»), чтобы начать говорить раньше."""
+    parts = re.split(r"(?<=[.!?;])\s+", text.strip())
+    return [p for p in parts if p]
+
+
+@lru_cache(maxsize=1)
+def _piper_voice():
+    from piper import PiperVoice  # импорт здесь: библиотека нужна только для варианта piper
+    return PiperVoice.load(config.PIPER_MODEL)
+
+
+def _piper(text: str) -> bytes:
+    voice = _piper_voice()
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav:
+        if hasattr(voice, "synthesize_wav"):   # piper-tts 1.3 и новее
+            voice.synthesize_wav(text, wav)
+        else:                                  # старые версии piper-tts
+            voice.synthesize(text, wav)
+    return buf.getvalue()
+
+
+@lru_cache(maxsize=1)
+def _silero_model():
+    import torch  # импорт здесь: torch нужен только для варианта silero
+    torch.set_num_threads(config.SILERO_THREADS)
+    path = Path(config.SILERO_MODEL_PATH)
+    if path.exists():  # файл модели скачан заранее (scripts/get_silero.sh) — без интернета
+        return torch.package.PackageImporter(str(path)).load_pickle("tts_models", "model")
+    model, _ = torch.hub.load("snakers4/silero-models", "silero_tts", language="ru",
+                              speaker=config.SILERO_MODEL, trust_repo=True)
+    return model
+
+
+def _silero(text: str) -> bytes:
+    """Голос персонажа: высота (SILERO_PITCH через SSML) и «детскость» (SILERO_SHIFT > 1 — выше и звонче)."""
+    model, text = _silero_model(), text[:900]
+    if config.SILERO_PITCH != "medium" or config.SILERO_SHIFT != 1.0:
+        safe = text.replace("&", " и ").replace("<", " ").replace(">", " ")
+        rate = "slow" if config.SILERO_SHIFT > 1.0 else "medium"  # сдвиг ускоряет речь — заранее замедляем
+        audio = model.apply_tts(ssml_text=f'<speak><prosody pitch="{config.SILERO_PITCH}" rate="{rate}">{safe}</prosody></speak>',
+                                speaker=config.SILERO_VOICE, sample_rate=config.SILERO_RATE).numpy()
+    else:
+        audio = model.apply_tts(text=text, speaker=config.SILERO_VOICE, sample_rate=config.SILERO_RATE,
+                                put_accent=True, put_yo=True).numpy()
+    if config.SILERO_SHIFT != 1.0 and len(audio):
+        n = int(len(audio) / config.SILERO_SHIFT)
+        audio = np.interp(np.linspace(0, len(audio) - 1, n), np.arange(len(audio)), audio)
+    pcm = (audio * 32767).clip(-32768, 32767).astype(np.int16)
+    return pcm_to_wav(pcm.tobytes(), config.SILERO_RATE)
+
+
+async def warm_up():
+    """Загрузить Silero в фоне при старте сервера, чтобы первый звонок не ждал 10–20 секунд."""
+    if config.TTS_BACKEND == "silero":
+        try:
+            await asyncio.to_thread(_silero, "Здравствуйте.")
+        except Exception as e:  # noqa: BLE001 — нет torch или модели: работаем на Piper
+            import logging
+            logging.getLogger("tts").warning("Silero не загрузился, говорим голосом Piper: %s", e)
+
+
+def piper_available() -> bool:
+    return Path(config.PIPER_MODEL).exists()
+
+
+async def speak(text: str) -> bytes:
+    """Текст → WAV. Удалённый голос с запасным локальным."""
+    text = normalize(text)
+    if config.TTS_BACKEND == "silero":
+        try:
+            return await asyncio.to_thread(_silero, text)
+        except Exception:  # torch/модель недоступны — не молчим, говорим голосом Piper
+            if not piper_available():
+                raise
+    elif config.TTS_BACKEND == "openai" and config.TTS_URL:
+        try:
+            return await ai.text_to_speech(text)
+        except Exception:  # удалённый сервер недоступен — не молчим, говорим голосом Piper
+            if not piper_available():
+                raise
+    return await asyncio.to_thread(_piper, text)  # в отдельном потоке, сервер не «замирает»
+
+
+def to_pcm(wav_bytes: bytes, rate: int = 8000) -> bytes:
+    """WAV любого формата → сырой звук 16 бит, моно, нужной частоты (для телефона — 8000 Гц)."""
+    with wave.open(io.BytesIO(wav_bytes)) as w:
+        src_rate, channels, width = w.getframerate(), w.getnchannels(), w.getsampwidth()
+        frames = w.readframes(w.getnframes())
+    if width != 2:
+        raise ValueError("Ожидается 16-битный WAV")
+    data = np.frombuffer(frames, dtype=np.int16).astype(np.float32)
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1)
+    if src_rate != rate and len(data):
+        n_out = int(len(data) * rate / src_rate)
+        data = np.interp(np.linspace(0, len(data) - 1, n_out), np.arange(len(data)), data)
+    return data.clip(-32768, 32767).astype(np.int16).tobytes()
+
+
+def pcm_to_wav(pcm: bytes, rate: int = 8000) -> bytes:
+    """Сырой звук 16 бит моно → WAV (для отправки в распознавание)."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
